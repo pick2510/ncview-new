@@ -22,16 +22,9 @@
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 #include "ncview/calcalcs.h"
+#include "test_udunits_helper.h"
 
 namespace {
-
-void ensure_udunits_initialized() {
-    static bool done = false;
-    if (!done) {
-        udu_utinit(nullptr);
-        done = true;
-    }
-}
 
 // A minimal timelike NCDim -- only the fields fmt_time()/udu_fmt_time()/
 // epic_fmt_time() actually read.
@@ -114,7 +107,7 @@ struct TgranFixture {
 } // namespace
 
 TEST_CASE("fmt_time: TSTD_UDUNITS, standard calendar, day granularity") {
-    ensure_udunits_initialized();
+    ensure_ncview_misc_initialized();
     NCDim dim = make_time_dim((char *)"days since 2000-01-01", (char *)"standard",
                                TSTD_UDUNITS, TGRAN_DAY);
 
@@ -127,7 +120,7 @@ TEST_CASE("fmt_time: TSTD_UDUNITS, standard calendar, day granularity") {
 }
 
 TEST_CASE("fmt_time: TSTD_UDUNITS, 360_day calendar, every month is 30 days") {
-    ensure_udunits_initialized();
+    ensure_ncview_misc_initialized();
     NCDim dim = make_time_dim((char *)"days since 2000-01-01", (char *)"360_day",
                                TSTD_UDUNITS, TGRAN_DAY);
 
@@ -138,7 +131,7 @@ TEST_CASE("fmt_time: TSTD_UDUNITS, 360_day calendar, every month is 30 days") {
 }
 
 TEST_CASE("fmt_time: TSTD_UDUNITS, 365_day calendar never inserts a leap day") {
-    ensure_udunits_initialized();
+    ensure_ncview_misc_initialized();
     NCDim dim = make_time_dim((char *)"days since 2000-01-01", (char *)"365_day",
                                TSTD_UDUNITS, TGRAN_DAY);
 
@@ -149,7 +142,7 @@ TEST_CASE("fmt_time: TSTD_UDUNITS, 365_day calendar never inserts a leap day") {
 }
 
 TEST_CASE("fmt_time: TSTD_UDUNITS with TGRAN_HOUR includes a time-of-day") {
-    ensure_udunits_initialized();
+    ensure_ncview_misc_initialized();
     NCDim dim = make_time_dim((char *)"hours since 2000-01-01", (char *)"standard",
                                TSTD_UDUNITS, TGRAN_HOUR);
 
@@ -219,7 +212,7 @@ TEST_CASE("udu_calc_tgran: always reports TGRAN_SEC for CF-style \"since\" units
     // udu_fmt_time()'s granularity-dependent format, or view.cc's callers)
     // must keep behaving exactly as it does today, bug and all, through the
     // core modernization. A real fix is separate follow-up work.
-    ensure_udunits_initialized();
+    ensure_ncview_misc_initialized();
 
     TgranFixture daily("temp_daily", 5, 1.0);       // 1-day spacing
     TgranFixture monthly("temp_monthly", 5, 30.0);  // 30-day spacing

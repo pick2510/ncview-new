@@ -47,6 +47,7 @@ add_executable(ncview_core_tests
     test_pixels.cc
     test_rcfile.cc
     test_time_fmt.cc
+    test_varlist.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE

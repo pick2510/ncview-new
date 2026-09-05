@@ -21,26 +21,13 @@
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
+#include "test_udunits_helper.h"
 
 // Not declared in any header (see protos.h's own comment on why 'options'
 // and 'variables' are): the one other global data_to_pixels() depends on.
 extern ncv_pixel *pixel_transform;
 
 namespace {
-
-// initialize_misc() (core/src/ncview.cc) is upstream's normal one-time
-// options setup -- called once per process, exactly like main() does, so
-// every test after the first one just overrides the handful of fields it
-// cares about instead of re-running it (it mallocs options.overlay itself
-// on each call, so calling it repeatedly would leak, harmlessly but
-// pointlessly, one OverlayOptions per test).
-void ensure_options_initialized() {
-    static bool done = false;
-    if (!done) {
-        initialize_misc();
-        done = true;
-    }
-}
 
 // data_to_pixels() only ever reads pixel_transform[0] (missing-value
 // pixel) and, when options.display_type == PseudoColor, remaps through it
@@ -69,7 +56,7 @@ struct PixelFixture {
     PixelFixture(size_t nx_, size_t ny_, std::vector<float> values,
                  float fill_value, float user_min, float user_max)
         : nx(nx_), ny(ny_) {
-        ensure_options_initialized();
+        ensure_ncview_misc_initialized();
 
         size[0] = ny; // y axis
         size[1] = nx; // x axis

@@ -9,6 +9,7 @@
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 #include "ncview/calcalcs.h"
+#include "test_udunits_helper.h"
 
 TEST_CASE("calendar: standard calendar jday round trip") {
     calcalcs_cal *cal = ccs_init_calendar("standard");
@@ -123,7 +124,7 @@ TEST_CASE("calendar: invalid date is rejected") {
 }
 
 TEST_CASE("calendar: udunits2 recognizes time and non-time units") {
-    udu_utinit(nullptr);
+    ensure_ncview_misc_initialized();
     CHECK(udu_utistime((char *)"time", (char *)"days since 2000-01-01") == 1);
     CHECK(udu_utistime((char *)"x", (char *)"meters") == 0);
     CHECK(udu_utistime((char *)"whatever_the_name", (char *)"seconds since 1970-01-01 00:00:00") == 1);
