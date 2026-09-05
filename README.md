@@ -12,7 +12,8 @@ See `PORTING.md` for the porting plan and status.
 
 ## Prerequisites
 
-- A C++17 compiler and CMake >= 3.20.
+- A C++17 compiler and CMake >= 3.21 (the install rules use
+  `install(RUNTIME_DEPENDENCY_SET ...)`, added in 3.21).
 - netCDF (the C library + headers; found via `find_package(netCDF)` or,
   failing that, pkg-config).
 - expat (`libexpat-dev`/`expat-devel`), required by the vendored UDUNITS-2 build.
@@ -79,12 +80,19 @@ ldd build-static/app/ncview   # confirm netcdf/hdf5 are no longer listed
 cmake --install build --prefix /usr/local
 ```
 
-installs the `ncview` binary, the man page, and a handful of supplementary
+installs the `ncview` binary, the man page, a handful of supplementary
 `*.ncmap` colormap files (the full built-in colormap set ships compiled into
 the binary regardless -- these are just the extra, less common ones upstream
-distributes as standalone files). `cmake --build build --target package`
-(via the CPack config in the top-level `CMakeLists.txt`) produces a `.tar.gz`
-instead.
+distributes as standalone files), and every non-system shared library the
+binary actually needs at runtime (netCDF, HDF5, X11, curl, ...), copied
+alongside it into `lib/` (`lib64/` on some distros) with an rpath pointing
+back at that directory -- the install (and the package `cmake --build build
+--target package` produces, a `.tar.gz` on Linux/macOS or `.zip` on Windows)
+is self-contained and doesn't require any of that separately installed on
+the machine it's copied to. Deliberately excluded from bundling: the OS's
+own core runtime (libc, the dynamic loader, kernel/GPU-driver-tied libraries
+on Linux, Windows' universal-CRT split DLLs) -- bundling those would be
+actively harmful (ABI/driver mismatches against the host), not helpful.
 
 Note: because of a quirk in the vendored UDUNITS-2 build (see below), the
 *default* install prefix if you don't pass `--prefix` resolves to this

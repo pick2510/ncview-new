@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libnetcdf-dev libexpat1-dev \
+            libx11-dev libxext-dev libxft-dev libxinerama-dev \
+            libxcursor-dev libxrender-dev libxfixes-dev \
+            texinfo
+
+      - name: Configure
+        # FLTK_BACKEND_WAYLAND=OFF: this project always forces
+        # FLTK_BACKEND=x11 at runtime (see README), and none of the
+        # Wayland/GTK dev packages that backend needs are installed above --
+        # explicit here instead of relying on FLTK's own auto-detection
+        # fallback, so a runner image that happens to have them preinstalled
+        # doesn't silently change what gets built and linked.
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DFLTK_BACKEND_WAYLAND=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: cmake --build build --target package -j"$(nproc)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ncview-linux
+          path: build/ncview-*.tar.gz
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          brew install netcdf expat texinfo
+          # Homebrew's texinfo is keg-only (macOS ships its own, much older
+          # makeinfo) -- add it to PATH so CMake's find_program(MAKEINFO)
+          # picks up a working one; the vendored UDUNITS-2 build fails
+          # without it (its CMakeLists.txt depends on the generated .info/
+          # .html unconditionally once a makeinfo is found, so its absence
+          # must mean "skip", not "use whatever old one macOS ships").
+          echo "$(brew --prefix texinfo)/bin" >> "$GITHUB_PATH"
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build
+        run: cmake --build build -j"$(sysctl -n hw.ncpu)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: cmake --build build --target package -j"$(sysctl -n hw.ncpu)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ncview-macos
+          path: build/ncview-*.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up MSYS2 / MinGW64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-netcdf
+            mingw-w64-x86_64-expat
+            texinfo
+          # core/CMakeLists.txt only applies -fpermissive (needed for the
+          # ported code's hundreds of implicit void*->T* conversions, legal
+          # in C, not in C++) when CMAKE_CXX_COMPILER_ID is GNU. MSVC has no
+          # equivalent flag and would hard-fail on all of them, so this
+          # project builds on Windows via MinGW-w64 GCC, not MSVC/vcpkg.
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: cmake --build build --target package -j
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ncview-windows
+          path: build/ncview-*.zip

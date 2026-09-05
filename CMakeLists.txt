@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)  # install(RUNTIME_DEPENDENCY_SET ...) below needs 3.21+
 project(ncview LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -132,9 +132,61 @@ endif()
 # --------------------------------------------------------------------------
 # Install rules
 # --------------------------------------------------------------------------
-install(TARGETS ncview RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS ncview
+    RUNTIME_DEPENDENCY_SET ncview_runtime_deps
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 install(DIRECTORY data/colormaps/ DESTINATION ${CMAKE_INSTALL_DATADIR}/ncview/colormaps)
 install(FILES data/ncview.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
+
+# Bundle every non-system shared library ncview actually needs at runtime
+# (netCDF, HDF5, X11, curl, ...) next to the binary, so a packaged archive
+# is self-contained and doesn't require any of that separately installed on
+# the machine that unpacks it. Deliberately excludes the OS's own core
+# runtime (libc, the dynamic loader, kernel/GPU-driver-tied libraries on
+# Linux, Windows' universal-CRT split DLLs) -- bundling those would be
+# actively harmful (ABI/driver mismatches against the host), not helpful.
+if(WIN32)
+    # DLLs are searched for next to the .exe -- no rpath mechanism to set up.
+    set(_ncview_bundle_dir ${CMAKE_INSTALL_BINDIR})
+    set(_ncview_bundle_pre_exclude "api-ms-.*" "ext-ms-.*")
+    set(_ncview_bundle_post_exclude ".*[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\\\][Ss]y[Ss]tem32.*")
+elseif(APPLE)
+    set(_ncview_bundle_dir ${CMAKE_INSTALL_LIBDIR})
+    set(_ncview_bundle_pre_exclude)
+    set(_ncview_bundle_post_exclude "^/usr/lib/.*" "^/System/Library/.*")
+else()
+    set(_ncview_bundle_dir ${CMAKE_INSTALL_LIBDIR})
+    set(_ncview_bundle_pre_exclude)
+    set(_ncview_bundle_post_exclude
+        "^linux-vdso.*"
+        "^/lib/ld-linux.*" "^/lib64/ld-linux.*" "^/lib/x86_64-linux-gnu/ld-.*"
+        ".*/libc\\.so.*" ".*/libm\\.so.*" ".*/libdl\\.so.*"
+        ".*/libpthread\\.so.*" ".*/librt\\.so.*" ".*/libresolv\\.so.*"
+        ".*/libGL\\.so.*" ".*/libEGL\\.so.*" ".*/libgbm\\.so.*" ".*/libdrm.*"
+        ".*/dri/.*"
+    )
+endif()
+
+install(RUNTIME_DEPENDENCY_SET ncview_runtime_deps
+    DESTINATION ${_ncview_bundle_dir}
+    PRE_EXCLUDE_REGEXES ${_ncview_bundle_pre_exclude}
+    POST_EXCLUDE_REGEXES ${_ncview_bundle_post_exclude}
+)
+
+if(UNIX AND NOT APPLE)
+    set_target_properties(ncview PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+        BUILD_WITH_INSTALL_RPATH FALSE
+        INSTALL_RPATH_USE_LINK_PATH FALSE
+    )
+elseif(APPLE)
+    set_target_properties(ncview PROPERTIES
+        INSTALL_RPATH "@executable_path/../${CMAKE_INSTALL_LIBDIR}"
+        BUILD_WITH_INSTALL_RPATH FALSE
+        INSTALL_RPATH_USE_LINK_PATH FALSE
+    )
+endif()
 
 # --------------------------------------------------------------------------
 # CPack (source/binary tarball)
@@ -142,7 +194,14 @@ install(FILES data/ncview.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 set(CPACK_PACKAGE_NAME "ncview")
 set(CPACK_PACKAGE_VERSION "2.1.11")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A visual netCDF file browser (C++/FLTK port)")
-set(CPACK_GENERATOR "TGZ")
-set(CPACK_SOURCE_GENERATOR "TGZ")
+# ZIP on Windows (no tar/gzip on a bare runner, and it's the platform-native
+# archive format there); TGZ everywhere else.
+if(WIN32)
+    set(CPACK_GENERATOR "ZIP")
+    set(CPACK_SOURCE_GENERATOR "ZIP")
+else()
+    set(CPACK_GENERATOR "TGZ")
+    set(CPACK_SOURCE_GENERATOR "TGZ")
+endif()
 set(CPACK_SOURCE_IGNORE_FILES "/build/;/build-.*/;/\\\\.git/")
 include(CPack)
