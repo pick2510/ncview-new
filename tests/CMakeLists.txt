@@ -26,13 +26,29 @@ else()
     )
 endif()
 
-# M1 checkpoint, part 2: functional behavior of a sample of pure,
-# global-state-free core logic. Links normally (not whole-archive), so only
-# the .o's this test actually calls get pulled in -- no main() clash.
-add_executable(core_headless_test
-    core_headless_test.cc
+# M1 checkpoint, part 2 (and the general unit test suite): functional
+# behavior of core's logic, from pure functions (stringlist, calcalcs,
+# util's string/number helpers) up through the file_netcdf.cc I/O boundary
+# against a real, synthetically-created netCDF file. Links normally (not
+# whole-archive), so only the .o's these tests actually call get pulled in
+# -- no main() clash with ncview_core_linkcheck above.
+#
+# Built on doctest (vendored single header, third_party/doctest) rather
+# than a hand-rolled harness or a framework needing its own build step
+# (e.g. GoogleTest) -- it's a real, widely-used C++ test framework with
+# named test cases, CHECK/REQUIRE assertions, and readable failure output,
+# for the cost of one header.
+add_executable(ncview_core_tests
+    main.cc
+    test_stringlist.cc
+    test_calendar.cc
+    test_util.cc
+    test_file_netcdf.cc
     stub_interface.cc
 )
-target_link_libraries(core_headless_test PRIVATE ncview_core)
-add_dependencies(core_headless_test ncview_core_linkcheck)
-add_test(NAME core_headless_test COMMAND core_headless_test)
+target_include_directories(ncview_core_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/third_party/doctest
+)
+target_link_libraries(ncview_core_tests PRIVATE ncview_core)
+add_dependencies(ncview_core_tests ncview_core_linkcheck)
+add_test(NAME ncview_core_tests COMMAND ncview_core_tests)
