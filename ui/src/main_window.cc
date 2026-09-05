@@ -376,7 +376,7 @@ MainWindow *instance()
 MainWindow::MainWindow()
 {
 	const int W = 900, H = 760;
-	win_ = new Fl_Double_Window( W, H, "ncview" );
+	win_ = new NcviewWindow( W, H, "ncview" );
 
 	labels_[LABEL_TITLE]        = new Fl_Box( 10, 5, W-20, 20 );
 	labels_[LABEL_SCANVAR_NAME] = new Fl_Box( 10, 25, 200, 18 );
@@ -406,37 +406,120 @@ MainWindow::MainWindow()
 	dim_pack_->end();
 
 	button_bar_ = new Fl_Pack( 10, H-70, W-20, 60 );
-	button_bar_->type( Fl_Pack::HORIZONTAL );
+	button_bar_->type( Fl_Pack::VERTICAL );  // a column of per-row horizontal packs; see rebuildButtonBar()
 	button_bar_->spacing( 2 );
-	rebuildButtonBar();
 
 	win_->end();
-	win_->resizable( image_ );
+	// No win_->resizable(...): layout() (below) repositions/resizes every
+	// managed widget itself on every resize (via NcviewWindow::on_resize),
+	// so FLTK's own generic proportional child-resize would just be
+	// redundant work immediately overwritten by layout() -- leaving no
+	// resizable() child makes Fl_Group::resize() a no-op for our children.
+	win_->on_resize = [this]( int w, int h ) { layout( w, h ); };
+	win_->size_range( 700, 500 );
+	layout( W, H );
 }
 
-struct ButtonSpec { int id; const char *text; };
+void MainWindow::layout( int w, int h )
+{
+	const int kSideMargin = 10;
+	const int kImageX = 200;
+	const int kTopY = 100;
+	const int kColorbarH = 20;
+	const int kColorbarGap = 10;
+	// Colorbar::draw() puts its tick labels ~13px below the swatch (plus
+	// font ascent/descent), so the gap before dim_pack_ needs to clear that
+	// text height -- 10px wasn't enough and let tick labels bleed into (and
+	// render underneath) the dimension row widgets below.
+	const int kColorbarLabelGap = 20;
+	const int kDimPackH = 100;
+	const int kDimGap = 10;
+	const int kBottomMargin = 10;
+	const int kVarPackGap = 40;  // matches the original fixed layout's var_pack_-to-dim_pack_ gap
+
+	// Bottom-up: the button bar's height depends on how many rows the
+	// current width wraps it into (rebuildButtonBar()), which then pushes
+	// everything above it up or down.
+	int button_bar_w = w - 2*kSideMargin;
+	int button_bar_h = rebuildButtonBar( button_bar_w );
+	int button_bar_y = h - kBottomMargin - button_bar_h;
+
+	int dim_pack_y = button_bar_y - kDimGap - kDimPackH;
+	int colorbar_y = dim_pack_y - kColorbarLabelGap - kColorbarH;
+	int image_h = colorbar_y - kColorbarGap - kTopY;
+	if( image_h < 40 ) image_h = 40;  // keep something sane at extreme window sizes
+
+	int right_w = w - kImageX - kSideMargin;
+	if( right_w < 40 ) right_w = 40;
+
+	button_bar_->resize( kSideMargin, button_bar_y, button_bar_w, button_bar_h );
+	dim_pack_->resize( kSideMargin, dim_pack_y, w - 2*kSideMargin, kDimPackH );
+	colorbar_->resize( kImageX, colorbar_y, right_w, kColorbarH );
+	image_->resize( kImageX, kTopY, right_w, image_h );
+
+	int var_pack_h = dim_pack_y - kVarPackGap - kTopY;
+	if( var_pack_h < 40 ) var_pack_h = 40;
+	var_pack_->resize( kSideMargin, kTopY, 180, var_pack_h );
+
+	if( labels_[LABEL_TITLE] ) labels_[LABEL_TITLE]->size( w - 2*kSideMargin, labels_[LABEL_TITLE]->h() );
+
+	win_->redraw();
+}
+
+// Explicit per-button pixel widths (rather than one fixed size for all)
+// since a uniform 60px was too narrow for "Colormap"/"Transform"/etc,
+// leaving their labels crowding the button edges.
+struct ButtonSpec { int id; const char *text; int width; };
 static const ButtonSpec kButtonSpecs[] = {
-	{ BUTTON_REWIND, "@|<" }, { BUTTON_BACKWARDS, "@<" }, { BUTTON_PAUSE, "@||" },
-	{ BUTTON_FORWARD, "@>" }, { BUTTON_FASTFORWARD, "@>|" }, { BUTTON_RESTART, "Restart" },
-	{ BUTTON_COLORMAP_SELECT, "Colormap" }, { BUTTON_INVERT_PHYSICAL, "Inv.Phys" },
-	{ BUTTON_INVERT_COLORMAP, "Inv.Cmap" }, { BUTTON_MINIMUM, "Min" }, { BUTTON_MAXIMUM, "Max" },
+	{ BUTTON_REWIND, "@|<", 40 }, { BUTTON_BACKWARDS, "@<", 40 }, { BUTTON_PAUSE, "@||", 40 },
+	{ BUTTON_FORWARD, "@>", 40 }, { BUTTON_FASTFORWARD, "@>|", 40 }, { BUTTON_RESTART, "Restart", 65 },
+	{ BUTTON_COLORMAP_SELECT, "Colormap", 80 }, { BUTTON_INVERT_PHYSICAL, "Inv.Phys", 75 },
+	{ BUTTON_INVERT_COLORMAP, "Inv.Cmap", 78 }, { BUTTON_MINIMUM, "Min", 50 }, { BUTTON_MAXIMUM, "Max", 50 },
 	// No BUTTON_BLOWUP/BUTTON_BLOWUP_TYPE here -- replaced by ImageView's
 	// scroll-to-zoom (mouse wheel) and drag-to-pan (left-button drag), which
 	// give continuous navigation instead of upstream's discrete button.
-	{ BUTTON_TRANSFORM, "Transform" },
-	{ BUTTON_DIMSET, "DimSet" }, { BUTTON_RANGE, "Range" }, { BUTTON_EDIT, "Edit" },
-	{ BUTTON_INFO, "Info" }, { BUTTON_PRINT, "Print" }, { BUTTON_OPTIONS, "Options" },
-	{ BUTTON_QUIT, "Quit" },
+	{ BUTTON_TRANSFORM, "Transform", 85 },
+	{ BUTTON_DIMSET, "DimSet", 65 }, { BUTTON_RANGE, "Range", 60 }, { BUTTON_EDIT, "Edit", 50 },
+	{ BUTTON_INFO, "Info", 50 }, { BUTTON_PRINT, "Print", 55 }, { BUTTON_OPTIONS, "Options", 70 },
+	{ BUTTON_QUIT, "Quit", 55 },
 };
 
-void MainWindow::rebuildButtonBar()
+// Rebuilds the button bar as however many rows of buttons fit in
+// available_width -- replaces the old single Fl_Pack::HORIZONTAL row, which
+// simply ran off the right edge of the window once the buttons' total width
+// (~1100px across 19 buttons) exceeded it (which it always did, even at the
+// original fixed 900px window width). button_bar_ itself is now a VERTICAL
+// pack of per-row HORIZONTAL packs, rebuilt every time available_width
+// changes (window resize) so it always wraps instead of overflowing.
+// Returns the total height needed for all the rows produced.
+int MainWindow::rebuildButtonBar( int available_width )
 {
+	button_bar_->clear();
+	if( available_width < 60 ) available_width = 60;
+
+	const int kButtonHeight = 26, kSpacing = 2;
+	Fl_Pack *row = nullptr;
+	int row_width = 0;  // width used so far in the current row, incl. inter-button spacing
+	int n_rows = 0;
+
 	for( const auto &spec : kButtonSpecs ) {
-		auto *btn = new Fl_Button( 0, 0, 60, 26, spec.text );
+		int with_this = row_width + ( row_width > 0 ? kSpacing : 0 ) + spec.width;
+		if( row == nullptr || with_this > available_width ) {
+			row = new Fl_Pack( 0, 0, available_width, kButtonHeight );
+			row->type( Fl_Pack::HORIZONTAL );
+			row->spacing( kSpacing );
+			button_bar_->add( row );
+			row_width = 0;
+			n_rows++;
+		}
+		auto *btn = new Fl_Button( 0, 0, spec.width, kButtonHeight, spec.text );
 		btn->callback( &MainWindow::buttonCallback, (void*)(intptr_t)spec.id );
-		button_bar_->add( btn );
+		row->add( btn );
 		buttons_[spec.id] = btn;
+		row_width += ( row_width > 0 ? kSpacing : 0 ) + spec.width;
 	}
+
+	return n_rows*kButtonHeight + ( n_rows > 0 ? (n_rows-1)*kSpacing : 0 );
 }
 
 void MainWindow::buttonCallback( Fl_Widget *, void *data )

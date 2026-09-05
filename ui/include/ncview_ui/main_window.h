@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -108,6 +109,21 @@ struct NamedColormap {
 	unsigned char r[256], g[256], b[256];
 };
 
+// Fl_Double_Window has no resize callback of its own; this just forwards
+// resize() to a std::function so MainWindow can re-run its layout whenever
+// the user drags the window edge, instead of only laying out once at
+// construction with a fixed 900x760.
+class NcviewWindow : public Fl_Double_Window {
+public:
+	NcviewWindow( int w, int h, const char *title ) : Fl_Double_Window( w, h, title ) {}
+	void resize( int X, int Y, int W, int H ) override
+	{
+		Fl_Double_Window::resize( X, Y, W, H );
+		if( on_resize ) on_resize( W, H );
+	}
+	std::function<void(int,int)> on_resize;
+};
+
 class MainWindow {
 public:
 	MainWindow();
@@ -146,13 +162,18 @@ public:
 	int  printerOptionsDialog( PrintOptions *po );
 
 private:
-	void rebuildButtonBar();
+	// Recomputes every widget's position/size for the current window
+	// dimensions -- run once at construction and again on every live
+	// resize (via NcviewWindow::on_resize), so the layout adapts instead
+	// of clipping/overflowing at anything other than the original 900x760.
+	void layout( int w, int h );
+	int  rebuildButtonBar( int available_width );  // returns total bar height (may be several rows)
 	void rebuildDimRow( DimRow &row );
 	static void buttonCallback( Fl_Widget *w, void *data );
 	static void varChoiceCallback( Fl_Widget *w, void *data );
 	static void dimStepCallback( Fl_Widget *w, void *data );
 
-	Fl_Double_Window *win_ = nullptr;
+	NcviewWindow     *win_ = nullptr;
 	ImageView         *image_ = nullptr;
 	Colorbar          *colorbar_ = nullptr;
 	Fl_Pack           *button_bar_ = nullptr;
