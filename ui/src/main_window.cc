@@ -184,6 +184,20 @@ void ImageView::zoomAt( int win_x, int win_y, double factor )
 int ImageView::handle( int event )
 {
 	switch( event ) {
+		// FL_ENTER must be accepted (return 1) here, not just FL_MOVE:
+		// Fl_Group::handle()'s FL_ENTER/FL_MOVE case sends FL_ENTER (not
+		// FL_MOVE) the moment the mouse first enters a child and only
+		// latches Fl::belowmouse() onto that child if its handle() returns
+		// non-zero for that FL_ENTER. Since this case list previously
+		// didn't include FL_ENTER, it fell through to Fl_Widget::handle()
+		// (returns 0), so Fl_Group never latched belowmouse onto this
+		// widget -- every subsequent plain mouse move (no button held) re-
+		// entered the same "first entry" branch and got resent as another
+		// FL_ENTER instead of FL_MOVE, so the position/value readout never
+		// updated on hover. It worked only during an active drag because
+		// FL_PUSH/FL_DRAG/FL_RELEASE route via Fl::pushed(), a completely
+		// separate mechanism from belowmouse-based FL_MOVE dispatch.
+		case FL_ENTER:
 		case FL_PUSH:
 		case FL_DRAG:
 		case FL_MOVE: {
@@ -407,7 +421,13 @@ MainWindow::MainWindow()
 	labels_[LABEL_SCANVAR_NAME] = new Fl_Box( 10, 25, 200, 18 );
 	labels_[LABEL_SCAN_PLACE]   = new Fl_Box( 220, 25, 200, 18 );
 	labels_[LABEL_DATA_EXTREMA] = new Fl_Box( 10, 43, 300, 18 );
-	labels_[LABEL_DATA_VALUE]   = new Fl_Box( 320, 43, 200, 18 );
+	// Wide enough to actually show the full "Current: (i=.., j=..) val
+	// (x=.., y=..)" string view_report_position() builds -- the old fixed
+	// 200px width clipped it right after "(x=", silently hiding the x/y
+	// coordinate values even though they were always part of the label
+	// text and updating on every mouse move. Resized to track the window
+	// edge in layout() below, same as LABEL_TITLE.
+	labels_[LABEL_DATA_VALUE]   = new Fl_Box( 320, 43, W-330, 18 );
 	labels_[LABEL_COLORMAP_NAME]= new Fl_Box( 10, 61, 150, 18 );
 	// No LABEL_BLOWUP ("M X<n>") box -- it showed core's discrete
 	// pre-zoom pixel-buffer scale factor, which upstream's now-removed
@@ -491,6 +511,10 @@ void MainWindow::layout( int w, int h )
 	var_pack_->resize( kSideMargin, kTopY, 180, var_pack_h );
 
 	if( labels_[LABEL_TITLE] ) labels_[LABEL_TITLE]->size( w - 2*kSideMargin, labels_[LABEL_TITLE]->h() );
+	if( labels_[LABEL_DATA_VALUE] ) {
+		int lx = labels_[LABEL_DATA_VALUE]->x();
+		labels_[LABEL_DATA_VALUE]->size( w - kSideMargin - lx, labels_[LABEL_DATA_VALUE]->h() );
+	}
 
 	win_->redraw();
 }

@@ -2154,11 +2154,11 @@ view_report_position( int x, int y, unsigned int button_mask )
 	if( ! view )
 		return;
 
-	/* This can happen if we click on a 2-d variable, then click 
+	/* This can happen if we click on a 2-d variable, then click
 	 * on a 1-d variable, then move the pointer back over the
 	 * displayed colormap of the (old) 2-d variable.
 	 */
-	if( view->variable->effective_dimensionality == 1 ) 
+	if( view->variable->effective_dimensionality == 1 )
 		return;
 
 	if( view->data_status == VDS_INVALID ) {
@@ -2378,6 +2378,11 @@ set_min_from_curdata()
 	int	x, y;
 	float	val;
 
+	// See plot_XY()'s comment: ImageView accepts Ctrl-click before any
+	// variable is selected, unlike upstream's canvas widget.
+	if( view == NULL )
+		return;
+
 	if( view->data_status == VDS_INVALID ) {
 		fill_view_data( view );
 		view->data_status = VDS_VALID;
@@ -2419,6 +2424,11 @@ set_max_from_curdata()
 	size_t	data_x, data_y, x_size, y_size;
 	int	x, y;
 	float	val;
+
+	// See plot_XY()'s comment: ImageView accepts Ctrl-click before any
+	// variable is selected, unlike upstream's canvas widget.
+	if( view == NULL )
+		return;
 
 	if( view->data_status == VDS_INVALID ) {
 		fill_view_data( view );
@@ -2593,6 +2603,16 @@ plot_XY()
 {
 	int	X_axis, i, x_window, y_window;
 	size_t	*start, *count, data_x, data_y, x_size, y_size, n;
+
+	// Upstream's Xt canvas widget never has this wired up to a live click
+	// until a variable is actually being displayed, so 'view' being NULL
+	// here never came up there. Our ImageView is a plain Fl_Widget that
+	// accepts clicks from the moment the window is shown -- clicking the
+	// still-empty 2-D pane before selecting any variable reaches this
+	// function with view == NULL and crashed (segfault dereferencing
+	// view->plot_XY_axis) instead of upstream's implicit no-op.
+	if( view == NULL )
+		return;
 
 	X_axis = view->plot_XY_axis;
 	if( X_axis == -1 ) {
