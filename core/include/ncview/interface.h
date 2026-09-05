@@ -80,6 +80,7 @@ int	in_report_auto_overlay  ( void );
  * uses std::function so the seam has no toolkit type in it. */
 void 	in_timer_set            ( std::function<void()> callback, unsigned long delay_millisec );
 char    *in_install_prev_colormap( int do_widgets );
+char	*in_install_colormap_by_name( char *name, int do_widgets );
 
 /******************************************************************************
  * Functions core calls directly (not via in_*) that are nonetheless UI

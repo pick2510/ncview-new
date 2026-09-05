@@ -251,6 +251,11 @@ char *in_install_prev_colormap( int do_widgets )
 	return instance()->installPrevColormap( do_widgets );
 }
 
+char *in_install_colormap_by_name( char *name, int do_widgets )
+{
+	return instance()->installColormapByName( name, do_widgets );
+}
+
 int in_set_2d_size( size_t width, size_t height )
 {
 	int r = instance()->set2DSize( width, height );

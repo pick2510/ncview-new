@@ -35,6 +35,22 @@ in_variable_selected( char *var_name )
 }
 
 /*****************************************************************************
+ * Vector through this routine when a colormap has been picked directly (by
+ * name) from the UI's colormap combobox -- the direct-pick counterpart of
+ * do_colormap_sel()'s cycle-by-one-step BUTTON_COLORMAP_SELECT handling in
+ * do_buttons.cc, which this deliberately mirrors (same in_install_..() then
+ * view_draw()/view_recompute_colorbar() tail) so a picked colormap repaints
+ * exactly like a cycled one does.
+ */
+void
+in_colormap_selected( char *name )
+{
+	in_install_colormap_by_name( name, TRUE );
+	view_draw( TRUE, FALSE );
+	view_recompute_colorbar();
+}
+
+/*****************************************************************************
  * Called when a button is pressed (by the UI's widget callbacks, or by
  * core itself -- e.g. util.cc pauses playback on an error by calling
  * in_button_pressed(BUTTON_PAUSE, MOD_1)).  Argument 'button_id' indicates

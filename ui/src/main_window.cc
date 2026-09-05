@@ -12,6 +12,7 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Float_Input.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Multi_Label.H>
 #include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_Return_Button.H>
 #include <FL/Fl_Round_Button.H>
@@ -28,6 +29,30 @@ inline void lookup( const unsigned char *r, const unsigned char *g, const unsign
 	out[0] = r[idx];
 	out[1] = g[idx];
 	out[2] = b[idx];
+}
+} // namespace
+
+namespace {
+// Small horizontal-gradient swatch for a colormap combo entry -- one column
+// per on-screen pixel, sampled across the full [0,255] table so the preview
+// looks like a miniature colorbar rather than a solid block.
+constexpr int kColormapPreviewW = 32, kColormapPreviewH = 14;
+
+Fl_RGB_Image *buildColormapPreview( const unsigned char *r, const unsigned char *g, const unsigned char *b )
+{
+	// alloc_array=1 below hands ownership of this buffer to the Fl_RGB_Image,
+	// which delete[]s it when the image itself is destroyed.
+	auto *buf = new unsigned char[ kColormapPreviewW * kColormapPreviewH * 3 ];
+	for( int x = 0; x < kColormapPreviewW; x++ ) {
+		int idx = x * 255 / (kColormapPreviewW - 1);
+		for( int y = 0; y < kColormapPreviewH; y++ ) {
+			unsigned char *px = buf + (y*kColormapPreviewW + x) * 3;
+			px[0] = r[idx]; px[1] = g[idx]; px[2] = b[idx];
+		}
+	}
+	auto *img = new Fl_RGB_Image( buf, kColormapPreviewW, kColormapPreviewH, 3 );
+	img->alloc_array = 1;
+	return img;
 }
 } // namespace
 
@@ -471,13 +496,20 @@ void MainWindow::layout( int w, int h )
 }
 
 // Explicit per-button pixel widths (rather than one fixed size for all)
-// since a uniform 60px was too narrow for "Colormap"/"Transform"/etc,
-// leaving their labels crowding the button edges.
+// since a uniform 60px was too narrow for "Transform"/etc, leaving their
+// labels crowding the button edges.
+//
+// No BUTTON_COLORMAP_SELECT entry here -- replaced by the colormap combobox
+// in var_pack_ (see rebuildColormapChoice()), which shows every colormap's
+// name and a preview swatch instead of cycling through them blind one at a
+// time. BUTTON_COLORMAP_SELECT/do_colormap_sel() still exist for the
+// NCVIEW_TEST_BUTTON headless-test hook and any script driving buttons by
+// id directly; they just have no on-screen button anymore.
 struct ButtonSpec { int id; const char *text; int width; };
 static const ButtonSpec kButtonSpecs[] = {
 	{ BUTTON_REWIND, "@|<", 40 }, { BUTTON_BACKWARDS, "@<", 40 }, { BUTTON_PAUSE, "@||", 40 },
 	{ BUTTON_FORWARD, "@>", 40 }, { BUTTON_FASTFORWARD, "@>|", 40 }, { BUTTON_RESTART, "Restart", 65 },
-	{ BUTTON_COLORMAP_SELECT, "Colormap", 80 }, { BUTTON_INVERT_PHYSICAL, "Inv.Phys", 75 },
+	{ BUTTON_INVERT_PHYSICAL, "Inv.Phys", 75 },
 	{ BUTTON_INVERT_COLORMAP, "Inv.Cmap", 78 }, { BUTTON_MINIMUM, "Min", 50 }, { BUTTON_MAXIMUM, "Max", 50 },
 	// No BUTTON_BLOWUP here -- replaced by ImageView's scroll-to-zoom (mouse
 	// wheel) and drag-to-pan (left-button drag), which give continuous
@@ -600,7 +632,59 @@ void MainWindow::populateVarList()
 		var_pack_->add( choice );
 		var_choices_.push_back( choice );
 	}
+	rebuildColormapChoice();
 	var_pack_->redraw();
+}
+
+// Replaces the old "Colormap" button-bar button (which just cycled through
+// colormaps_ one at a time with no indication of what any of them looked
+// like) with a combobox showing every colormap's name plus a small preview
+// swatch, so the choice can be made directly instead of by cycling blind.
+// Rebuilt alongside the variable-bucket combos above it (populateVarList()
+// clears and rebuilds var_pack_ as a whole on every file load), which is
+// what makes it move up/down with them: it's simply the last child of the
+// same vertical pack, so it sits directly below however many dimensionality
+// buckets (1d/2d/3d/4d/5d) the current file's variables happen to produce.
+void MainWindow::rebuildColormapChoice()
+{
+	colormap_choice_ = new Fl_Choice( 0, 0, var_pack_->w(), 24 );
+	for( size_t i = 0; i < colormaps_.size(); i++ ) {
+		std::string label = escapeMenuLabel( colormaps_[i].name.c_str() );
+		int idx = colormap_choice_->add( label.c_str(), 0, &MainWindow::colormapChoiceCallback,
+			(void *)(intptr_t)i );
+		if( i < colormap_previews_.size() ) {
+			auto *item = const_cast<Fl_Menu_Item *>( &colormap_choice_->menu()[idx] );
+			// Fl_Menu_Item has no native way to show an icon and text
+			// together -- Fl_Image::label(Fl_Menu_Item*) replaces the
+			// label with an image-only one, discarding the name text
+			// entirely (confirmed: it silently left every item blank).
+			// Fl_Multi_Label is FLTK's actual mechanism for pairing an
+			// image with text on a menu item. Deliberately heap-allocated
+			// and never freed -- this only runs once per file load
+			// (populateVarList()), same bounded-leak tradeoff already used
+			// for the dim-row callback closures below.
+			auto *ml = new Fl_Multi_Label;
+			ml->typea = FL_IMAGE_LABEL;
+			ml->labela = (const char *)colormap_previews_[i];
+			ml->typeb = FL_NORMAL_LABEL;
+			ml->labelb = item->label();
+			ml->label( item );
+		}
+	}
+	if( current_colormap_ >= 0 && current_colormap_ < (int)colormaps_.size() )
+		colormap_choice_->value( current_colormap_ );
+	var_pack_->add( colormap_choice_ );
+}
+
+void MainWindow::colormapChoiceCallback( Fl_Widget *w, void * )
+{
+	auto *choice = static_cast<Fl_Choice*>( w );
+	const Fl_Menu_Item *item = choice->mvalue();
+	if( item == nullptr ) return;
+	size_t idx = (size_t)(intptr_t)item->user_data();
+	auto *mw = instance();
+	if( idx >= mw->colormaps_.size() ) return;
+	in_colormap_selected( (char *)mw->colormaps_[idx].name.c_str() );
 }
 
 void MainWindow::setLabel( int label_id, const char *s )
@@ -618,6 +702,13 @@ void MainWindow::setLabel( int label_id, const char *s )
 
 void MainWindow::setSensitive( int button_id, int state )
 {
+	// BUTTON_COLORMAP_SELECT has no entry in buttons_[] any more (see
+	// kButtonSpecs) -- core's set_buttons() still toggles it as part of
+	// BUTTONS_ALL_ON/BUTTONS_ALL_OFF, so route it to the combobox instead.
+	if( button_id == BUTTON_COLORMAP_SELECT ) {
+		if( colormap_choice_ ) { if( state ) colormap_choice_->activate(); else colormap_choice_->deactivate(); }
+		return;
+	}
 	if( button_id < 0 || button_id >= (int)(sizeof(buttons_)/sizeof(buttons_[0])) ) return;
 	if( buttons_[button_id] == nullptr ) return;
 	if( state ) buttons_[button_id]->activate();
@@ -744,6 +835,7 @@ void MainWindow::createColormap( const char *name, const unsigned char *r, const
 	std::memcpy( cm.g, g, 256 );
 	std::memcpy( cm.b, b, 256 );
 	colormaps_.push_back( cm );
+	colormap_previews_.push_back( buildColormapPreview( r, g, b ) );
 	if( current_colormap_ < 0 ) {
 		current_colormap_ = 0;
 		image_->setColormap( r, g, b );
@@ -774,7 +866,10 @@ char *MainWindow::installNextColormap( int do_widgets )
 	auto &cm = colormaps_[current_colormap_];
 	image_->setColormap( cm.r, cm.g, cm.b );
 	colorbar_->setColormap( cm.r, cm.g, cm.b );
-	if( do_widgets ) setLabel( LABEL_COLORMAP_NAME, cm.name.c_str() );
+	if( do_widgets ) {
+		setLabel( LABEL_COLORMAP_NAME, cm.name.c_str() );
+		if( colormap_choice_ ) { colormap_choice_->value( current_colormap_ ); colormap_choice_->redraw(); }
+	}
 	return (char *)cm.name.c_str();
 }
 
@@ -785,8 +880,28 @@ char *MainWindow::installPrevColormap( int do_widgets )
 	auto &cm = colormaps_[current_colormap_];
 	image_->setColormap( cm.r, cm.g, cm.b );
 	colorbar_->setColormap( cm.r, cm.g, cm.b );
-	if( do_widgets ) setLabel( LABEL_COLORMAP_NAME, cm.name.c_str() );
+	if( do_widgets ) {
+		setLabel( LABEL_COLORMAP_NAME, cm.name.c_str() );
+		if( colormap_choice_ ) { colormap_choice_->value( current_colormap_ ); colormap_choice_->redraw(); }
+	}
 	return (char *)cm.name.c_str();
+}
+
+char *MainWindow::installColormapByName( const char *name, int do_widgets )
+{
+	for( size_t i = 0; i < colormaps_.size(); i++ ) {
+		if( colormaps_[i].name != name ) continue;
+		current_colormap_ = (int)i;
+		auto &cm = colormaps_[i];
+		image_->setColormap( cm.r, cm.g, cm.b );
+		colorbar_->setColormap( cm.r, cm.g, cm.b );
+		if( do_widgets ) {
+			setLabel( LABEL_COLORMAP_NAME, cm.name.c_str() );
+			if( colormap_choice_ ) { colormap_choice_->value( current_colormap_ ); colormap_choice_->redraw(); }
+		}
+		return (char *)cm.name.c_str();
+	}
+	return nullptr;
 }
 
 void MainWindow::createColorbar( float user_min, float user_max, int transform )

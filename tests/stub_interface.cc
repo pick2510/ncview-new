@@ -40,6 +40,7 @@ void in_timer_clear() {}
 int in_report_auto_overlay() { return 0; }
 void in_timer_set(std::function<void()>, unsigned long) {}
 char *in_install_prev_colormap(int) { return nullptr; }
+char *in_install_colormap_by_name(char*, int) { return nullptr; }
 
 void set_options() {}
 int printer_options(PrintOptions*) { return 0; }

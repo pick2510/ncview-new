@@ -278,5 +278,6 @@ Stringlist *get_persistent_state();
  * UI); see that file's header comment.
  */
 void	in_variable_selected	( char *var_name );
+void	in_colormap_selected	( char *name );
 void	in_button_pressed	( int button_id, int modifier );
 void	in_error		( char *message );

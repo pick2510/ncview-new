@@ -20,6 +20,7 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Pack.H>
+#include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Widget.H>
 
 // This whole project is C++ throughout (core included), so these are
@@ -144,7 +145,9 @@ public:
 	int  set2DSize( size_t width, size_t height );
 	char *installNextColormap( int do_widgets );
 	char *installPrevColormap( int do_widgets );
+	char *installColormapByName( const char *name, int do_widgets );
 	bool  seenColormapName( const char *name ) const;
+
 	void  checkLegalColormapLoaded();
 	void  createColorbar( float user_min, float user_max, int transform );
 	void  drawColorbar();
@@ -169,9 +172,11 @@ private:
 	void layout( int w, int h );
 	int  rebuildButtonBar( int available_width );  // returns total bar height (may be several rows)
 	void rebuildDimRow( DimRow &row );
+	void rebuildColormapChoice();
 	static void buttonCallback( Fl_Widget *w, void *data );
 	static void varChoiceCallback( Fl_Widget *w, void *data );
 	static void dimStepCallback( Fl_Widget *w, void *data );
+	static void colormapChoiceCallback( Fl_Widget *w, void *data );
 
 	NcviewWindow     *win_ = nullptr;
 	ImageView         *image_ = nullptr;
@@ -180,11 +185,19 @@ private:
 	Fl_Pack           *dim_pack_ = nullptr;
 	Fl_Pack           *var_pack_ = nullptr;
 	std::vector<Fl_Choice*> var_choices_;         // one per dimensionality bucket (1d, 2d, ...)
+	Fl_Choice         *colormap_choice_ = nullptr; // last child of var_pack_; see rebuildColormapChoice()
 	Fl_Box            *labels_[16] = {};          // indexed by LABEL_*
 	Fl_Widget         *buttons_[32] = {};          // indexed by BUTTON_*
 
 	std::vector<DimRow> dim_rows_;
 	std::vector<NamedColormap> colormaps_;
+	// One preview swatch image per colormaps_ entry, in the same order --
+	// built once in createColormap() and reused across every
+	// rebuildColormapChoice() call (colormaps_ itself never changes after
+	// startup; only the var-bucket combos above it get rebuilt per file).
+	// Owned for the life of this singleton, like the dim-row callback
+	// closures below -- never explicitly freed.
+	std::vector<Fl_RGB_Image*> colormap_previews_;
 	int current_colormap_ = -1;
 };
 
