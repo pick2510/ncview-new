@@ -152,6 +152,25 @@ endif()
 # hardcoded paths resolve; our actual project readme is README.md.
 add_subdirectory(third_party/udunits2)
 
+# UDUNITS-2's own CMakeLists.txt only escapes backslashes in the path it
+# bakes into config.h's DEFAULT_UDUNITS2_XML_PATH "IF(MSVC)" -- on Windows/
+# MinGW (CMAKE_CXX_COMPILER_ID GNU, not MSVC, which is how this project
+# builds on Windows -- see the flex/bison note above and the CI workflow)
+# that guard is false, leaving raw Windows backslashes sitting in a C
+# string literal, which the compiler then tries to parse as escape
+# sequences and fails outright ("incomplete universal character name
+# \u..."). Windows' own path APIs (and ut_read_xml()) accept forward
+# slashes identically to backslashes, so normalize the generated header
+# ourselves after the fact rather than patch the vendored submodule.
+if(WIN32)
+    set(_udunits2_config_h "${CMAKE_BINARY_DIR}/third_party/udunits2/config.h")
+    if(EXISTS "${_udunits2_config_h}")
+        file(READ "${_udunits2_config_h}" _udunits2_config_h_content)
+        string(REPLACE "\\" "/" _udunits2_config_h_content "${_udunits2_config_h_content}")
+        file(WRITE "${_udunits2_config_h}" "${_udunits2_config_h_content}")
+    endif()
+endif()
+
 # --------------------------------------------------------------------------
 # ncview
 # --------------------------------------------------------------------------
