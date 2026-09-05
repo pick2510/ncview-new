@@ -162,6 +162,7 @@ Strict parity means these are *found* during the work and fixed afterwards, each
 
 - `core/src/view.cc:1231` — an unguarded `printf("got an expose event\n")` in `redraw_ccontour()`, writing to stdout in normal operation.
 - `core/src/util.cc:232-234` — `size_t` values printed through `%ld`, undefined on Windows/LLP64 where the CI already builds.
+- `core/src/udu.cc:udu_calc_tgran()` — always returns `TGRAN_SEC` for any CF-convention "`<units> since <reference-date>`" time axis (i.e. virtually every real netCDF file), never `TGRAN_MIN`/`HOUR`/`DAY`/`MONTH`/`YEAR`. Root cause (confirmed against this project's vendored UDUNITS-2, `third_party/udunits2`, pinned v2.2.28): `ut_are_convertible(unit, seconds)` reports a unit *with* a reference origin as not convertible to plain `seconds` (a bare `"days"`, with no `"since"`, correctly reports convertible), so the function's own `if (!ut_are_convertible(...)) return TGRAN_SEC;` guard fires unconditionally. Found via `tests/test_time_fmt.cc`'s `udu_calc_tgran` characterization test (Phase 0b) — see that test's comment for the full derivation.
 - Whatever 0d's sanitizer run turns up that RAII does not resolve on its own.
 
 ## Verification
