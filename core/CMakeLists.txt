@@ -41,6 +41,15 @@ target_compile_definitions(ncview_core PRIVATE
     NCVIEW_BUILD_TREE_UDUNITS2_XML="${CMAKE_SOURCE_DIR}/third_party/udunits2/lib/udunits2.xml"
 )
 
+# M6: the (optional -- built-in colormaps already cover normal use)
+# supplementary *.ncmap colormap files this project installs alongside the
+# binary (see top-level CMakeLists.txt's install(DIRECTORY data/colormaps ...)).
+# ncview.cc's init_display_interface() searches this directory in addition to
+# $NCVIEWBASE/$HOME and ".", exactly like upstream's NCVIEW_LIB_DIR.
+target_compile_definitions(ncview_core PRIVATE
+    NCVIEW_LIB_DIR="${CMAKE_INSTALL_FULL_DATADIR}/ncview/colormaps"
+)
+
 # Upstream's linked lists type their next/prev pointers as `void *` and rely
 # on C's implicit void*->T* conversion at every traversal site; there are
 # hundreds of these across core/. -fpermissive downgrades that (and a few

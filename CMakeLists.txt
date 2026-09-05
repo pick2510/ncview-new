@@ -9,12 +9,13 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
 
+include(GNUInstallDirs)
+
 # tests/ whole-archive-links ncview_core (and transitively libudunits2) into
 # a shared library to force full symbol resolution (see tests/CMakeLists.txt);
 # that requires every static lib involved to be PIC.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(NCVIEW_ENABLE_PNG "Enable PNG frame dump support" ON)
 option(NCVIEW_BUILD_TESTS "Build ncview_core headless tests" ON)
 
 # --------------------------------------------------------------------------
@@ -27,13 +28,11 @@ if(NOT netCDF_FOUND)
     add_library(netCDF::netcdf ALIAS PkgConfig::NETCDF)
 endif()
 
-if(NCVIEW_ENABLE_PNG)
-    find_package(PNG)
-    if(NOT PNG_FOUND)
-        message(WARNING "libpng not found; disabling NCVIEW_ENABLE_PNG")
-        set(NCVIEW_ENABLE_PNG OFF)
-    endif()
-endif()
+# M0's plan called for an NCVIEW_ENABLE_PNG option guarding a system libpng
+# dependency for the "-frames" PNG dump. M5 implemented that dump with
+# FLTK's own fl_write_png instead (ui/src/interface_fltk.cc) -- FLTK already
+# bundles libpng for its own image support, so PNG output is unconditional
+# and there is no separate libpng dependency to gate.
 
 # --------------------------------------------------------------------------
 # Vendored third-party libraries (submodules)
@@ -66,4 +65,20 @@ if(NCVIEW_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-install(DIRECTORY data/ DESTINATION ${CMAKE_INSTALL_PREFIX}/share/ncview)
+# --------------------------------------------------------------------------
+# Install rules
+# --------------------------------------------------------------------------
+install(TARGETS ncview RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY data/colormaps/ DESTINATION ${CMAKE_INSTALL_DATADIR}/ncview/colormaps)
+install(FILES data/ncview.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
+
+# --------------------------------------------------------------------------
+# CPack (source/binary tarball)
+# --------------------------------------------------------------------------
+set(CPACK_PACKAGE_NAME "ncview")
+set(CPACK_PACKAGE_VERSION "2.1.11")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A visual netCDF file browser (C++/FLTK port)")
+set(CPACK_GENERATOR "TGZ")
+set(CPACK_SOURCE_GENERATOR "TGZ")
+set(CPACK_SOURCE_IGNORE_FILES "/build/;/build-.*/;/\\\\.git/")
+include(CPack)
