@@ -17,6 +17,26 @@
 
 namespace {
 
+// HDF5 (netCDF-4's storage backend) has taken out an advisory file lock on
+// every open file by default since 1.10.0. That's actively hostile to a
+// test that creates, closes, and immediately reopens the same short-lived
+// file: confirmed on CI as an outright hang on Windows (the process never
+// returned; no crash, no timeout from netCDF itself, just stuck) the first
+// time this test actually got far enough to hit real file I/O rather than
+// failing fast on an earlier bug. This is a well-known HDF5 gotcha on
+// Windows, network filesystems, and various CI sandboxes -- HDF5_USE_FILE_
+// LOCKING=FALSE is the documented escape hatch. Must be set before the
+// first netCDF/HDF5 call in the process.
+struct DisableHdf5FileLocking {
+    DisableHdf5FileLocking() {
+#ifdef _WIN32
+        _putenv_s( "HDF5_USE_FILE_LOCKING", "FALSE" );
+#else
+        setenv( "HDF5_USE_FILE_LOCKING", "FALSE", 0 );
+#endif
+    }
+} g_disable_hdf5_file_locking;
+
 // Creates a small netCDF file with dims time(3), lat(4), lon(5) and
 // variables lat(lat), lon(lon), time(time), temp(time,lat,lon); returns its
 // path. Caller must std::remove() it.

@@ -52,3 +52,8 @@ target_include_directories(ncview_core_tests PRIVATE
 target_link_libraries(ncview_core_tests PRIVATE ncview_core)
 add_dependencies(ncview_core_tests ncview_core_linkcheck)
 add_test(NAME ncview_core_tests COMMAND ncview_core_tests)
+# Defense in depth against a hang like the HDF5 file-locking one this suite
+# hit on Windows CI (see test_file_netcdf.cc): fail fast with a clear CTest
+# timeout instead of stalling the whole workflow until the job-level limit
+# kills it with no indication of which test or why.
+set_tests_properties(ncview_core_tests PROPERTIES TIMEOUT 60)
