@@ -115,8 +115,8 @@ published to [GitHub Releases](../../releases) by
 version matching `v*.*.*` and push the tag:
 
 ```sh
-git tag v2.1.11
-git push origin v2.1.11
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 This triggers the same build/test/package steps CI already runs (shared via
