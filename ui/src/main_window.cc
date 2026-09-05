@@ -663,7 +663,15 @@ void MainWindow::makeDimButtons( Stringlist *dim_list )
 		rebuildDimRow( row );
 		dim_rows_.push_back( row );
 	}
-	dim_pack_->redraw();
+	// A plain dim_pack_->redraw() isn't enough: Fl_Pack::draw() only
+	// recomputes child positions using the *pack's own* damage state, and
+	// after clear()+add() that alone doesn't reliably repaint a newly added
+	// row at the bottom (confirmed empirically -- switching to a variable
+	// with more scannable dims than the previous one, e.g. a 2-D var to a
+	// 3-D one, silently drops the last dimension row until some unrelated
+	// event forces a real relayout, such as resizing the window). Route
+	// through the same full relayout a resize already triggers instead.
+	layout( win_->w(), win_->h() );
 }
 
 void MainWindow::clearDimButtons()
