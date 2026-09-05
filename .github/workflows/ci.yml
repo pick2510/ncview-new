@@ -21,18 +21,24 @@ jobs:
             libnetcdf-dev libexpat1-dev \
             libx11-dev libxext-dev libxft-dev libxinerama-dev \
             libxcursor-dev libxrender-dev libxfixes-dev \
-            texinfo
+            flex bison texinfo
 
+      # -DFLTK_BACKEND_WAYLAND=OFF: this project always forces
+      # FLTK_BACKEND=x11 at runtime (see README), and none of the
+      # Wayland/GTK dev packages that backend needs are installed above --
+      # explicit here instead of relying on FLTK's own auto-detection
+      # fallback, so a runner image that happens to have them preinstalled
+      # doesn't silently change what gets built and linked.
+      #
+      # -DFLTK_BUILD_GL=OFF: ncview never uses OpenGL (no Fl_Gl_Window),
+      # and building FLTK's GL support needs OpenGL headers that aren't
+      # part of this runner image's default install (only the loader
+      # library is) -- skip it rather than pull in a GL dev package for
+      # code that's never linked into ncview anyway.
       - name: Configure
-        # FLTK_BACKEND_WAYLAND=OFF: this project always forces
-        # FLTK_BACKEND=x11 at runtime (see README), and none of the
-        # Wayland/GTK dev packages that backend needs are installed above --
-        # explicit here instead of relying on FLTK's own auto-detection
-        # fallback, so a runner image that happens to have them preinstalled
-        # doesn't silently change what gets built and linked.
         run: >
           cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          -DFLTK_BACKEND_WAYLAND=OFF
+          -DFLTK_BACKEND_WAYLAND=OFF -DFLTK_BUILD_GL=OFF
 
       - name: Build
         run: cmake --build build -j"$(nproc)"
@@ -57,14 +63,20 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install netcdf expat texinfo
-          # Homebrew's texinfo is keg-only (macOS ships its own, much older
-          # makeinfo) -- add it to PATH so CMake's find_program(MAKEINFO)
-          # picks up a working one; the vendored UDUNITS-2 build fails
-          # without it (its CMakeLists.txt depends on the generated .info/
-          # .html unconditionally once a makeinfo is found, so its absence
-          # must mean "skip", not "use whatever old one macOS ships").
-          echo "$(brew --prefix texinfo)/bin" >> "$GITHUB_PATH"
+          brew install netcdf expat texinfo flex bison
+          # Homebrew's texinfo/flex/bison are keg-only (macOS ships its own,
+          # much older copies) -- add them to PATH so CMake's
+          # find_program(MAKEINFO)/FLEX/BISON pick up working ones. The
+          # vendored UDUNITS-2 build needs a real makeinfo (its CMakeLists.txt
+          # depends on the generated .info/.html unconditionally once one is
+          # found, so its absence must mean "skip", not "use whatever old one
+          # macOS ships") and our own top-level CMakeLists.txt needs a real
+          # flex/bison to pre-generate UDUNITS-2's parser.c/scanner.c.
+          {
+            echo "$(brew --prefix texinfo)/bin"
+            echo "$(brew --prefix flex)/bin"
+            echo "$(brew --prefix bison)/bin"
+          } >> "$GITHUB_PATH"
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -93,6 +105,14 @@ jobs:
         with:
           submodules: recursive
 
+      # core/CMakeLists.txt only applies -fpermissive (needed for the ported
+      # code's hundreds of implicit void*->T* conversions, legal in C, not
+      # in C++) when CMAKE_CXX_COMPILER_ID is GNU. MSVC has no equivalent
+      # flag and would hard-fail on all of them, so this project builds on
+      # Windows via MinGW-w64 GCC (through MSYS2), not MSVC/vcpkg. flex and
+      # bison are the plain MSYS2 (not mingw-w64-prefixed) packages
+      # deliberately -- they're host code-generator tools invoked once by
+      # our own top-level CMakeLists.txt, not something linked into ncview.
       - name: Set up MSYS2 / MinGW64 toolchain
         uses: msys2/setup-msys2@v2
         with:
@@ -104,15 +124,15 @@ jobs:
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-netcdf
             mingw-w64-x86_64-expat
+            flex
+            bison
             texinfo
-          # core/CMakeLists.txt only applies -fpermissive (needed for the
-          # ported code's hundreds of implicit void*->T* conversions, legal
-          # in C, not in C++) when CMAKE_CXX_COMPILER_ID is GNU. MSVC has no
-          # equivalent flag and would hard-fail on all of them, so this
-          # project builds on Windows via MinGW-w64 GCC, not MSVC/vcpkg.
 
+      # -DFLTK_BUILD_GL=OFF: see the linux job -- ncview never uses OpenGL.
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DFLTK_BUILD_GL=OFF
 
       - name: Build
         run: cmake --build build -j

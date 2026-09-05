@@ -110,6 +110,41 @@ set(FLTK_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/fltk)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+# UDUNITS-2's own CMakeLists.txt (lib/CMakeLists.txt) only regenerates
+# parser.c/scanner.c from their bison/flex sources "IF(UNIX)" -- on Windows
+# (MinGW) that's false regardless of whether flex/bison are installed, so
+# its add_library() a few lines later fails outright with "Cannot find
+# source file: parser.c" (neither generated file is committed to the
+# submodule, only their .y/.l sources are). Generate both ourselves,
+# unconditionally, so they simply already exist by the time UDUNITS-2's own
+# CMakeLists.txt looks for them -- fixes Windows without touching the
+# vendored submodule, and is a no-op on Unix where its own custom command
+# would just regenerate the same files anyway.
+find_package(FLEX REQUIRED)
+find_package(BISON REQUIRED)
+set(_udunits2_lib_dir "${CMAKE_CURRENT_SOURCE_DIR}/third_party/udunits2/lib")
+if(NOT EXISTS "${_udunits2_lib_dir}/scanner.c")
+    execute_process(
+        COMMAND "${FLEX_EXECUTABLE}" -d -Put -o scanner.c scanner.l
+        WORKING_DIRECTORY "${_udunits2_lib_dir}"
+        RESULT_VARIABLE _flex_result
+    )
+    if(NOT _flex_result EQUAL 0)
+        message(FATAL_ERROR "Failed to generate UDUNITS-2's scanner.c via flex")
+    endif()
+endif()
+if(NOT EXISTS "${_udunits2_lib_dir}/parser.c")
+    execute_process(
+        COMMAND "${BISON_EXECUTABLE}" -t -p ut -o parser.c parser.y
+        WORKING_DIRECTORY "${_udunits2_lib_dir}"
+        RESULT_VARIABLE _bison_result
+    )
+    if(NOT _bison_result EQUAL 0)
+        message(FATAL_ERROR "Failed to generate UDUNITS-2's parser.c via bison")
+    endif()
+endif()
+
 # Upstream's CMakeLists.txt assumes it is the top-level project: its CPack
 # block and its `install(FILES "${CMAKE_SOURCE_DIR}/COPYRIGHT" ...)` resolve
 # CMAKE_SOURCE_DIR to *our* repo root when add_subdirectory'd. We keep root

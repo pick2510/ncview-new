@@ -221,9 +221,9 @@ void udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval,
 	int	year, month, day, hour, minute, debug;
 	double	second;
 	static  char last_units[1024];
-	static	char months[12][4] = { "Jan\0", "Feb\0", "Mar\0", "Apr\0",
-				       "May\0", "Jun\0", "Jul\0", "Aug\0",
-				       "Sep\0", "Oct\0", "Nov\0", "Dec\0"};
+	static	char months[12][4] = { "Jan", "Feb", "Mar", "Apr",
+				       "May", "Jun", "Jul", "Aug",
+				       "Sep", "Oct", "Nov", "Dec"};
 
 	debug = 0;
 	if( debug ) fprintf( stderr, "udu_fmt_time: entering with dim=%s, units=%s, value=%f\n",
