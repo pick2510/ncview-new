@@ -5,6 +5,10 @@
 
 #include <FL/Fl.H>
 #include <FL/fl_draw.H>
+#include <FL/Fl_Check_Button.H>
+#include <FL/Fl_Choice.H>
+#include <FL/Fl_Float_Input.H>
+#include <FL/Fl_Return_Button.H>
 
 namespace ncview_ui {
 
@@ -415,6 +419,162 @@ void MainWindow::setCursorBusy( bool busy )
 {
 	if( busy ) win_->cursor( FL_CURSOR_WAIT );
 	else win_->cursor( FL_CURSOR_DEFAULT );
+}
+
+void MainWindow::pixelToRgb( ncv_pixel pix, int *r, int *g, int *b ) const
+{
+	if( current_colormap_ < 0 || current_colormap_ >= (int)colormaps_.size() ) {
+		if( r ) *r = pix; if( g ) *g = pix; if( b ) *b = pix;
+		return;
+	}
+	const auto &cm = colormaps_[current_colormap_];
+	if( r ) *r = cm.r[pix];
+	if( g ) *g = cm.g[pix];
+	if( b ) *b = cm.b[pix];
+}
+
+/* ===================== M4 dialogs ===================== */
+/* Small modal dialogs, run with their own Fl::wait() loop (the standard
+ * FLTK pattern for a blocking modal window: show(), set_modal(), spin until
+ * it's hidden by a button callback). Replaces upstream's Xt dialog/range.c
+ * /set_options.c-family widgets one dialog at a time; see PORTING.md. */
+
+namespace {
+struct ModalResult { bool ok = false; };
+
+void modalOkCallback( Fl_Widget *w, void *data )
+{
+	static_cast<ModalResult*>(data)->ok = true;
+	w->window()->hide();
+}
+
+void modalCancelCallback( Fl_Widget *w, void * )
+{
+	w->window()->hide();
+}
+} // namespace
+
+void MainWindow::setOptionsDialog()
+{
+	Fl_Window win( 320, 190, "Options" );
+	Fl_Check_Button autoscale( 10, 10, 300, 25, "Autoscale each frame" );
+	autoscale.value( options.autoscale );
+	Fl_Check_Button extra_info( 10, 40, 300, 25, "Show extra info" );
+	extra_info.value( options.want_extra_info );
+	Fl_Check_Button save_frames( 10, 70, 300, 25, "Save frames in memory" );
+	save_frames.value( options.save_frames );
+	Fl_Check_Button auto_overlay( 10, 100, 300, 25, "Automatic coastline overlay" );
+	auto_overlay.value( options.auto_overlay );
+
+	ModalResult result;
+	Fl_Return_Button ok( 90, 145, 70, 30, "OK" );
+	ok.callback( modalOkCallback, &result );
+	Fl_Button cancel( 170, 145, 70, 30, "Cancel" );
+	cancel.callback( modalCancelCallback, nullptr );
+
+	win.end();
+	win.set_modal();
+	win.show();
+	while( win.shown() ) Fl::wait();
+
+	if( result.ok ) {
+		options.autoscale = autoscale.value();
+		options.want_extra_info = extra_info.value();
+		options.save_frames = save_frames.value();
+		options.auto_overlay = auto_overlay.value();
+		view_draw( TRUE, FALSE );
+	}
+}
+
+int MainWindow::rangeDialog( float old_min, float old_max, float global_min, float global_max,
+		float *new_min, float *new_max, int *allvars )
+{
+	Fl_Window win( 320, 190, "Set Range" );
+	char buf[64];
+
+	Fl_Box global_box( 10, 10, 300, 20 );
+	snprintf( buf, sizeof(buf), "Global range: %g to %g", global_min, global_max );
+	global_box.copy_label( buf );
+
+	Fl_Box min_label( 10, 40, 60, 25, "Min:" );
+	Fl_Float_Input min_input( 80, 40, 220, 25 );
+	snprintf( buf, sizeof(buf), "%g", old_min );
+	min_input.value( buf );
+
+	Fl_Box max_label( 10, 70, 60, 25, "Max:" );
+	Fl_Float_Input max_input( 80, 70, 220, 25 );
+	snprintf( buf, sizeof(buf), "%g", old_max );
+	max_input.value( buf );
+
+	Fl_Check_Button all_vars_cb( 10, 100, 300, 25, "Apply to all variables" );
+	all_vars_cb.value( 0 );
+
+	(void)min_label; (void)max_label;
+
+	ModalResult result;
+	Fl_Return_Button ok( 90, 145, 70, 30, "OK" );
+	ok.callback( modalOkCallback, &result );
+	Fl_Button cancel( 170, 145, 70, 30, "Cancel" );
+	cancel.callback( modalCancelCallback, nullptr );
+
+	win.end();
+	win.set_modal();
+	win.show();
+	while( win.shown() ) Fl::wait();
+
+	if( !result.ok ) return MESSAGE_CANCEL;
+
+	*new_min = (float)atof( min_input.value() );
+	*new_max = (float)atof( max_input.value() );
+	if( allvars ) *allvars = all_vars_cb.value();
+	return MESSAGE_OK;
+}
+
+int MainWindow::scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y_axis_name,
+		Stringlist **new_dim_list )
+{
+	std::vector<std::string> names;
+	for( Stringlist *s = dim_list; s != nullptr; s = (Stringlist *)s->next )
+		names.push_back( s->string );
+	if( names.empty() ) return 0;
+
+	Fl_Window win( 320, 150, "Set Scan Dimensions" );
+	Fl_Box x_label( 10, 15, 60, 25, "X axis:" );
+	Fl_Choice x_choice( 90, 15, 210, 25 );
+	Fl_Box y_label( 10, 50, 60, 25, "Y axis:" );
+	Fl_Choice y_choice( 90, 50, 210, 25 );
+	(void)x_label; (void)y_label;
+
+	int x_default = 0, y_default = 0;
+	for( size_t i = 0; i < names.size(); i++ ) {
+		x_choice.add( names[i].c_str() );
+		y_choice.add( names[i].c_str() );
+		if( x_axis_name && names[i] == x_axis_name ) x_default = (int)i;
+		if( y_axis_name && names[i] == y_axis_name ) y_default = (int)i;
+	}
+	x_choice.value( x_default );
+	y_choice.value( names.size() > 1 ? (int)((y_default == x_default) ? (x_default+1)%names.size() : y_default) : 0 );
+
+	ModalResult result;
+	Fl_Return_Button ok( 90, 105, 70, 30, "OK" );
+	ok.callback( modalOkCallback, &result );
+	Fl_Button cancel( 170, 105, 70, 30, "Cancel" );
+	cancel.callback( modalCancelCallback, nullptr );
+
+	win.end();
+	win.set_modal();
+	win.show();
+	while( win.shown() ) Fl::wait();
+
+	if( !result.ok || new_dim_list == nullptr ) return 0;
+
+	// Build the returned list Y-axis first, then X-axis (matching upstream's
+	// in_set_scan_dims contract: "first the name of the Y dimension, then
+	// the name of the X dimension").
+	*new_dim_list = nullptr;
+	stringlist_add_string( new_dim_list, (char *)names[y_choice.value()].c_str(), nullptr, SLTYPE_NULL );
+	stringlist_add_string( new_dim_list, (char *)names[x_choice.value()].c_str(), nullptr, SLTYPE_NULL );
+	return 1;
 }
 
 } // namespace ncview_ui

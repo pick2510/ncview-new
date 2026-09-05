@@ -107,6 +107,14 @@ public:
 	void  drawColorbar();
 	void  populateVarList();
 	void  setCursorBusy( bool busy );
+	void  pixelToRgb( ncv_pixel pix, int *r, int *g, int *b ) const;
+
+	// ---- M4 dialogs -------------------------------------------------
+	void setOptionsDialog();
+	int  rangeDialog( float old_min, float old_max, float global_min, float global_max,
+			float *new_min, float *new_max, int *allvars );
+	int  scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y_axis_name,
+			Stringlist **new_dim_list );
 
 private:
 	void rebuildButtonBar();

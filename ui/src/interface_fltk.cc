@@ -49,6 +49,11 @@ void in_initialize( void )
 	instance()->window()->show();
 	if( getenv( "NCVIEW_TEST_AUTOSELECT" ) && variables )
 		in_variable_selected( variables->name );
+	if( const char *d = getenv( "NCVIEW_TEST_DIALOG" ) ) {
+		if( std::strcmp( d, "range" ) == 0 ) do_range( MOD_1 );
+		else if( std::strcmp( d, "options" ) == 0 ) do_options( MOD_1 );
+		else if( std::strcmp( d, "dimset" ) == 0 ) do_dimset( MOD_1 );
+	}
 }
 
 void in_process_user_input( void )
@@ -218,11 +223,7 @@ void in_set_edit_place( size_t index, int x, int y, int nx, int ny )
 
 int in_set_scan_dims( Stringlist *dim_list, char *x_axis_name, char *y_axis_name, Stringlist **new_dim_list )
 {
-	// TODO(M4): a real dialog (upstream's range.c-adjacent x_set_scan_dims).
-	// For now: keep whatever the caller proposed, changing nothing.
-	(void)dim_list; (void)x_axis_name; (void)y_axis_name;
-	if( new_dim_list ) *new_dim_list = nullptr;
-	return 0;
+	return instance()->scanDimsDialog( dim_list, x_axis_name, y_axis_name, new_dim_list );
 }
 
 void in_change_min( char *label )
@@ -249,7 +250,7 @@ int in_report_auto_overlay( void ) { return 0; }
 
 void set_options( void )
 {
-	fl_alert( "Options dialog is not implemented yet." );
+	instance()->setOptionsDialog();
 }
 
 int printer_options( PrintOptions * )
@@ -260,13 +261,9 @@ int printer_options( PrintOptions * )
 
 void printer_options_init( void ) {}
 
-int x_range( float old_min, float old_max, float, float, float *new_min, float *new_max, int *allvars )
+int x_range( float old_min, float old_max, float global_min, float global_max, float *new_min, float *new_max, int *allvars )
 {
-	// TODO(M4): real range dialog. For now, leave the range unchanged.
-	*new_min = old_min;
-	*new_max = old_max;
-	if( allvars ) *allvars = 0;
-	return MESSAGE_CANCEL;
+	return instance()->rangeDialog( old_min, old_max, global_min, global_max, new_min, new_max, allvars );
 }
 
 void x_dataedit( char **text, int nx )
@@ -319,11 +316,5 @@ Stringlist *get_persistent_X_state( void )
 
 void pix_to_rgb( ncv_pixel pix, int *r, int *g, int *b )
 {
-	// Best-effort: without direct access to MainWindow's private
-	// colormap table this just echoes the index; only do_print.cc's
-	// (not yet wired, M5) PostScript path depends on getting real RGB
-	// here. TODO(M5): expose the active colormap for this.
-	if( r ) *r = pix;
-	if( g ) *g = pix;
-	if( b ) *b = pix;
+	instance()->pixelToRgb( pix, r, g, b );
 }
