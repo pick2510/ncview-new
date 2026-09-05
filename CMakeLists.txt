@@ -18,6 +18,25 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(NCVIEW_BUILD_TESTS "Build ncview_core headless tests" ON)
 
+# HPC clusters routinely lack (or have mismatched-version) shared libraries
+# for anything outside their own module system -- this pulls netCDF/HDF5 and
+# the C++ runtime in statically so the binary doesn't touch either at
+# runtime, and disables FLTK's Wayland backend, which this project never
+# uses at runtime anyway (main.cc/README always run with FLTK_BACKEND=x11)
+# but which otherwise drags in ~80 transitive shared libraries (GTK, Mesa,
+# EGL, D-Bus, at-spi, LLVM...) purely to sit unused. Deliberately NOT static:
+# curl/xml2 (netCDF's optional, unused-for-local-files OPeNDAP/remote-access
+# dependency, pulling in OpenSSL/Kerberos/LDAP -- both unnecessary here and
+# inadvisable to freeze via static linking) and the X11/Xft stack (stable,
+# always-present OS-level ABI on any cluster reachable via `ssh -X`).
+option(NCVIEW_STATIC_LINK
+    "Statically link netCDF/HDF5 and the C++ runtime, and disable FLTK's unused Wayland backend, for portability to systems (e.g. HPC clusters) without matching shared libraries"
+    OFF)
+
+if(NCVIEW_STATIC_LINK)
+    set(FLTK_BACKEND_WAYLAND OFF CACHE BOOL "" FORCE)
+endif()
+
 # --------------------------------------------------------------------------
 # netCDF (system dependency)
 # --------------------------------------------------------------------------
@@ -26,6 +45,51 @@ if(NOT netCDF_FOUND)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(NETCDF REQUIRED IMPORTED_TARGET netcdf)
     add_library(netCDF::netcdf ALIAS PkgConfig::NETCDF)
+endif()
+
+if(NCVIEW_STATIC_LINK)
+    # netCDF's own numeric/storage chain -- swap netCDF::netcdf's dynamic
+    # .so for its .a, plus the .a of everything it in turn needs (found the
+    # same way autotools/CMake would: by name, via the normal library search
+    # path), so the ncview_core -> netCDF::netcdf PUBLIC link (core/CMakeLists.txt)
+    # picks it up transitively with no changes needed there.
+    # netCDF_DIR (set by find_package(netCDF)'s own CMake config, e.g.
+    # <prefix>/lib/cmake/netCDF) tells us which prefix's lib/ directory to
+    # also search -- covers non-system installs (Homebrew/Linuxbrew, a
+    # module-system path, spack, ...) without hardcoding one.
+    set(_ncview_static_lib_hints)
+    if(netCDF_DIR)
+        get_filename_component(_ncview_static_lib_hints "${netCDF_DIR}/../.." ABSOLUTE)
+    endif()
+
+    set(_ncview_static_netcdf_chain netcdf hdf5_hl hdf5 sz zstd bz2 z)
+    set(_ncview_static_netcdf_libs "")
+    foreach(_lib ${_ncview_static_netcdf_chain})
+        find_library(_ncview_static_${_lib} NAMES lib${_lib}.a HINTS ${_ncview_static_lib_hints})
+        if(NOT _ncview_static_${_lib})
+            message(FATAL_ERROR
+                "NCVIEW_STATIC_LINK is ON but lib${_lib}.a was not found. "
+                "Install a static build of ${_lib} (e.g. via your package "
+                "manager's -static/-devel package) or turn NCVIEW_STATIC_LINK off.")
+        endif()
+        list(APPEND _ncview_static_netcdf_libs "${_ncview_static_${_lib}}")
+    endforeach()
+    list(POP_FRONT _ncview_static_netcdf_libs _ncview_static_netcdf_a)
+    # netCDF's own exported target declares per-configuration locations
+    # (IMPORTED_LOCATION_RELEASE, etc. -- see IMPORTED_CONFIGURATIONS) that
+    # CMake consults *before* the plain IMPORTED_LOCATION, so overriding
+    # only the latter silently has no effect on the actual link line;
+    # every configuration CMake might map our build type to needs the
+    # override too.
+    set_target_properties(netCDF::netcdf PROPERTIES
+        IMPORTED_LOCATION "${_ncview_static_netcdf_a}"
+        IMPORTED_LOCATION_RELEASE "${_ncview_static_netcdf_a}"
+        IMPORTED_LOCATION_DEBUG "${_ncview_static_netcdf_a}"
+        IMPORTED_LOCATION_RELWITHDEBINFO "${_ncview_static_netcdf_a}"
+        IMPORTED_LOCATION_MINSIZEREL "${_ncview_static_netcdf_a}"
+        IMPORTED_LOCATION_NOCONFIG "${_ncview_static_netcdf_a}"
+        INTERFACE_LINK_LIBRARIES "${_ncview_static_netcdf_libs};curl;xml2;m"
+    )
 endif()
 
 # M0's plan called for an NCVIEW_ENABLE_PNG option guarding a system libpng

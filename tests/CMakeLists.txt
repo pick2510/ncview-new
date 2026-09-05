@@ -1,11 +1,16 @@
 # M1 checkpoint, part 1: prove every symbol ncview_core needs is resolved by
 # nothing but the headless stub_interface.cc implementation of
-# ncview/interface.h (no UI, no X11). A shared library has no `main`, so
-# whole-archive-linking ncview_core.a into it (pulling in every .o,
-# including ncview.cc's real main()) can't collide with anything -- any
-# missing symbol anywhere in ncview_core fails right here at link time.
-add_library(ncview_core_linkcheck SHARED
+# ncview/interface.h (no UI, no X11). ncview_core has no `main` of its own
+# (M1 renamed upstream's to ncview_main()), so whole-archive-linking it
+# into an ordinary executable (pulling in every .o) can't collide with
+# anything -- any missing symbol anywhere in ncview_core fails right here
+# at link time. Deliberately an executable, not a shared library: a shared
+# object requires every static archive linked into it to be PIC, which
+# NCVIEW_STATIC_LINK's non-PIC system static libs (e.g. Homebrew's
+# libz.a) aren't -- an executable carries no such requirement.
+add_executable(ncview_core_linkcheck
     stub_interface.cc
+    linkcheck_main.cc
 )
 target_link_libraries(ncview_core_linkcheck PRIVATE
     -Wl,--whole-archive ncview_core -Wl,--no-whole-archive

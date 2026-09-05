@@ -10,3 +10,11 @@ add_executable(ncview
 target_link_libraries(ncview PRIVATE
     -Wl,--start-group ncview_ui ncview_core -Wl,--end-group
 )
+
+if(NCVIEW_STATIC_LINK)
+    # The single most common reason a binary built on one machine won't run
+    # on an HPC compute/login node: a GCC/libstdc++ version older than the
+    # one it was built with. Freezing our own copy of the runtime in avoids
+    # that regardless of what's on the target node.
+    target_link_options(ncview PRIVATE -static-libgcc -static-libstdc++)
+endif()

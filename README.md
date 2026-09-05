@@ -39,6 +39,40 @@ This produces `build/app/ncview`, runnable in place:
 ./build/app/ncview some_file.nc
 ```
 
+## Static linking (for HPC clusters etc.)
+
+By default everything outside the vendored `third_party/` submodules (netCDF,
+X11, expat, ...) links dynamically, same as any normal build. Pass
+`-DNCVIEW_STATIC_LINK=ON` to instead:
+
+- statically link netCDF and its numeric/storage chain (HDF5, zstd, bz2, sz,
+  zlib) plus the C++ runtime (`-static-libgcc -static-libstdc++`), so the
+  binary doesn't depend on whatever (likely mismatched-version) copies of
+  those a given HPC node's module system provides;
+- disable FLTK's Wayland backend, which this project never uses at runtime
+  anyway (it always forces `FLTK_BACKEND=x11`) but which otherwise drags in
+  ~80 transitive shared libraries (GTK, Mesa, EGL, D-Bus, at-spi, LLVM) for
+  no benefit.
+
+Requires static (`.a`) builds of netCDF/HDF5/zstd/bz2/sz/zlib to be
+findable (configure fails with a clear message naming whichever one isn't);
+on Debian/Ubuntu that's typically already covered by the normal `-dev`
+packages, on other distros/Homebrew you may need a `-static` package.
+`libstdc++.a` specifically needs your distro's static-libstdc++ package
+(e.g. Fedora/RHEL's `libstdc++-static`, not installed by default).
+
+Deliberately left dynamic even with this on: curl and libxml2 (netCDF's
+optional OPeNDAP/remote-file dependency chain, unused for local files and
+pulling in OpenSSL/Kerberos/LDAP -- both unnecessary here and inadvisable to
+freeze via static linking) and the X11/Xft stack (stable, always-present
+OS-level ABI on any cluster reachable via `ssh -X`).
+
+```sh
+cmake -S . -B build-static -DCMAKE_BUILD_TYPE=RelWithDebInfo -DNCVIEW_STATIC_LINK=ON
+cmake --build build-static -j
+ldd build-static/app/ncview   # confirm netcdf/hdf5 are no longer listed
+```
+
 ## Installing
 
 ```sh
