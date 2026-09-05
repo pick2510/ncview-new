@@ -16,8 +16,8 @@
 
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
+#include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
-#include <FL/Fl_Hold_Browser.H>
 #include <FL/Fl_Pack.H>
 #include <FL/Fl_Widget.H>
 
@@ -121,7 +121,7 @@ private:
 	void rebuildButtonBar();
 	void rebuildDimRow( DimRow &row );
 	static void buttonCallback( Fl_Widget *w, void *data );
-	static void varBrowserCallback( Fl_Widget *w, void *data );
+	static void varChoiceCallback( Fl_Widget *w, void *data );
 	static void dimStepCallback( Fl_Widget *w, void *data );
 
 	Fl_Double_Window *win_ = nullptr;
@@ -129,7 +129,8 @@ private:
 	Colorbar          *colorbar_ = nullptr;
 	Fl_Pack           *button_bar_ = nullptr;
 	Fl_Pack           *dim_pack_ = nullptr;
-	Fl_Hold_Browser   *var_browser_ = nullptr;
+	Fl_Pack           *var_pack_ = nullptr;
+	std::vector<Fl_Choice*> var_choices_;         // one per dimensionality bucket (1d, 2d, ...)
 	Fl_Box            *labels_[16] = {};          // indexed by LABEL_*
 	Fl_Widget         *buttons_[32] = {};          // indexed by BUTTON_*
 

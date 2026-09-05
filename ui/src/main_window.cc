@@ -1,5 +1,6 @@
 #include "ncview_ui/main_window.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -208,8 +209,10 @@ MainWindow::MainWindow()
 	labels_[LABEL_SCALAR_DIMS]  = new Fl_Box( 170, 79, 280, 18 );
 	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT ); }
 
-	var_browser_ = new Fl_Hold_Browser( 10, 100, 180, H-220 );
-	var_browser_->callback( &MainWindow::varBrowserCallback, this );
+	var_pack_ = new Fl_Pack( 10, 100, 180, H-220 );
+	var_pack_->type( Fl_Pack::VERTICAL );
+	var_pack_->spacing( 2 );
+	var_pack_->end();
 
 	image_ = new ImageView( 200, 100, W-210, H-320 );
 	colorbar_ = new Colorbar( 200, H-210, W-210, 20 );
@@ -255,20 +258,69 @@ void MainWindow::buttonCallback( Fl_Widget *, void *data )
 	in_button_pressed( id, MOD_1 );
 }
 
-void MainWindow::varBrowserCallback( Fl_Widget *, void *data )
+void MainWindow::varChoiceCallback( Fl_Widget *w, void * )
 {
-	auto *self = static_cast<MainWindow*>(data);
-	int line = self->var_browser_->value();
-	if( line <= 0 ) return;
-	const char *name = self->var_browser_->text( line );
-	in_variable_selected( (char *)name );
+	// The variable name is stashed as each menu item's user_data (set in
+	// populateVarList()), not read back from the item's label -- labels are
+	// escaped ('/' and '&' are FLTK menu-path/shortcut metacharacters) so
+	// they can't be used directly as the real NCVar name.
+	auto *choice = static_cast<Fl_Choice*>( w );
+	const Fl_Menu_Item *item = choice->mvalue();
+	if( item == nullptr || item->user_data() == nullptr ) return;
+	in_variable_selected( (char *)item->user_data() );
 }
+
+namespace {
+// FLTK's Fl_Menu_::add(const char*) treats '/' as a submenu path separator
+// and '&' as a shortcut-underline marker; escape both so variable names
+// containing them (netCDF4 group paths, say) still display as plain text
+// in a single flat menu instead of being silently split into submenus.
+std::string escapeMenuLabel( const char *name )
+{
+	std::string out;
+	for( const char *p = name; *p; ++p ) {
+		if( *p == '/' || *p == '&' ) out += '\\';
+		out += *p;
+	}
+	return out;
+}
+} // namespace
 
 void MainWindow::populateVarList()
 {
-	var_browser_->clear();
-	for( NCVar *v = variables; v != nullptr; v = (NCVar *)v->next )
-		var_browser_->add( v->name );
+	var_pack_->clear();
+	var_choices_.clear();
+
+	// Group variables by their number of non-degenerate dimensions, same
+	// buckets upstream's x_sort_vars_by_ndims() uses for "menu" var-selection
+	// style (1d, 2d, 3d, 4d, 5-or-more), alpha-sorted within each bucket.
+	std::vector<NCVar*> buckets[5];
+	for( NCVar *v = variables; v != nullptr; v = (NCVar *)v->next ) {
+		int d = v->effective_dimensionality;
+		int idx = ( d >= 1 && d <= 4 ) ? d - 1 : 4;
+		buckets[idx].push_back( v );
+	}
+	for( auto &b : buckets )
+		std::sort( b.begin(), b.end(),
+			[]( const NCVar *a, const NCVar *c ) { return std::strcmp( a->name, c->name ) < 0; } );
+
+	static const char *kBucketSuffix[5] = { "1d", "2d", "3d", "4d", "5d" };
+	for( int i = 0; i < 5; i++ ) {
+		if( buckets[i].empty() ) continue;
+
+		auto *choice = new Fl_Choice( 0, 0, var_pack_->w(), 24 );
+		char header[64];
+		std::snprintf( header, sizeof(header), "(%zu) %s vars", buckets[i].size(), kBucketSuffix[i] );
+		choice->add( header, 0, nullptr, nullptr, FL_MENU_INACTIVE );
+		for( NCVar *v : buckets[i] ) {
+			std::string label = escapeMenuLabel( v->name );
+			choice->add( label.c_str(), 0, &MainWindow::varChoiceCallback, (void *)v->name );
+		}
+		choice->value( 0 );
+		var_pack_->add( choice );
+		var_choices_.push_back( choice );
+	}
+	var_pack_->redraw();
 }
 
 void MainWindow::setLabel( int label_id, const char *s )
@@ -288,12 +340,15 @@ void MainWindow::setSensitive( int button_id, int state )
 
 void MainWindow::indicateActiveVar( const char *var_name )
 {
-	for( int i = 1; i <= var_browser_->size(); i++ ) {
-		const char *t = var_browser_->text( i );
-		if( t && std::strcmp( t, var_name ) == 0 ) {
-			var_browser_->select( i );
-			var_browser_->middleline( i );
-			break;
+	for( auto *choice : var_choices_ ) {
+		const Fl_Menu_Item *items = choice->menu();
+		for( int i = 0; items[i].text != nullptr; i++ ) {
+			const char *nm = (const char *)items[i].user_data();
+			if( nm && std::strcmp( nm, var_name ) == 0 ) {
+				choice->value( i );
+				choice->redraw();
+				return;
+			}
 		}
 	}
 }
