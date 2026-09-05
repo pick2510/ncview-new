@@ -53,6 +53,20 @@ void udu_utinit( char *path )
 	/* Turn annoying "override" errors off */
 	ut_set_error_message_handler( ut_ignore );
 
+	/* ut_read_xml() checks $UDUNITS2_XML_PATH itself and then falls back
+	 * to the path this build's UDUNITS-2 was configured with (an
+	 * installed location under CMAKE_INSTALL_PREFIX). As a last resort
+	 * -- e.g. running straight out of an uninstalled build tree -- point
+	 * $UDUNITS2_XML_PATH itself at the vendored submodule's copy of
+	 * udunits2.xml, so long as the caller hasn't set it already. This is
+	 * done via the environment (not just here in udu_utinit) because
+	 * utCalendar2_cal.cc has its own, independent ut_read_xml(NULL) call
+	 * that needs the exact same fallback.
+	 */
+#ifdef NCVIEW_BUILD_TREE_UDUNITS2_XML
+	if( getenv( "UDUNITS2_XML_PATH" ) == NULL )
+		setenv( "UDUNITS2_XML_PATH", NCVIEW_BUILD_TREE_UDUNITS2_XML, 0 );
+#endif
 	unitsys = ut_read_xml( path );
 
 	/* Turn errors back on */

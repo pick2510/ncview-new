@@ -29,6 +29,17 @@ target_link_libraries(ncview_core PUBLIC
     netCDF::netcdf
     libudunits2
 )
+# This port always builds against the vendored UDUNITS-2 (see udu.cc), so
+# units support is unconditional rather than an autotools-detected option.
+target_compile_definitions(ncview_core PUBLIC HAVE_UDUNITS2)
+
+# Last-resort udunits2.xml location for running straight out of an
+# uninstalled build tree (see udu.cc:udu_utinit). $UDUNITS2_XML_PATH and the
+# installed-prefix default (set by third_party/udunits2's own CMakeLists)
+# both take priority over this.
+target_compile_definitions(ncview_core PRIVATE
+    NCVIEW_BUILD_TREE_UDUNITS2_XML="${CMAKE_SOURCE_DIR}/third_party/udunits2/lib/udunits2.xml"
+)
 
 # Upstream's linked lists type their next/prev pointers as `void *` and rely
 # on C's implicit void*->T* conversion at every traversal site; there are
