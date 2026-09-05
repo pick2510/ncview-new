@@ -418,7 +418,7 @@ void x_dataedit( char **text, int nx )
 		if( t->callback_context() != Fl_Table::CONTEXT_CELL || Fl::event() != FL_RELEASE ) return;
 		int row = t->callback_row(), col = t->callback_col();
 		int index = row * t->nx() + col;
-		char **cells = reinterpret_cast<char**>( t->argument() );
+		char **cells = static_cast<char**>( t->user_data() );
 		if( cells == nullptr || cells[index] == nullptr ) return;
 
 		char line[132];
@@ -434,7 +434,12 @@ void x_dataedit( char **text, int nx )
 		snprintf( cells[index], 32, "%-10.5g", new_val );
 		t->redraw();
 	} );
-	table.argument( reinterpret_cast<long>( text ) );
+	// Fl_Widget::argument() stores its value as a plain `long`, which
+	// truncates a pointer on Windows' LLP64 model (long stays 32-bit
+	// there even in a 64-bit build); user_data() stores a real void*
+	// with no such width loss, for the exact same "opaque callback
+	// payload" purpose here.
+	table.user_data( (void *)text );
 
 	g_dataedit_table = &table;
 
