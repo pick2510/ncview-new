@@ -1,0 +1,68 @@
+name: Release
+
+# Builds ncview for Linux, macOS, and Windows (same steps as CI, via the
+# shared build.yml reusable workflow) and publishes the three packaged
+# archives to a GitHub Release.
+#
+# Normal use: push a tag matching v*.*.* (e.g. `git tag v2.1.11 && git push
+# origin v2.1.11`) -- CPACK_PACKAGE_VERSION in CMakeLists.txt is the source
+# of truth for the version actually baked into the packages, so keep the tag
+# in sync with it.
+#
+# workflow_dispatch with an explicit tag is for re-publishing the same
+# version (e.g. a CI infra flake on one platform) without pushing a new tag:
+# the release/asset upload step is idempotent (--clobber), safe to re-run.
+on:
+  push:
+    tags: [ 'v*.*.*' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re-)publish a release for, e.g. v2.1.11'
+        required: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect packaged archives
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec cp {} dist/ \;
+          ls -la dist
+
+      # `gh release create` errors if the tag's release already exists (the
+      # workflow_dispatch re-publish case), so fall back to uploading assets
+      # onto the existing release instead of failing.
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "${{ github.repository }}" --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --repo "${{ github.repository }}" \
+              --title "$TAG" \
+              --generate-notes
+          fi

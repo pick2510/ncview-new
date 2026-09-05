@@ -106,3 +106,26 @@ UDUNITS-2's own files, kept here only because UDUNITS-2's vendored
 `${CMAKE_SOURCE_DIR}/COPYRIGHT`, and `${CMAKE_SOURCE_DIR}/CHANGE_LOG` for
 its install/CPack rules, and `CMAKE_SOURCE_DIR` resolves to our repo root
 once it's pulled in via `add_subdirectory`.
+
+## Releases
+
+Pre-built, self-contained packages for Linux, macOS, and Windows are
+published to [GitHub Releases](../../releases) by
+`.github/workflows/release.yml`. To cut a release, tag a commit with a
+version matching `v*.*.*` and push the tag:
+
+```sh
+git tag v2.1.11
+git push origin v2.1.11
+```
+
+This triggers the same build/test/package steps CI already runs (shared via
+`.github/workflows/build.yml`) on all three platforms, then uploads the
+resulting archives to a release named after the tag. Keep the tag in sync
+with `CPACK_PACKAGE_VERSION` in the top-level `CMakeLists.txt`, which is the
+actual source of truth for the version baked into the packages.
+
+To re-publish the same release (e.g. after a CI infra flake on one
+platform) without pushing a new tag, run the workflow manually from the
+Actions tab (`workflow_dispatch`) with the existing tag name -- it uploads
+over the existing release's assets rather than failing.

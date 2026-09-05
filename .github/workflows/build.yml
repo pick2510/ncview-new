@@ -1,0 +1,154 @@
+name: Build
+
+# Reusable workflow: builds, tests, and packages ncview for Linux, macOS, and
+# Windows. Called by ci.yml (on every push/PR) and release.yml (on a version
+# tag) so the two never drift apart -- a release is built by the exact same
+# steps CI already verified.
+on:
+  workflow_call:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libnetcdf-dev libexpat1-dev \
+            libx11-dev libxext-dev libxft-dev libxinerama-dev \
+            libxcursor-dev libxrender-dev libxfixes-dev \
+            flex bison texinfo patchelf
+
+      # -DFLTK_BACKEND_WAYLAND=OFF: this project always forces
+      # FLTK_BACKEND=x11 at runtime (see README), and none of the
+      # Wayland/GTK dev packages that backend needs are installed above --
+      # explicit here instead of relying on FLTK's own auto-detection
+      # fallback, so a runner image that happens to have them preinstalled
+      # doesn't silently change what gets built and linked.
+      #
+      # -DFLTK_BUILD_GL=OFF: ncview never uses OpenGL (no Fl_Gl_Window),
+      # and building FLTK's GL support needs OpenGL headers that aren't
+      # part of this runner image's default install (only the loader
+      # library is) -- skip it rather than pull in a GL dev package for
+      # code that's never linked into ncview anyway.
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DFLTK_BACKEND_WAYLAND=OFF -DFLTK_BUILD_GL=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: cmake --build build --target package -j"$(nproc)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ncview-linux
+          path: build/ncview-*.tar.gz
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          brew install netcdf expat texinfo flex bison
+          # Homebrew's texinfo/flex/bison are keg-only (macOS ships its own,
+          # much older copies) -- add them to PATH so CMake's
+          # find_program(MAKEINFO)/FLEX/BISON pick up working ones. The
+          # vendored UDUNITS-2 build needs a real makeinfo (its CMakeLists.txt
+          # depends on the generated .info/.html unconditionally once one is
+          # found, so its absence must mean "skip", not "use whatever old one
+          # macOS ships") and our own top-level CMakeLists.txt needs a real
+          # flex/bison to pre-generate UDUNITS-2's parser.c/scanner.c.
+          {
+            echo "$(brew --prefix texinfo)/bin"
+            echo "$(brew --prefix flex)/bin"
+            echo "$(brew --prefix bison)/bin"
+          } >> "$GITHUB_PATH"
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build
+        run: cmake --build build -j"$(sysctl -n hw.ncpu)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: cmake --build build --target package -j"$(sysctl -n hw.ncpu)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ncview-macos
+          path: build/ncview-*.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # This project builds on Windows via MinGW-w64 GCC (through MSYS2),
+      # not MSVC/vcpkg -- MSYS2's pacman has a prebuilt mingw-w64 netcdf
+      # package, avoiding a from-source vcpkg build, and GCC keeps the
+      # toolchain consistent with the linux job. flex and bison are the
+      # plain MSYS2 (not mingw-w64-prefixed) packages deliberately --
+      # they're host code-generator tools invoked once by our own
+      # top-level CMakeLists.txt, not something linked into ncview.
+      #
+      # Deliberately NOT installing `texinfo` here: see CMakeLists.txt's
+      # WIN32 block -- MSYS2's makeinfo is a Perl script ninja (a native
+      # Windows process) can't invoke at all, and ncview has no use for
+      # UDUNITS-2's own documentation anyway, so it's simplest to just let
+      # find_program(MAKEINFO) find nothing.
+      - name: Set up MSYS2 / MinGW64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-netcdf
+            mingw-w64-x86_64-expat
+            flex
+            bison
+
+      # -DFLTK_BUILD_GL=OFF: see the linux job -- ncview never uses OpenGL.
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DFLTK_BUILD_GL=OFF
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package
+        run: cmake --build build --target package -j
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ncview-windows
+          path: build/ncview-*.zip
