@@ -44,6 +44,7 @@ add_executable(ncview_core_tests
     test_calendar.cc
     test_util.cc
     test_file_netcdf.cc
+    test_pixels.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE
