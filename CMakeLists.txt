@@ -156,16 +156,19 @@ if(WIN32)
     # ("is not recognized as an internal or external command").
     #
     # ncview has no use for UDUNITS-2's own documentation, so rather than
-    # chase down a native makeinfo: (1) force MAKEINFO to NOTFOUND so
-    # texi_doc() takes its own "not found" branch and never defines a
-    # custom command to (re)generate these files at all -- the standard
-    # find_program()-suppression idiom, setting a cache variable to a
-    # NOTFOUND-suffixed value makes find_program() leave it alone -- and
-    # (2) pre-create empty placeholders at the exact paths its
-    # add_custom_target(... ALL DEPENDS ...) still unconditionally
-    # references, so that target is just a plain file with no producer
-    # rule, permanently satisfied instead of racing file timestamps.
-    set(MAKEINFO "MAKEINFO-NOTFOUND" CACHE FILEPATH "" FORCE)
+    # chase down a native makeinfo: the CI workflow simply doesn't install
+    # the `texinfo` MSYS2 package on Windows, so find_program(MAKEINFO
+    # makeinfo) genuinely finds nothing and texi_doc() takes its own "not
+    # found" branch, never defining a command to (re)generate these files
+    # at all. (Pre-setting the MAKEINFO cache variable to a NOTFOUND-
+    # suffixed value here does *not* work as a substitute for that -- CMake
+    # specifically treats an existing "<var>-NOTFOUND" cache value as "not
+    # found *yet*, keep searching" and overwrites it with a fresh, real
+    # result if one exists on PATH, confirmed locally.) What's still needed
+    # regardless of *how* it ends up not found: pre-create empty
+    # placeholders at the exact paths its add_custom_target(... ALL
+    # DEPENDS ...) unconditionally references, so each is a plain file
+    # with no producer rule -- permanently satisfied, not a missing target.
     foreach(_doc_output
         third_party/udunits2/udunits2.info
         third_party/udunits2/udunits2.html

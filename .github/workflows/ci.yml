@@ -105,14 +105,19 @@ jobs:
         with:
           submodules: recursive
 
-      # core/CMakeLists.txt only applies -fpermissive (needed for the ported
-      # code's hundreds of implicit void*->T* conversions, legal in C, not
-      # in C++) when CMAKE_CXX_COMPILER_ID is GNU. MSVC has no equivalent
-      # flag and would hard-fail on all of them, so this project builds on
-      # Windows via MinGW-w64 GCC (through MSYS2), not MSVC/vcpkg. flex and
-      # bison are the plain MSYS2 (not mingw-w64-prefixed) packages
-      # deliberately -- they're host code-generator tools invoked once by
-      # our own top-level CMakeLists.txt, not something linked into ncview.
+      # This project builds on Windows via MinGW-w64 GCC (through MSYS2),
+      # not MSVC/vcpkg -- MSYS2's pacman has a prebuilt mingw-w64 netcdf
+      # package, avoiding a from-source vcpkg build, and GCC keeps the
+      # toolchain consistent with the linux job. flex and bison are the
+      # plain MSYS2 (not mingw-w64-prefixed) packages deliberately --
+      # they're host code-generator tools invoked once by our own
+      # top-level CMakeLists.txt, not something linked into ncview.
+      #
+      # Deliberately NOT installing `texinfo` here: see CMakeLists.txt's
+      # WIN32 block -- MSYS2's makeinfo is a Perl script ninja (a native
+      # Windows process) can't invoke at all, and ncview has no use for
+      # UDUNITS-2's own documentation anyway, so it's simplest to just let
+      # find_program(MAKEINFO) find nothing.
       - name: Set up MSYS2 / MinGW64 toolchain
         uses: msys2/setup-msys2@v2
         with:
@@ -126,7 +131,6 @@ jobs:
             mingw-w64-x86_64-expat
             flex
             bison
-            texinfo
 
       # -DFLTK_BUILD_GL=OFF: see the linux job -- ncview never uses OpenGL.
       - name: Configure
