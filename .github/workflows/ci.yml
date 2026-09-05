@@ -21,7 +21,7 @@ jobs:
             libnetcdf-dev libexpat1-dev \
             libx11-dev libxext-dev libxft-dev libxinerama-dev \
             libxcursor-dev libxrender-dev libxfixes-dev \
-            flex bison texinfo
+            flex bison texinfo patchelf
 
       # -DFLTK_BACKEND_WAYLAND=OFF: this project always forces
       # FLTK_BACKEND=x11 at runtime (see README), and none of the
