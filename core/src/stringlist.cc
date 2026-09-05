@@ -383,8 +383,8 @@ stringlist_dump( Stringlist *s )
 			}
 
 		printf( "MAGIC=%d ", s->magic );
-		printf( "ADDR=%ld ", (long)s );
-		printf( "PREV=%ld NEXT=%ld ", (long)(void*)s->prev, (long)(void*)s->next );
+		printf( "ADDR=%p ", (void*)s );
+		printf( "PREV=%p NEXT=%p ", (void*)s->prev, (void*)s->next );
 		printf( "INDEX=%d: ", s->index );
 		if( s->string == NULL ) 
 			printf( "(null string) " );

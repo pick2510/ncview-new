@@ -65,7 +65,14 @@ void udu_utinit( char *path )
 	 */
 #ifdef NCVIEW_BUILD_TREE_UDUNITS2_XML
 	if( getenv( "UDUNITS2_XML_PATH" ) == NULL )
+		/* setenv() is POSIX-only -- MinGW-w64's Windows CRT provides
+		 * _putenv_s() instead, with the value passed as one combined
+		 * "NAME=value" string rather than separate arguments. */
+#ifdef _WIN32
+		_putenv_s( "UDUNITS2_XML_PATH", NCVIEW_BUILD_TREE_UDUNITS2_XML );
+#else
 		setenv( "UDUNITS2_XML_PATH", NCVIEW_BUILD_TREE_UDUNITS2_XML, 0 );
+#endif
 #endif
 	unitsys = ut_read_xml( path );
 
