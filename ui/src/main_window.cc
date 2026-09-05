@@ -443,14 +443,22 @@ void MainWindow::setCursorBusy( bool busy )
 
 void MainWindow::pixelToRgb( ncv_pixel pix, int *r, int *g, int *b ) const
 {
+	// Upstream's x_interface.c implementation returned X11 XColor-style
+	// 16-bit channel values (do_print.c's only caller right-shifts by 8 to
+	// get back to 8 bits: "fprintf(outf, "%02x%02x%02x", (r>>8), (g>>8),
+	// (b>>8))"). Our colormap tables are plain 8-bit, so scale up the same
+	// way X11 itself does (value16 = value8*257, i.e. value8 replicated
+	// into both bytes) rather than changing do_print.cc's contract.
+	unsigned char r8, g8, b8;
 	if( current_colormap_ < 0 || current_colormap_ >= (int)colormaps_.size() ) {
-		if( r ) *r = pix; if( g ) *g = pix; if( b ) *b = pix;
-		return;
+		r8 = g8 = b8 = (unsigned char)pix;
+	} else {
+		const auto &cm = colormaps_[current_colormap_];
+		r8 = cm.r[pix]; g8 = cm.g[pix]; b8 = cm.b[pix];
 	}
-	const auto &cm = colormaps_[current_colormap_];
-	if( r ) *r = cm.r[pix];
-	if( g ) *g = cm.g[pix];
-	if( b ) *b = cm.b[pix];
+	if( r ) *r = r8 * 257;
+	if( g ) *g = g8 * 257;
+	if( b ) *b = b8 * 257;
 }
 
 /* ===================== M4 dialogs ===================== */

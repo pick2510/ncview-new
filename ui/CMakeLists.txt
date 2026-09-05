@@ -10,4 +10,5 @@ target_include_directories(ncview_ui PUBLIC
 target_link_libraries(ncview_ui PUBLIC
     ncview_core
     fltk
+    fltk_images
 )

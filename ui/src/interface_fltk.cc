@@ -10,10 +10,12 @@
  */
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Double_Window.H>
+#include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_Table.H>
 #include <FL/Fl_Text_Buffer.H>
 #include <FL/Fl_Text_Display.H>
@@ -170,8 +172,40 @@ void in_set_cur_dim_value( char *name, char *string )
 
 /* ---- 2-D field / colormap ------------------------------------------------ */
 
+namespace {
+// M5: "-frames" (options.dump_frames) dumps every displayed frame to a PNG,
+// e.g. to assemble into a movie. Upstream's x_interface.c did this itself
+// with a direct libpng call inside its x_draw_2d_field(); FLTK already
+// bundles libpng for its own image support (fltk_images/fl_write_png.cxx),
+// so this needs no new dependency -- just an RGB expansion via pix_to_rgb,
+// which do_print.cc's PostScript writer already relies on.
+void dumpFrameToPng( const unsigned char *data, size_t width, size_t height, size_t frameno )
+{
+	static bool error_state = false;
+	if( error_state ) return;
+
+	char filename[64];
+	snprintf( filename, sizeof(filename), "frame.%05zu.png", frameno );
+
+	std::vector<unsigned char> rgb( width * height * 3 );
+	for( size_t i = 0; i < width * height; i++ ) {
+		int r, g, b;
+		pix_to_rgb( data[i], &r, &g, &b );
+		rgb[i*3+0] = (unsigned char)(r >> 8);
+		rgb[i*3+1] = (unsigned char)(g >> 8);
+		rgb[i*3+2] = (unsigned char)(b >> 8);
+	}
+	if( fl_write_png( filename, rgb.data(), (int)width, (int)height, 3 ) != 0 ) {
+		fprintf( stderr, "ncview: can't write PNG file %s\n", filename );
+		error_state = true;
+	}
+}
+} // namespace
+
 void in_draw_2d_field( unsigned char *data, size_t width, size_t height, size_t timestep )
 {
+	if( options.dump_frames )
+		dumpFrameToPng( data, width, height, timestep );
 	instance()->draw2DField( data, width, height, timestep );
 }
 

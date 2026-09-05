@@ -104,9 +104,11 @@ Still open:
 
 Testing note: `ui/src/interface_fltk.cc`'s `in_initialize()` has env-var-gated test hooks (`NCVIEW_TEST_AUTOSELECT=1|<var name>`, `NCVIEW_TEST_DIALOG=range|options|dimset|info|dataedit|plot|print`) used to drive the app under Xvfb without a real mouse/keyboard — harmless in normal use, worth keeping for regression checks. `print`'s hook defers to the first event-loop tick via `Fl::add_timeout(0.0, ...)` since `print_init()` (which seeds `PrintOptions`' defaults) runs after `in_initialize()` returns, not before.
 
-### M5 — Output paths
-- `do_print.c` (471 lines of hand-rolled PostScript) stays as core logic initially; then offer FLTK-native printing via `Fl_Printer` as the default device with the existing PS writer kept for `DEVICE_FILE`.
-- PNG frame dump: keep the `libpng` path, optional behind `NCVIEW_ENABLE_PNG`.
+### M5 — Output paths — done
+- ✅ **PostScript printing** (`do_print.c`): stayed as core logic unchanged since M1 (`core/src/do_print.cc`); `DEVICE_PRINTER` still shells out to `lpr` exactly like upstream (there was never a native print dialog to replace -- upstream's own "Printer" device is just `lpr` under the hood, so `Fl_Printer` would be new scope, not parity, and wasn't added).
+- ✅ **Fixed a real bug this uncovered**: `MainWindow::pixelToRgb` (`pix_to_rgb`) was returning plain 8-bit colormap values, but `do_print.cc`'s PostScript writer -- ported verbatim from upstream, which expects X11 `XColor`-style 16-bit channels -- right-shifts every channel by 8 (`"%02x%02x%02x", (r>>8), (g>>8), (b>>8)`). Every printed/dumped pixel was silently coming out black. Fixed by scaling colormap bytes the same way X11 does (`value16 = value8*257`) in `pixelToRgb` instead of changing core's contract.
+- ✅ **PNG frame dump** (`-frames`/`options.dump_frames`, `in_draw_2d_field`): upstream's `x_interface.c` called libpng directly, gated behind `HAVE_PNG`. This port uses FLTK's own `fl_write_png` (`ui/src/interface_fltk.cc`'s `dumpFrameToPng`) instead of adding a new `NCVIEW_ENABLE_PNG`/libpng dependency -- FLTK already bundles libpng for its own image support (`fltk_images`), so `ncview_ui` just links that target and reuses `pix_to_rgb` to build the RGB buffer, same as the PostScript writer does.
+- Verified under Xvfb: `-frames` produces `frame.NNNNN.png` files that visually match the on-screen render pixel-for-pixel (confirms the `pixelToRgb` fix); the printer-options dialog (previous commit) and the PNG writer share the exact same `pix_to_rgb` call, so the PostScript writer's colors are fixed by the same change.
 
 ### M6 — Parity, cleanup, docs
 - Side-by-side parity checklist against the Xaw build over real test files: colormap cycling, blowup/transform modes, animation controls, range dialog, XY plots, overlays, printing, `.ncviewrc` round-trip.
