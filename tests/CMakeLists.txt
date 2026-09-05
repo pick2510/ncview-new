@@ -12,9 +12,19 @@ add_executable(ncview_core_linkcheck
     stub_interface.cc
     linkcheck_main.cc
 )
-target_link_libraries(ncview_core_linkcheck PRIVATE
-    -Wl,--whole-archive ncview_core -Wl,--no-whole-archive
-)
+# GNU ld/LLD's -Wl,--whole-archive/--no-whole-archive syntax isn't
+# understood by Apple's ld64 at all ("unknown options: --whole-archive
+# --no-whole-archive"); its equivalent is -force_load taking the archive's
+# path directly, with no on/off toggle wrapping other libraries.
+if(APPLE)
+    target_link_libraries(ncview_core_linkcheck PRIVATE
+        -Wl,-force_load,$<TARGET_FILE:ncview_core> ncview_core
+    )
+else()
+    target_link_libraries(ncview_core_linkcheck PRIVATE
+        -Wl,--whole-archive ncview_core -Wl,--no-whole-archive
+    )
+endif()
 
 # M1 checkpoint, part 2: functional behavior of a sample of pure,
 # global-state-free core logic. Links normally (not whole-archive), so only

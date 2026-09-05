@@ -35,12 +35,6 @@
 #include "ncview/utCalendar2_cal.h"
 
 
-char *ccs_err_str( int errno );
-char *ccs_err_str( int errno );
-char *ccs_err_str( int errno );
-char *ccs_err_str( int errno );
-char *ccs_err_str( int errno );
-
 static int have_initted=0;
 static calcalcs_cal *cal_std=NULL;
 static ut_unit *udu_ref_date;

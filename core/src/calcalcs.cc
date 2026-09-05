@@ -919,15 +919,15 @@ int ccs_set_xition_date( calcalcs_cal *calendar, int year, int month, int day )
 }
 
 /********************************************************************************************/
-char *ccs_err_str( int errno ) 
+char *ccs_err_str( int err_num )
 {
-	if( errno == 0 ) 
+	if( err_num == 0 )
 		sprintf( error_message, "no error from calcalcs routines version %f", CALCALCS_VERSION_NUMBER );
 
-	else if( errno == CALCALCS_ERR_NULL_CALENDAR ) 
+	else if( err_num == CALCALCS_ERR_NULL_CALENDAR )
 		sprintf( error_message, "a NULL calendar was passed to the calcalcs routine" );
 
-	else if( errno == CALCALCS_ERR_INVALID_CALENDAR )
+	else if( err_num == CALCALCS_ERR_INVALID_CALENDAR )
 		sprintf( error_message, "an invalid, malformed, previously-freed, or uninitialized calendar was passed to the calcalcs routine" );
 
 	return( error_message );
