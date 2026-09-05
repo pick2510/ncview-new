@@ -12,9 +12,16 @@
 #include <cstring>
 
 #include <FL/Fl.H>
+#include <FL/Fl_Button.H>
+#include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Table.H>
+#include <FL/Fl_Text_Buffer.H>
+#include <FL/Fl_Text_Display.H>
 #include <FL/fl_ask.H>
+#include <FL/fl_draw.H>
 
 #include "ncview_ui/main_window.h"
+#include "ncview_ui/plot_window.h"
 
 using ncview_ui::MainWindow;
 using ncview_ui::instance;
@@ -47,12 +54,32 @@ void in_initialize( void )
 	// so the global `variables` list is populated.
 	instance()->populateVarList();
 	instance()->window()->show();
-	if( getenv( "NCVIEW_TEST_AUTOSELECT" ) && variables )
-		in_variable_selected( variables->name );
+	if( const char *sel = getenv( "NCVIEW_TEST_AUTOSELECT" ) ) {
+		NCVar *v = variables;
+		// A specific variable name may be given (besides "1", meaning "just
+		// pick the first one"); useful for driving a chosen 2-D field in
+		// headless/manual testing without a real mouse.
+		if( std::strcmp( sel, "1" ) != 0 )
+			for( NCVar *c = variables; c != nullptr; c = (NCVar *)c->next )
+				if( std::strcmp( c->name, sel ) == 0 ) { v = c; break; }
+		if( v != nullptr )
+			in_variable_selected( v->name );
+	}
 	if( const char *d = getenv( "NCVIEW_TEST_DIALOG" ) ) {
 		if( std::strcmp( d, "range" ) == 0 ) do_range( MOD_1 );
 		else if( std::strcmp( d, "options" ) == 0 ) do_options( MOD_1 );
 		else if( std::strcmp( d, "dimset" ) == 0 ) do_dimset( MOD_1 );
+		else if( std::strcmp( d, "info" ) == 0 ) view_information();
+		else if( std::strcmp( d, "dataedit" ) == 0 ) view_data_edit();
+		else if( std::strcmp( d, "plot" ) == 0 ) plot_XY();
+		else if( std::strcmp( d, "print" ) == 0 ) {
+			// do_print() reads the printopts defaults that ncview_main()
+			// sets up via print_init() -- which runs *after* in_initialize()
+			// returns (see ncview.cc). Defer to the first event-loop tick so
+			// the manual "print" test hook sees the same state a real
+			// button press would.
+			Fl::add_timeout( 0.0, []( void * ) { do_print(); } );
+		}
 	}
 }
 
@@ -209,16 +236,157 @@ void x_error( char *message )
 	fl_alert( "%s", message ? message : "(unknown error)" );
 }
 
-/* ---- popups not yet implemented (M4) ------------------------------------- */
+/* ---- variable-info popup -------------------------------------------------- */
 
 void in_display_stuff( char *s, char *var_name )
 {
-	(void)s; (void)var_name;
+	char window_title[132];
+	snprintf( window_title, sizeof(window_title), "Attributes of \"%s\"", var_name ? var_name : "" );
+
+	// Owns itself: deleted when the user hits Close. Upstream capped these
+	// at MAX_DISPLAY_POPUPS live popups (interface/display_info.c); FLTK has
+	// no widget-count pressure that made that limit necessary, so any
+	// number may be open at once here.
+	auto *win = new Fl_Double_Window( 520, 260, window_title );
+	win->begin();
+	auto *buf = new Fl_Text_Buffer();
+	buf->text( s ? s : "" );
+	auto *disp = new Fl_Text_Display( 10, 10, 500, 200 );
+	disp->buffer( buf );
+	disp->wrap_mode( Fl_Text_Display::WRAP_AT_BOUNDS, 0 );
+	auto *close_btn = new Fl_Button( 220, 220, 80, 30, "Close" );
+	close_btn->callback( []( Fl_Widget *w, void * ) {
+		Fl_Double_Window *window = static_cast<Fl_Double_Window*>( w->window() );
+		window->hide();
+		Fl::delete_widget( window );
+	} );
+	win->resizable( disp );
+	win->end();
+	win->show();
+}
+
+/* ---- data-edit grid -------------------------------------------------------- */
+
+namespace {
+
+// One data-edit window can be open at a time (matches upstream: x_dataedit()
+// runs its own blocking mini event loop, so only one is ever live). The
+// table cells are backed directly by the char** upstream hands us (each
+// entry is a 32-byte buffer from view_data_edit()), so editing a cell just
+// rewrites that buffer in place.
+class DataEditTable : public Fl_Table {
+public:
+	DataEditTable( int x, int y, int w, int h, int nx, int ny, char **text )
+		: Fl_Table( x, y, w, h ), nx_( nx ), text_( text )
+	{
+		rows( ny );
+		cols( nx );
+		row_header( 0 );
+		col_header( 0 );
+		row_height_all( 22 );
+		col_width_all( 72 );
+		end();
+	}
+
+	int nx() const { return nx_; }
+
+protected:
+	void draw_cell( TableContext context, int R, int C, int X, int Y, int W, int H ) override
+	{
+		if( context != CONTEXT_CELL ) return;
+		int index = R * nx_ + C;
+		fl_push_clip( X, Y, W, H );
+		fl_color( FL_WHITE );
+		fl_rectf( X, Y, W, H );
+		fl_color( FL_BLACK );
+		if( text_ && text_[index] )
+			fl_draw( text_[index], X + 3, Y, W - 6, H, FL_ALIGN_LEFT );
+		fl_rect( X, Y, W, H );
+		fl_pop_clip();
+	}
+
+private:
+	int nx_;
+	char **text_;
+};
+
+DataEditTable *g_dataedit_table = nullptr;
+
+void dataeditDoneCallback( Fl_Widget *w, void *data )
+{
+	*static_cast<bool*>( data ) = true;
+	w->window()->hide();
+}
+
+void dataeditDumpCallback( Fl_Widget *, void * )
+{
+	view_data_edit_dump();
+}
+
+} // namespace
+
+void x_dataedit( char **text, int nx )
+{
+	int n = 0;
+	while( text[n] != nullptr ) n++;
+	int ny = nx > 0 ? n / nx : 0;
+	if( ny <= 0 ) return;
+
+	Fl_Double_Window win( 520, 420, "Data Edit" );
+	win.begin();
+	DataEditTable table( 10, 10, 500, 350, nx, ny, text );
+	table.when( FL_WHEN_RELEASE );
+	auto *dump_btn = new Fl_Button( 10, 370, 100, 30, "Dump Data" );
+	dump_btn->callback( dataeditDumpCallback );
+	bool done = false;
+	auto *done_btn = new Fl_Button( 410, 370, 100, 30, "Done" );
+	done_btn->callback( dataeditDoneCallback, &done );
+	win.end();
+
+	// Double-click (or single release; Fl_Table doesn't distinguish well
+	// without extra bookkeeping) on a cell prompts for a new value, mirroring
+	// upstream's list-widget click -> x_dialog() -> in_change_dat() flow.
+	table.callback( []( Fl_Widget *w, void * ) {
+		auto *t = static_cast<DataEditTable*>( w );
+		if( t->callback_context() != Fl_Table::CONTEXT_CELL || Fl::event() != FL_RELEASE ) return;
+		int row = t->callback_row(), col = t->callback_col();
+		int index = row * t->nx() + col;
+		char **cells = reinterpret_cast<char**>( t->argument() );
+		if( cells == nullptr || cells[index] == nullptr ) return;
+
+		char line[132];
+		strncpy( line, cells[index], sizeof(line)-1 );
+		line[sizeof(line)-1] = '\0';
+		const char *result = fl_input( "Value:", line );
+		if( result == nullptr ) return;
+
+		float new_val, dummy;
+		if( sscanf( result, "%f %f", &new_val, &dummy ) != 1 ) return;
+
+		view_change_dat( (size_t)index, new_val );
+		snprintf( cells[index], 32, "%-10.5g", new_val );
+		t->redraw();
+	} );
+	table.argument( reinterpret_cast<long>( text ) );
+
+	g_dataedit_table = &table;
+
+	win.show();
+	while( win.shown() ) Fl::wait();
+
+	g_dataedit_table = nullptr;
 }
 
 void in_set_edit_place( size_t index, int x, int y, int nx, int ny )
 {
-	(void)index; (void)x; (void)y; (void)nx; (void)ny;
+	(void)x; (void)y; (void)ny;
+	if( g_dataedit_table == nullptr || nx <= 0 ) return;
+	int row = (int)(index / (size_t)nx);
+	int col = (int)(index % (size_t)nx);
+	g_dataedit_table->set_selection( row, col, row, col );
+	g_dataedit_table->row_position( row );
+	g_dataedit_table->col_position( col );
+	g_dataedit_table->redraw();
 }
 
 int in_set_scan_dims( Stringlist *dim_list, char *x_axis_name, char *y_axis_name, Stringlist **new_dim_list )
@@ -234,11 +402,12 @@ void in_change_min( char *label )
 int in_popup_XY_graph( size_t n, int dimindex, double *xvals, double *yvals, char *x_axis_title,
 	char *y_axis_title, char *title, char *legend, Stringlist *scannable_dims )
 {
-	// TODO(M4): real plot window (ui/src/plot_window.cc, per PORTING.md).
-	(void)n; (void)dimindex; (void)xvals; (void)yvals; (void)x_axis_title;
-	(void)y_axis_title; (void)title; (void)legend; (void)scannable_dims;
-	fl_alert( "XY plots are not implemented yet." );
-	return 0;
+	if( scannable_dims == nullptr ) {
+		in_error( (char *)"Internal error: got NULL scannable_dims in in_popup_XY_graph!" );
+		return -1;
+	}
+	return ncview_ui::popupXYGraph( n, dimindex, xvals, yvals, x_axis_title, y_axis_title,
+			title, legend, scannable_dims );
 }
 
 void in_popup_2d_window( void )   {}
@@ -253,10 +422,9 @@ void set_options( void )
 	instance()->setOptionsDialog();
 }
 
-int printer_options( PrintOptions * )
+int printer_options( PrintOptions *po )
 {
-	fl_alert( "Print options dialog is not implemented yet." );
-	return MESSAGE_CANCEL;
+	return instance()->printerOptionsDialog( po );
 }
 
 void printer_options_init( void ) {}
@@ -264,12 +432,6 @@ void printer_options_init( void ) {}
 int x_range( float old_min, float old_max, float global_min, float global_max, float *new_min, float *new_max, int *allvars )
 {
 	return instance()->rangeDialog( old_min, old_max, global_min, global_max, new_min, new_max, allvars );
-}
-
-void x_dataedit( char **text, int nx )
-{
-	(void)text; (void)nx;
-	fl_alert( "Data editing is not implemented yet." );
 }
 
 int x_seen_colormap_name( char *name )
@@ -307,7 +469,7 @@ void x_set_var_sensitivity( char *varname, int sens )
 	(void)varname; (void)sens;
 }
 
-void unlock_plot( void ) {}
+void unlock_plot( void ) { ncview_ui::unlockPlot(); }
 
 Stringlist *get_persistent_X_state( void )
 {

@@ -25,6 +25,8 @@
 	#defines, and structure definitions
 */
 
+#pragma once
+
 #ifdef HAVE_UDUNITS2
 #include <udunits2.h>
 #endif

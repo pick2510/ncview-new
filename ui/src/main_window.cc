@@ -8,7 +8,9 @@
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Float_Input.H>
+#include <FL/Fl_Input.H>
 #include <FL/Fl_Return_Button.H>
+#include <FL/Fl_Round_Button.H>
 
 namespace ncview_ui {
 
@@ -88,8 +90,26 @@ int ImageView::handle( int event )
 			int ox = x() + (w() - (int)width_) / 2;
 			int oy = y() + (h() - (int)height_) / 2;
 			view_report_position( Fl::event_x() - ox, Fl::event_y() - oy, mask );
+			// Middle-button press/drag highlights the corresponding cell in
+			// the data-edit window, if one is open (matches upstream's
+			// Btn2Up/Btn2Motion -> do_set_dataedit_place() translation).
+			if( (event == FL_PUSH || event == FL_DRAG) && Fl::event_button2() )
+				set_dataedit_place();
 			return 1;
 		}
+		case FL_RELEASE:
+			// Matches upstream's ccontour_widget translations: a plain
+			// left-button release pops up an XY plot along the cursor's
+			// position; the same with Ctrl held instead sets the current
+			// min/max (Btn1 -> min, Btn3 -> max) from the value under the
+			// cursor.
+			if( Fl::event_button() == FL_LEFT_MOUSE ) {
+				if( Fl::event_state( FL_CTRL ) ) set_min_from_curdata();
+				else plot_XY();
+			} else if( Fl::event_button() == FL_RIGHT_MOUSE && Fl::event_state( FL_CTRL ) ) {
+				set_max_from_curdata();
+			}
+			return 1;
 		default:
 			return Fl_Widget::handle( event );
 	}
@@ -575,6 +595,85 @@ int MainWindow::scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y
 	stringlist_add_string( new_dim_list, (char *)names[y_choice.value()].c_str(), nullptr, SLTYPE_NULL );
 	stringlist_add_string( new_dim_list, (char *)names[x_choice.value()].c_str(), nullptr, SLTYPE_NULL );
 	return 1;
+}
+
+int MainWindow::printerOptionsDialog( PrintOptions *po )
+{
+	Fl_Window win( 420, 300, "Printer Options" );
+	char buf[64];
+
+	Fl_Box dev_label( 10, 10, 60, 25, "Device:" );
+	Fl_Round_Button dev_printer( 80, 10, 90, 25, "Printer" );
+	Fl_Round_Button dev_file( 175, 10, 70, 25, "File" );
+	dev_printer.type( FL_RADIO_BUTTON );
+	dev_file.type( FL_RADIO_BUTTON );
+	(po->output_device == DEVICE_PRINTER ? dev_printer : dev_file).setonly();
+	Fl_Input outfile_input( 250, 10, 160, 25 );
+	outfile_input.value( po->out_file_name );
+
+	Fl_Box margin_label( 10, 45, 90, 25, "Margins (in):" );
+	Fl_Box xmar_label( 100, 45, 20, 25, "X" );
+	Fl_Float_Input xmar_input( 120, 45, 50, 25 );
+	snprintf( buf, sizeof(buf), "%g", po->page_x_margin ); xmar_input.value( buf );
+	Fl_Box ytmar_label( 180, 45, 60, 25, "Y top" );
+	Fl_Float_Input ytmar_input( 240, 45, 50, 25 );
+	snprintf( buf, sizeof(buf), "%g", po->page_upper_y_margin ); ytmar_input.value( buf );
+	Fl_Box ybmar_label( 300, 45, 60, 25, "Y bot" );
+	Fl_Float_Input ybmar_input( 360, 45, 50, 25 );
+	snprintf( buf, sizeof(buf), "%g", po->page_lower_y_margin ); ybmar_input.value( buf );
+
+	Fl_Box font_label( 10, 80, 90, 25, "Font:" );
+	Fl_Input font_name_input( 100, 80, 120, 25 );
+	font_name_input.value( po->font_name );
+	Fl_Box fontsize_label( 230, 80, 40, 25, "Size" );
+	Fl_Float_Input fontsize_input( 270, 80, 40, 25 );
+	snprintf( buf, sizeof(buf), "%d", po->font_size ); fontsize_input.value( buf );
+	Fl_Box headsize_label( 315, 80, 45, 25, "Head" );
+	Fl_Float_Input headsize_input( 360, 80, 40, 25 );
+	snprintf( buf, sizeof(buf), "%d", po->header_font_size ); headsize_input.value( buf );
+
+	Fl_Check_Button include_title( 10, 115, 190, 25, "Title" );
+	include_title.value( po->include_title );
+	Fl_Check_Button include_axis( 10, 140, 190, 25, "Axis labels" );
+	include_axis.value( po->include_axis_labels );
+	Fl_Check_Button include_extra( 10, 165, 190, 25, "Extra info" );
+	include_extra.value( po->include_extra_info );
+	Fl_Check_Button include_outline( 210, 115, 190, 25, "Outline" );
+	include_outline.value( po->include_outline );
+	Fl_Check_Button include_id( 210, 140, 190, 25, "ID" );
+	include_id.value( po->include_id );
+	Fl_Check_Button test_only( 210, 165, 190, 25, "No image (test only)" );
+	test_only.value( po->test_only );
+
+	ModalResult result;
+	Fl_Return_Button ok( 190, 250, 70, 30, "OK" );
+	ok.callback( modalOkCallback, &result );
+	Fl_Button cancel( 270, 250, 70, 30, "Cancel" );
+	cancel.callback( modalCancelCallback, nullptr );
+
+	win.end();
+	win.set_modal();
+	win.show();
+	while( win.shown() ) Fl::wait();
+
+	if( !result.ok ) return MESSAGE_CANCEL;
+
+	po->output_device = dev_printer.value() ? DEVICE_PRINTER : DEVICE_FILE;
+	strncpy( po->out_file_name, outfile_input.value(), sizeof(po->out_file_name)-1 );
+	po->page_x_margin = (float)atof( xmar_input.value() );
+	po->page_upper_y_margin = (float)atof( ytmar_input.value() );
+	po->page_lower_y_margin = (float)atof( ybmar_input.value() );
+	strncpy( po->font_name, font_name_input.value(), sizeof(po->font_name)-1 );
+	po->font_size = atoi( fontsize_input.value() );
+	po->header_font_size = atoi( headsize_input.value() );
+	po->include_title = include_title.value();
+	po->include_axis_labels = include_axis.value();
+	po->include_extra_info = include_extra.value();
+	po->include_outline = include_outline.value();
+	po->include_id = include_id.value();
+	po->test_only = test_only.value();
+
+	return MESSAGE_OK;
 }
 
 } // namespace ncview_ui

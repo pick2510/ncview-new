@@ -115,6 +115,7 @@ public:
 			float *new_min, float *new_max, int *allvars );
 	int  scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y_axis_name,
 			Stringlist **new_dim_list );
+	int  printerOptionsDialog( PrintOptions *po );
 
 private:
 	void rebuildButtonBar();

@@ -32,6 +32,8 @@
  * ncview_ui must implement. See PORTING.md.
  */
 
+#pragma once
+
 #include "ncview/stringlist.h"
 #include "ncview/interface.h"
 
