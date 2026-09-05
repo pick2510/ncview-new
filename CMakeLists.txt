@@ -243,10 +243,20 @@ if(WIN32)
     set(_ncview_bundle_dir ${CMAKE_INSTALL_BINDIR})
     set(_ncview_bundle_pre_exclude "api-ms-.*" "ext-ms-.*")
     set(_ncview_bundle_post_exclude ".*[Ww][Ii][Nn][Dd][Oo][Ww][Ss][/\\\\][Ss]y[Ss]tem32.*")
+    # install(RUNTIME_DEPENDENCY_SET)'s resolver finds *names* of needed
+    # DLLs (libstdc++-6.dll, libnetcdf.dll, ...) via objdump fine on its
+    # own, but doesn't know where any of them actually live on disk unless
+    # told -- MinGW/MSYS2 keeps every package's DLLs (the compiler's own
+    # runtime included) in one shared bin/ next to the compiler itself, so
+    # deriving that directory from CMAKE_CXX_COMPILER covers all of them
+    # without hardcoding a path.
+    get_filename_component(_ncview_mingw_bin_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(_ncview_bundle_search_dirs "${_ncview_mingw_bin_dir}")
 elseif(APPLE)
     set(_ncview_bundle_dir ${CMAKE_INSTALL_LIBDIR})
     set(_ncview_bundle_pre_exclude)
     set(_ncview_bundle_post_exclude "^/usr/lib/.*" "^/System/Library/.*")
+    set(_ncview_bundle_search_dirs)
 else()
     set(_ncview_bundle_dir ${CMAKE_INSTALL_LIBDIR})
     set(_ncview_bundle_pre_exclude)
@@ -258,12 +268,14 @@ else()
         ".*/libGL\\.so.*" ".*/libEGL\\.so.*" ".*/libgbm\\.so.*" ".*/libdrm.*"
         ".*/dri/.*"
     )
+    set(_ncview_bundle_search_dirs)
 endif()
 
 install(RUNTIME_DEPENDENCY_SET ncview_runtime_deps
     DESTINATION ${_ncview_bundle_dir}
     PRE_EXCLUDE_REGEXES ${_ncview_bundle_pre_exclude}
     POST_EXCLUDE_REGEXES ${_ncview_bundle_post_exclude}
+    DIRECTORIES ${_ncview_bundle_search_dirs}
 )
 
 if(UNIX AND NOT APPLE)
