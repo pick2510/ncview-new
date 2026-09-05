@@ -216,6 +216,7 @@ MainWindow::MainWindow()
 
 	dim_pack_ = new Fl_Pack( 10, H-180, W-20, 100 );
 	dim_pack_->type( Fl_Pack::VERTICAL );
+	dim_pack_->end();
 
 	button_bar_ = new Fl_Pack( 10, H-70, W-20, 60 );
 	button_bar_->type( Fl_Pack::HORIZONTAL );
