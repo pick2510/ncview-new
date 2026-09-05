@@ -10,6 +10,7 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Float_Input.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_Return_Button.H>
 #include <FL/Fl_Round_Button.H>
 
@@ -500,7 +501,15 @@ void modalCancelCallback( Fl_Widget *w, void * )
 
 void MainWindow::setOptionsDialog()
 {
-	Fl_Window win( 320, 190, "Options" );
+	// Upstream's set_options.c also has a "select which colormaps are
+	// enabled for cycling" section, backed by interface/colormap_funcs.c
+	// (X11 colorcell allocation, deliberately not ported -- see PORTING.md's
+	// M6 notes); everything else there is reproduced here.
+	const int kOverlayY = 135;
+	int n_overlays = overlay_n_overlays();
+	int overlay_bottom = kOverlayY + 20 + n_overlays * 24;
+
+	Fl_Window win( 340, overlay_bottom + 80, "Options" );
 	Fl_Check_Button autoscale( 10, 10, 300, 25, "Autoscale each frame" );
 	autoscale.value( options.autoscale );
 	Fl_Check_Button extra_info( 10, 40, 300, 25, "Show extra info" );
@@ -510,10 +519,51 @@ void MainWindow::setOptionsDialog()
 	Fl_Check_Button auto_overlay( 10, 100, 300, 25, "Automatic coastline overlay" );
 	auto_overlay.value( options.auto_overlay );
 
+	Fl_Box overlay_label( 10, kOverlayY, 300, 20, "Overlay:" );
+	overlay_label.align( FL_ALIGN_LEFT | FL_ALIGN_INSIDE );
+	overlay_label.labelfont( FL_HELVETICA_BOLD );
+
+	char **names = overlay_names();
+	int current_overlay = overlay_current();
+	int custom_idx = overlay_custom_n();
+	std::vector<Fl_Round_Button *> overlay_btns;
+	int y = kOverlayY + 20;
+	for( int i = 0; i < n_overlays; i++ ) {
+		auto *btn = new Fl_Round_Button( 10, y, 300, 22, names[i] );
+		btn->type( FL_RADIO_BUTTON );
+		if( i == current_overlay ) btn->setonly();
+		overlay_btns.push_back( btn );
+		y += 24;
+	}
+
+	// Upstream's equivalent (set_options.c's static overlay_filename) is
+	// also a value that survives across dialog invocations, not reset
+	// each time the dialog opens.
+	static std::string custom_overlay_filename;
+	Fl_Box filename_box( 10, y, 230, 25 );
+	filename_box.box( FL_DOWN_BOX );
+	filename_box.align( FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP );
+	filename_box.copy_label( custom_overlay_filename.empty() ?
+		"(no custom overlay file selected)" : custom_overlay_filename.c_str() );
+	Fl_Button browse_btn( 250, y, 80, 25, "Browse..." );
+	browse_btn.callback( []( Fl_Widget *, void *data ) {
+		auto *label_box = static_cast<Fl_Box *>( data );
+		Fl_Native_File_Chooser fc;
+		fc.title( "Select custom overlay file" );
+		char base_dir[1024];
+		determine_overlay_base_dir( base_dir, sizeof(base_dir) );
+		fc.directory( base_dir );
+		if( fc.show() == 0 && fc.filename() != nullptr ) {
+			custom_overlay_filename = fc.filename();
+			label_box->copy_label( custom_overlay_filename.c_str() );
+		}
+	}, &filename_box );
+	y += 35;
+
 	ModalResult result;
-	Fl_Return_Button ok( 90, 145, 70, 30, "OK" );
+	Fl_Return_Button ok( 100, y, 70, 30, "OK" );
 	ok.callback( modalOkCallback, &result );
-	Fl_Button cancel( 170, 145, 70, 30, "Cancel" );
+	Fl_Button cancel( 190, y, 70, 30, "Cancel" );
 	cancel.callback( modalCancelCallback, nullptr );
 
 	win.end();
@@ -526,6 +576,19 @@ void MainWindow::setOptionsDialog()
 		options.want_extra_info = extra_info.value();
 		options.save_frames = save_frames.value();
 		options.auto_overlay = auto_overlay.value();
+
+		int new_overlay = current_overlay;
+		for( int i = 0; i < n_overlays; i++ )
+			if( overlay_btns[i]->value() ) { new_overlay = i; break; }
+		// Re-apply if unchanged but "custom": matches upstream's own
+		// set_options.c condition, letting a freshly Browse()'d filename
+		// take effect even if "Custom" was already selected.
+		if( new_overlay != current_overlay || new_overlay == custom_idx )
+			do_overlay( new_overlay,
+				new_overlay == custom_idx && !custom_overlay_filename.empty() ?
+					(char *)custom_overlay_filename.c_str() : nullptr,
+				FALSE );
+
 		view_draw( TRUE, FALSE );
 	}
 }
