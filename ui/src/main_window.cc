@@ -384,11 +384,15 @@ MainWindow::MainWindow()
 	labels_[LABEL_DATA_EXTREMA] = new Fl_Box( 10, 43, 300, 18 );
 	labels_[LABEL_DATA_VALUE]   = new Fl_Box( 320, 43, 200, 18 );
 	labels_[LABEL_COLORMAP_NAME]= new Fl_Box( 10, 61, 150, 18 );
-	labels_[LABEL_BLOWUP]       = new Fl_Box( 170, 61, 80, 18 );
-	labels_[LABEL_TRANSFORM]    = new Fl_Box( 260, 61, 80, 18 );
-	labels_[LABEL_BLOWUP_TYPE]  = new Fl_Box( 350, 61, 100, 18 );
-	labels_[LABEL_CCINFO_1]     = new Fl_Box( 460, 61, 200, 18 );
-	labels_[LABEL_CCINFO_2]     = new Fl_Box( 460, 79, 200, 18 );
+	// No LABEL_BLOWUP ("M X<n>") box -- it showed core's discrete
+	// pre-zoom pixel-buffer scale factor, which upstream's now-removed
+	// BUTTON_BLOWUP let you cycle. With that gone (replaced by ImageView's
+	// continuous scroll/drag zoom, which this label never reflected anyway)
+	// it was a static, unexplained number nobody could act on.
+	labels_[LABEL_TRANSFORM]    = new Fl_Box( 170, 61, 80, 18 );
+	labels_[LABEL_BLOWUP_TYPE]  = new Fl_Box( 260, 61, 100, 18 );
+	labels_[LABEL_CCINFO_1]     = new Fl_Box( 370, 61, 200, 18 );
+	labels_[LABEL_CCINFO_2]     = new Fl_Box( 370, 79, 200, 18 );
 	labels_[LABEL_SKIP]         = new Fl_Box( 10, 79, 150, 18 );
 	labels_[LABEL_SCALAR_DIMS]  = new Fl_Box( 170, 79, 280, 18 );
 	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT ); }
@@ -475,9 +479,15 @@ static const ButtonSpec kButtonSpecs[] = {
 	{ BUTTON_FORWARD, "@>", 40 }, { BUTTON_FASTFORWARD, "@>|", 40 }, { BUTTON_RESTART, "Restart", 65 },
 	{ BUTTON_COLORMAP_SELECT, "Colormap", 80 }, { BUTTON_INVERT_PHYSICAL, "Inv.Phys", 75 },
 	{ BUTTON_INVERT_COLORMAP, "Inv.Cmap", 78 }, { BUTTON_MINIMUM, "Min", 50 }, { BUTTON_MAXIMUM, "Max", 50 },
-	// No BUTTON_BLOWUP/BUTTON_BLOWUP_TYPE here -- replaced by ImageView's
-	// scroll-to-zoom (mouse wheel) and drag-to-pan (left-button drag), which
-	// give continuous navigation instead of upstream's discrete button.
+	// No BUTTON_BLOWUP here -- replaced by ImageView's scroll-to-zoom (mouse
+	// wheel) and drag-to-pan (left-button drag), which give continuous
+	// navigation instead of upstream's discrete button. BUTTON_BLOWUP_TYPE
+	// is unrelated to navigation (it toggles how core resamples pixels --
+	// replicate vs bilinear -- independent of the on-screen zoom level), so
+	// unlike BUTTON_BLOWUP it still needs a real control; its current state
+	// is shown by the passive LABEL_BLOWUP_TYPE box up in the info area
+	// (unchanged from upstream), this button is just the trigger.
+	{ BUTTON_BLOWUP_TYPE, "Interp", 60 },
 	{ BUTTON_TRANSFORM, "Transform", 85 },
 	{ BUTTON_DIMSET, "DimSet", 65 }, { BUTTON_RANGE, "Range", 60 }, { BUTTON_EDIT, "Edit", 50 },
 	{ BUTTON_INFO, "Info", 50 }, { BUTTON_PRINT, "Print", 55 }, { BUTTON_OPTIONS, "Options", 70 },
@@ -598,6 +608,12 @@ void MainWindow::setLabel( int label_id, const char *s )
 	if( label_id < 0 || label_id >= (int)(sizeof(labels_)/sizeof(labels_[0])) ) return;
 	if( labels_[label_id] == nullptr ) return;
 	labels_[label_id]->copy_label( s );
+	// copy_label() alone doesn't schedule a repaint -- without this, the
+	// i/j/value label under the cursor (LABEL_DATA_VALUE, updated on every
+	// FL_MOVE via view_report_position()) only appeared to change when some
+	// unrelated event happened to trigger a redraw (a click, a resize),
+	// making mouse-over tracking look frozen.
+	labels_[label_id]->redraw();
 }
 
 void MainWindow::setSensitive( int button_id, int state )
@@ -686,6 +702,7 @@ void MainWindow::fillDimInfo( NCDim *d, int /*please_flip*/ )
 	for( auto &row : dim_rows_ ) {
 		if( row.name == d->name ) {
 			row.name_box->copy_label( d->long_name && d->long_name[0] ? d->long_name : d->name );
+			row.name_box->redraw();
 			break;
 		}
 	}
@@ -693,9 +710,15 @@ void MainWindow::fillDimInfo( NCDim *d, int /*please_flip*/ )
 
 void MainWindow::setCurDimValue( const char *name, const char *value )
 {
+	// Same missing-repaint bug as MainWindow::setLabel() (see its comment):
+	// copy_label() alone doesn't schedule a redraw, so a dimension row's
+	// displayed value -- e.g. "Time" during animation playback or manual
+	// scrubbing with the row's prev/next buttons -- only appeared to update
+	// when some unrelated event happened to repaint the window.
 	for( auto &row : dim_rows_ ) {
 		if( row.name == name ) {
 			row.value_box->copy_label( value );
+			row.value_box->redraw();
 			return;
 		}
 	}
