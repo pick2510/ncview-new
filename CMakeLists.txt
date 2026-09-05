@@ -145,6 +145,41 @@ if(NOT EXISTS "${_udunits2_lib_dir}/parser.c")
     endif()
 endif()
 
+if(WIN32)
+    # UDUNITS-2's texi_doc() (called three times: its own CMakeLists.txt,
+    # lib/, and prog/) unconditionally depends on generated .info/.html
+    # files once a makeinfo is found (the same "ALL target depends on a
+    # file nothing generates" shape as the flex/bison fix above). On
+    # Windows, MSYS2's `texinfo` package's makeinfo is a Perl script under
+    # its POSIX layer (/usr/bin), not a native .exe -- ninja (itself a
+    # native process, invoked outside the MSYS2 shell) can't run it at all
+    # ("is not recognized as an internal or external command").
+    #
+    # ncview has no use for UDUNITS-2's own documentation, so rather than
+    # chase down a native makeinfo: (1) force MAKEINFO to NOTFOUND so
+    # texi_doc() takes its own "not found" branch and never defines a
+    # custom command to (re)generate these files at all -- the standard
+    # find_program()-suppression idiom, setting a cache variable to a
+    # NOTFOUND-suffixed value makes find_program() leave it alone -- and
+    # (2) pre-create empty placeholders at the exact paths its
+    # add_custom_target(... ALL DEPENDS ...) still unconditionally
+    # references, so that target is just a plain file with no producer
+    # rule, permanently satisfied instead of racing file timestamps.
+    set(MAKEINFO "MAKEINFO-NOTFOUND" CACHE FILEPATH "" FORCE)
+    foreach(_doc_output
+        third_party/udunits2/udunits2.info
+        third_party/udunits2/udunits2.html
+        third_party/udunits2/lib/udunits2lib.info
+        third_party/udunits2/lib/udunits2lib.html
+        third_party/udunits2/prog/udunits2prog.info
+        third_party/udunits2/prog/udunits2prog.html
+    )
+        if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_doc_output}")
+            file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/${_doc_output}" "")
+        endif()
+    endforeach()
+endif()
+
 # Upstream's CMakeLists.txt assumes it is the top-level project: its CPack
 # block and its `install(FILES "${CMAKE_SOURCE_DIR}/COPYRIGHT" ...)` resolve
 # CMAKE_SOURCE_DIR to *our* repo root when add_subdirectory'd. We keep root
