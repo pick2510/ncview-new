@@ -75,6 +75,7 @@ void in_initialize( void )
 		else if( std::strcmp( d, "info" ) == 0 ) view_information();
 		else if( std::strcmp( d, "dataedit" ) == 0 ) view_data_edit();
 		else if( std::strcmp( d, "plot" ) == 0 ) plot_XY();
+		else if( std::strcmp( d, "overlay" ) == 0 ) do_overlay( OVERLAY_P8DEG, nullptr, FALSE );
 		else if( std::strcmp( d, "print" ) == 0 ) {
 			// do_print() reads the printopts defaults that ncview_main()
 			// sets up via print_init() -- which runs *after* in_initialize()
@@ -473,7 +474,19 @@ int in_popup_XY_graph( size_t n, int dimindex, double *xvals, double *yvals, cha
 void in_popup_2d_window( void )   {}
 void in_popdown_2d_window( void ) {}
 
-int in_report_auto_overlay( void ) { return 0; }
+int in_report_auto_overlay( void )
+{
+	// Upstream's x_report_auto_overlay() returns an X application-resource
+	// default ("Ncview*autoOverlay", app_data.auto_overlay) that's ANDed
+	// with the live options.auto_overlay toggle (view.cc:set_scan_variable)
+	// -- effectively a second, resource-file-only on/off switch. That
+	// resource defaults to 1 (DEFAULT_AUTO_OVERLAY in x_interface.c) and
+	// this port has no application-resource system to override it with, so
+	// returning 0 here (the previous M3 stub) silently disabled automatic
+	// overlays entirely, no matter what the Options dialog's "Automatic
+	// coastline overlay" checkbox said. Return the upstream default instead.
+	return 1;
+}
 
 /* ---- extra seam: real UI dialogs/state (M4 stubs for now) ---------------- */
 

@@ -713,6 +713,18 @@ initialize_file_interface( Stringlist *input_files )
 	void
 initialize_display_interface()
 {
+	/* Upstream allocated and filled this identity/remap table in
+	 * interface/colormap_funcs.c's x_create_colormap() -- the X11
+	 * colorcell-allocation file this port intentionally doesn't carry over
+	 * (FLTK expands a pixel index straight to RGB, the same as upstream's
+	 * own TrueColor branch there: pixel_transform[i] = i). Without this,
+	 * util.cc:data_to_pixels() unconditionally dereferences a NULL
+	 * pixel_transform for the first missing/fill-value pixel it sees.
+	 */
+	pixel_transform = (ncv_pixel *)malloc( (options.n_colors+options.n_extra_colors) * sizeof(ncv_pixel) );
+	for( int i=0; i<options.n_colors+options.n_extra_colors; i++ )
+		pixel_transform[i] = (ncv_pixel)i;
+
 	initialize_colormaps();
 
 	/* Make the colormaps in the program congruent in order
