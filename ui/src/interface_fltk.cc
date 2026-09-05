@@ -8,6 +8,7 @@
  * FLTK replacement for upstream's src/interface/interface.c +
  * src/interface/x_interface.c.
  */
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -82,6 +83,31 @@ void in_initialize( void )
 			// button press would.
 			Fl::add_timeout( 0.0, []( void * ) { do_print(); } );
 		}
+	}
+	if( const char *b = getenv( "NCVIEW_TEST_BUTTON" ) ) {
+		// Drives any button through the exact same in_button_pressed() path
+		// MainWindow::buttonCallback uses for a real click -- for
+		// regression-checking buttons (blowup, transform, invert, ...)
+		// under Xvfb without a real mouse. Deferred one tick for the same
+		// reason "print" is: some of these (BUTTON_BLOWUP, BUTTON_RESTART)
+		// interact with state that in_initialize()'s caller (ncview_main())
+		// only finishes setting up after in_initialize() returns.
+		static const struct { const char *name; int id; } kButtons[] = {
+			{ "rewind", BUTTON_REWIND }, { "backwards", BUTTON_BACKWARDS },
+			{ "pause", BUTTON_PAUSE }, { "forward", BUTTON_FORWARD },
+			{ "fastforward", BUTTON_FASTFORWARD }, { "colormap", BUTTON_COLORMAP_SELECT },
+			{ "invert_physical", BUTTON_INVERT_PHYSICAL }, { "invert_colormap", BUTTON_INVERT_COLORMAP },
+			{ "minimum", BUTTON_MINIMUM }, { "maximum", BUTTON_MAXIMUM },
+			{ "blowup", BUTTON_BLOWUP }, { "restart", BUTTON_RESTART },
+			{ "transform", BUTTON_TRANSFORM }, { "blowup_type", BUTTON_BLOWUP_TYPE },
+		};
+		for( const auto &e : kButtons )
+			if( std::strcmp( b, e.name ) == 0 ) {
+				int id = e.id;
+				Fl::add_timeout( 0.0, [](void *data) { in_button_pressed( (int)(intptr_t)data, MOD_1 ); },
+					(void*)(intptr_t)id );
+				break;
+			}
 	}
 }
 

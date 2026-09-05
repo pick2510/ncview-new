@@ -1,5 +1,6 @@
 #include "ncview_ui/main_window.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -143,8 +144,23 @@ void Colorbar::setRange( float user_min, float user_max, int transform )
 void Colorbar::draw()
 {
 	int n_colors = options.n_colors > 0 ? options.n_colors : 200;
+	int width = w() > 0 ? w() : 1;
 	for( int px = 0; px < w(); px++ ) {
-		int idx = 10 + (px * n_colors) / (w() > 0 ? w() : 1);
+		// Mirrors util.cc:data_to_pixels' pixel-index formula exactly
+		// (transform, then invert_colors, then scale by n_colors) --
+		// upstream's cbar.c does the same in cbar_make(). Without this the
+		// colorbar shows a plain linear gradient that no longer matches
+		// the image whenever a transform or "Invert Colormap" is active.
+		double normval = (double)px / (double)width;
+		switch( transform_ ) {
+			case TRANSFORM_HI:     normval = normval*normval*normval*normval; break;
+			case TRANSFORM_LOW:    normval = sqrt( sqrt( normval ) ); break;
+			case TRANSFORM_CENTER: normval = atan( (normval-0.5)*8.0 )/3.1415926536 + 0.5; break;
+			default: break;
+		}
+		if( options.invert_colors ) normval = 1.0 - normval;
+		int idx = 10 + (int)(normval * n_colors);
+		if( idx < 0 ) idx = 0;
 		if( idx > 255 ) idx = 255;
 		fl_color( fl_rgb_color( colormap_r_[idx], colormap_g_[idx], colormap_b_[idx] ) );
 		fl_line( x()+px, y(), x()+px, y()+h() );
