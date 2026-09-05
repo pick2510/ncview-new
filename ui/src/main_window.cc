@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <FL/Fl.H>
@@ -56,6 +57,13 @@ void ImageView::setColormap( const unsigned char *r, const unsigned char *g, con
 
 void ImageView::setData( const unsigned char *data, size_t width, size_t height )
 {
+	// A size change means a different variable or scan-dim layout is now
+	// showing; start that view fresh rather than carrying over a zoom/pan
+	// that was framed for the old data.
+	if( width != width_ || height != height_ ) {
+		zoom_ = 1.0;
+		panx_ = pany_ = 0.0;
+	}
 	width_ = width;
 	height_ = height;
 	pixels_.assign( data, data + width*height );
@@ -65,19 +73,87 @@ void ImageView::setData( const unsigned char *data, size_t width, size_t height 
 	redraw();
 }
 
+namespace {
+struct ZoomDrawCtx {
+	const unsigned char *rgb;
+	size_t width, height;
+	double zoom, ox, oy;             // ox,oy: window-relative origin of buffer (0,0)
+	unsigned char bg_r, bg_g, bg_b;  // shown outside the image bounds
+};
+} // namespace
+
 void ImageView::draw()
 {
-	fl_color( FL_DARK2 );
-	fl_rectf( x(), y(), w(), h() );
-	if( rgb_buf_.empty() || width_ == 0 || height_ == 0 )
+	if( rgb_buf_.empty() || width_ == 0 || height_ == 0 ) {
+		fl_color( FL_DARK2 );
+		fl_rectf( x(), y(), w(), h() );
 		return;
+	}
 
-	// Center the image in the widget; ncview itself decides the pixel
-	// size via the blowup factor (view.c), so width_/height_ already
-	// reflect that -- we just draw at 1:1 and clip/center.
-	int ox = x() + (w() - (int)width_) / 2;
-	int oy = y() + (h() - (int)height_) / 2;
-	fl_draw_image( rgb_buf_.data(), ox, oy, (int)width_, (int)height_, 3, 0 );
+	ZoomDrawCtx ctx;
+	ctx.rgb = rgb_buf_.data();
+	ctx.width = width_;
+	ctx.height = height_;
+	ctx.zoom = zoom_;
+	ctx.ox = x() + (w() - width_*zoom_) / 2.0 + panx_;
+	ctx.oy = y() + (h() - height_*zoom_) / 2.0 + pany_;
+	Fl::get_color( FL_DARK2, ctx.bg_r, ctx.bg_g, ctx.bg_b );
+
+	// Draw via a per-scanline callback rather than fl_draw_image() on a
+	// pre-scaled buffer: this lets the display zoom continuously (including
+	// shrinking to fit and magnifying well past the data's native
+	// resolution) via simple nearest-neighbor sampling, without ever
+	// resampling/copying the underlying rgb_buf_ itself.
+	fl_draw_image( []( void *data, int cx, int cy, int w_line, unsigned char *buf ) {
+			auto *c = static_cast<ZoomDrawCtx*>( data );
+			double by = ( cy - c->oy ) / c->zoom;
+			bool row_in_range = by >= 0.0 && by < (double)c->height;
+			size_t row = row_in_range ? (size_t)by : 0;
+			for( int i = 0; i < w_line; i++ ) {
+				double bx = ( (cx + i) - c->ox ) / c->zoom;
+				if( row_in_range && bx >= 0.0 && bx < (double)c->width ) {
+					size_t idx = ( row * c->width + (size_t)bx ) * 3;
+					buf[i*3+0] = c->rgb[idx+0];
+					buf[i*3+1] = c->rgb[idx+1];
+					buf[i*3+2] = c->rgb[idx+2];
+				} else {
+					buf[i*3+0] = c->bg_r;
+					buf[i*3+1] = c->bg_g;
+					buf[i*3+2] = c->bg_b;
+				}
+			}
+		}, &ctx, x(), y(), w(), h(), 3 );
+}
+
+void ImageView::screenToBuffer( int win_x, int win_y, int *bx, int *by ) const
+{
+	double ox = x() + (w() - width_*zoom_) / 2.0 + panx_;
+	double oy = y() + (h() - height_*zoom_) / 2.0 + pany_;
+	if( bx ) *bx = (int)std::floor( (win_x - ox) / zoom_ );
+	if( by ) *by = (int)std::floor( (win_y - oy) / zoom_ );
+}
+
+void ImageView::zoomAt( int win_x, int win_y, double factor )
+{
+	if( width_ == 0 || height_ == 0 ) return;
+	double new_zoom = zoom_ * factor;
+	if( new_zoom < kMinZoom ) new_zoom = kMinZoom;
+	if( new_zoom > kMaxZoom ) new_zoom = kMaxZoom;
+	if( new_zoom == zoom_ ) return;
+
+	// Keep the buffer point currently under the cursor fixed on screen
+	// (the usual "zoom toward the pointer" behavior), rather than zooming
+	// around the image center.
+	int bx, by;
+	screenToBuffer( win_x, win_y, &bx, &by );
+
+	zoom_ = new_zoom;
+	double base_ox = x() + (w() - width_*zoom_) / 2.0;
+	double base_oy = y() + (h() - height_*zoom_) / 2.0;
+	panx_ = win_x - base_ox - bx*zoom_;
+	pany_ = win_y - base_oy - by*zoom_;
+
+	redraw();
 }
 
 int ImageView::handle( int event )
@@ -86,13 +162,35 @@ int ImageView::handle( int event )
 		case FL_PUSH:
 		case FL_DRAG:
 		case FL_MOVE: {
+			if( event == FL_PUSH ) {
+				press_x_ = Fl::event_x();
+				press_y_ = Fl::event_y();
+				pan_start_x_ = panx_;
+				pan_start_y_ = pany_;
+				dragging_ = false;
+			} else if( event == FL_DRAG && Fl::event_button1() ) {
+				// Left-button drag pans the view -- replaces upstream's
+				// discrete Blowup button with direct, continuous navigation.
+				// Gated by a small movement threshold so it doesn't eat the
+				// plain-click-to-plot / Ctrl-click-to-set-min/max gestures
+				// handled below on FL_RELEASE.
+				int dx = Fl::event_x() - press_x_;
+				int dy = Fl::event_y() - press_y_;
+				if( !dragging_ && ( std::abs( dx ) > 3 || std::abs( dy ) > 3 ) )
+					dragging_ = true;
+				if( dragging_ ) {
+					panx_ = pan_start_x_ + dx;
+					pany_ = pan_start_y_ + dy;
+					redraw();
+				}
+			}
 			unsigned int mask = 0;
 			if( Fl::event_button1() ) mask |= 1;
 			if( Fl::event_button2() ) mask |= 2;
 			if( Fl::event_button3() ) mask |= 4;
-			int ox = x() + (w() - (int)width_) / 2;
-			int oy = y() + (h() - (int)height_) / 2;
-			view_report_position( Fl::event_x() - ox, Fl::event_y() - oy, mask );
+			int bx, by;
+			screenToBuffer( Fl::event_x(), Fl::event_y(), &bx, &by );
+			view_report_position( bx, by, mask );
 			// Middle-button press/drag highlights the corresponding cell in
 			// the data-edit window, if one is open (matches upstream's
 			// Btn2Up/Btn2Motion -> do_set_dataedit_place() translation).
@@ -100,14 +198,23 @@ int ImageView::handle( int event )
 				set_dataedit_place();
 			return 1;
 		}
+		case FL_MOUSEWHEEL: {
+			// Scroll to zoom, centered on the cursor -- replaces upstream's
+			// discrete Blowup/Bl.Type buttons with continuous zoom.
+			double factor = std::pow( 1.1, -Fl::event_dy() );
+			zoomAt( Fl::event_x(), Fl::event_y(), factor );
+			return 1;
+		}
 		case FL_RELEASE:
 			// Matches upstream's ccontour_widget translations: a plain
 			// left-button release pops up an XY plot along the cursor's
 			// position; the same with Ctrl held instead sets the current
 			// min/max (Btn1 -> min, Btn3 -> max) from the value under the
-			// cursor.
+			// cursor. Suppressed if this release ends a pan drag rather
+			// than an actual click.
 			if( Fl::event_button() == FL_LEFT_MOUSE ) {
-				if( Fl::event_state( FL_CTRL ) ) set_min_from_curdata();
+				if( dragging_ ) dragging_ = false;
+				else if( Fl::event_state( FL_CTRL ) ) set_min_from_curdata();
 				else plot_XY();
 			} else if( Fl::event_button() == FL_RIGHT_MOUSE && Fl::event_state( FL_CTRL ) ) {
 				set_max_from_curdata();
@@ -236,7 +343,10 @@ static const ButtonSpec kButtonSpecs[] = {
 	{ BUTTON_FORWARD, "@>" }, { BUTTON_FASTFORWARD, "@>|" }, { BUTTON_RESTART, "Restart" },
 	{ BUTTON_COLORMAP_SELECT, "Colormap" }, { BUTTON_INVERT_PHYSICAL, "Inv.Phys" },
 	{ BUTTON_INVERT_COLORMAP, "Inv.Cmap" }, { BUTTON_MINIMUM, "Min" }, { BUTTON_MAXIMUM, "Max" },
-	{ BUTTON_BLOWUP, "Blowup" }, { BUTTON_BLOWUP_TYPE, "Bl.Type" }, { BUTTON_TRANSFORM, "Transform" },
+	// No BUTTON_BLOWUP/BUTTON_BLOWUP_TYPE here -- replaced by ImageView's
+	// scroll-to-zoom (mouse wheel) and drag-to-pan (left-button drag), which
+	// give continuous navigation instead of upstream's discrete button.
+	{ BUTTON_TRANSFORM, "Transform" },
 	{ BUTTON_DIMSET, "DimSet" }, { BUTTON_RANGE, "Range" }, { BUTTON_EDIT, "Edit" },
 	{ BUTTON_INFO, "Info" }, { BUTTON_PRINT, "Print" }, { BUTTON_OPTIONS, "Options" },
 	{ BUTTON_QUIT, "Quit" },
@@ -532,6 +642,11 @@ void MainWindow::pixelToRgb( ncv_pixel pix, int *r, int *g, int *b ) const
 	if( r ) *r = r8 * 257;
 	if( g ) *g = g8 * 257;
 	if( b ) *b = b8 * 257;
+}
+
+void MainWindow::queryPointerPosition( int *x, int *y ) const
+{
+	image_->screenToBuffer( Fl::event_x(), Fl::event_y(), x, y );
 }
 
 /* ===================== M4 dialogs ===================== */

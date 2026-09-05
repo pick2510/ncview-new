@@ -43,11 +43,38 @@ public:
 	void draw() override;
 	int handle( int event ) override;
 
+	// Maps a window-relative point (Fl::event_x()/event_y() -- FLTK widget
+	// coordinates are window-relative, not parent-relative) to a pixel
+	// coordinate in the untransformed data buffer, undoing the current
+	// zoom/pan/centering. Used both internally and by MainWindow so
+	// in_query_pointer_position() reports positions consistent with what's
+	// actually on screen, matching what view_report_position() gets.
+	void screenToBuffer( int win_x, int win_y, int *bx, int *by ) const;
+
 private:
+	void zoomAt( int win_x, int win_y, double factor );
+
 	unsigned char colormap_r_[256], colormap_g_[256], colormap_b_[256];
 	std::vector<unsigned char> pixels_;   // index buffer, width_*height_
 	std::vector<unsigned char> rgb_buf_;  // expanded RGB buffer, width_*height_*3
 	size_t width_ = 0, height_ = 0;
+
+	// Continuous zoom/pan replacing upstream's discrete Blowup button:
+	// scroll wheel zooms (centered on the cursor), left-button drag pans.
+	// zoom_ is a plain display multiplier applied on top of whatever
+	// resolution core handed us -- it never touches core's own (still
+	// automatic) blowup sizing.
+	double zoom_ = 1.0;
+	double panx_ = 0.0, pany_ = 0.0;
+	static constexpr double kMinZoom = 0.1, kMaxZoom = 32.0;
+
+	// Click-vs-drag disambiguation: a plain left-button release plots the
+	// clicked point (see handle()'s FL_RELEASE case), but with panning now
+	// also live on left-button drag, that release must be suppressed once
+	// the button has moved far enough to count as a pan rather than a click.
+	int press_x_ = 0, press_y_ = 0;
+	double pan_start_x_ = 0.0, pan_start_y_ = 0.0;
+	bool dragging_ = false;
 };
 
 // A simple horizontal gradient strip showing the current colormap over the
@@ -108,6 +135,7 @@ public:
 	void  populateVarList();
 	void  setCursorBusy( bool busy );
 	void  pixelToRgb( ncv_pixel pix, int *r, int *g, int *b ) const;
+	void  queryPointerPosition( int *x, int *y ) const;
 
 	// ---- M4 dialogs -------------------------------------------------
 	void setOptionsDialog();

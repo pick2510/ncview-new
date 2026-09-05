@@ -270,8 +270,14 @@ int in_set_2d_size( size_t width, size_t height )
 
 void in_query_pointer_position( int *x, int *y )
 {
-	if( x ) *x = Fl::event_x();
-	if( y ) *y = Fl::event_y();
+	// Must return the same data-buffer-pixel coordinate space
+	// view_report_position() gets (ImageView::screenToBuffer() undoes the
+	// widget's position plus its zoom/pan/centering transform) -- core's
+	// mouse_xy_to_data_xy() divides this straight through by options.blowup
+	// with no further offset, so a raw Fl::event_x()/y() here (window-
+	// relative, not widget-relative) would misplace every caller: plot_XY(),
+	// set_min/max_from_curdata(), set_dataedit_place().
+	instance()->queryPointerPosition( x, y );
 }
 
 /* ---- dialogs / errors ---------------------------------------------------- */
