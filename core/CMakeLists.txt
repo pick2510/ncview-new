@@ -19,6 +19,7 @@ add_library(ncview_core STATIC
     src/view.cc
 )
 set_target_properties(ncview_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(ncview_core PRIVATE ncview_warning_flags)
 target_include_directories(ncview_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )

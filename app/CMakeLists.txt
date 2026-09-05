@@ -16,6 +16,7 @@ add_executable(ncview
 # from the other has already been seen once and gets resolved.
 target_link_libraries(ncview PRIVATE
     ncview_ui ncview_core ncview_ui ncview_core
+    ncview_warning_flags
 )
 
 if(NCVIEW_STATIC_LINK)

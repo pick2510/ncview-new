@@ -11,6 +11,18 @@ endif()
 
 include(GNUInstallDirs)
 
+# core/modernization.md Phase 0a: surface every warning the compiler already
+# has an opinion about, without failing the build on them yet (see
+# core/WARNINGS.md for the baseline this produced and the plan for clearing
+# it module by module). Only applied to our own targets -- third_party/fltk
+# and third_party/udunits2 are vendored and not ours to clean up.
+add_library(ncview_warning_flags INTERFACE)
+if(MSVC)
+    target_compile_options(ncview_warning_flags INTERFACE /W4)
+else()
+    target_compile_options(ncview_warning_flags INTERFACE -Wall -Wextra -Wno-unused-parameter)
+endif()
+
 # tests/ whole-archive-links ncview_core (and transitively libudunits2) into
 # a shared library to force full symbol resolution (see tests/CMakeLists.txt);
 # that requires every static lib involved to be PIC.
