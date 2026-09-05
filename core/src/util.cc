@@ -296,7 +296,7 @@ data_to_pixels( View *v )
 			}
 		else
 			{
-			if( ! data_has_mv( v->data, x_size*y_size, fill_value ) )
+			if( ! data_has_mv( (float *)v->data, x_size*y_size, fill_value ) )
 				return( -1 );
 			v->variable->user_max = 1;
 			}
@@ -307,7 +307,7 @@ data_to_pixels( View *v )
 	    	snprintf( error_message, 1022, "min and max both %g for variable %s",
 	    		v->variable->user_min, v->variable->name );
 		x_error( error_message );
-		if( ! data_has_mv( v->data, x_size*y_size, fill_value ) ) {
+		if( ! data_has_mv( (float *)v->data, x_size*y_size, fill_value ) ) {
 			v->variable->user_max += 0.1 * v->variable->user_max;
 			v->variable->user_min -= 0.1 * v->variable->user_min;
 			v->variable->auto_set_no_range = 1;

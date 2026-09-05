@@ -1204,7 +1204,7 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 	y_size       = *(view->variable->size + view->y_axis_id);
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
-	view->pixels = (void *)malloc( scaled_x_size*scaled_y_size*sizeof(ncv_pixel) );
+	view->pixels = (unsigned char *)malloc( scaled_x_size*scaled_y_size*sizeof(ncv_pixel) );
 
 	if( options.save_frames == TRUE ) {
 		if( options.debug )
@@ -2561,7 +2561,7 @@ view_data_edit_dump( void )
 		start[1] = 0L;
 		count[0] = y_size;
 		count[1] = x_size;
-		err = nc_put_vara_float( ncid, varid, start, count, view->data );
+		err = nc_put_vara_float( ncid, varid, start, count, (const float *)view->data );
 		if( err != NC_NOERR ) {
 			fprintf( stderr, "Error writing data to new netcdf file!!\n" );
 			fprintf( stderr, "%s\n", nc_strerror(err) );

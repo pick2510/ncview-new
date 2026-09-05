@@ -2172,7 +2172,7 @@ void nc_print_group_structure( int fileid )
 
 		/* Get group name */
 		ierr = nc_inq_grpname_len( gid[ig], &gnl );
-		group_name = malloc( sizeof(char) * (gnl+2) );
+		group_name = (char *)malloc( sizeof(char) * (gnl+2) );
 		ierr = nc_inq_grpname_full( gid[ig], &gnl, group_name );
 
 		/* find info about this group: number of dims, vars, atts */

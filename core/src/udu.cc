@@ -32,7 +32,7 @@
 
 typedef struct {
 	char	*name;
-	void	*next;
+	AnyPtr	next;
 } UniqList;
 
 static int		valid_udunits_pkg;

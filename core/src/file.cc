@@ -325,8 +325,8 @@ fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 	virt_to_actual_place( var, virt_start_pos, act_start_pos, &file );
 
 	if( file_type == FILE_TYPE_NETCDF )
-		netcdf_fi_get_data( file->id, var->name, act_start_pos, 
-			  count, data, (NetCDFOptions *)var->first_file->aux_data );
+		netcdf_fi_get_data( file->id, var->name, act_start_pos,
+			  count, (float *)data, (NetCDFOptions *)var->first_file->aux_data );
 	else
 		{
 		fprintf( stderr, "?unknown file_type passed to fi_get_data: %d\n",

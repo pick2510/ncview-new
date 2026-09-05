@@ -2,6 +2,8 @@
 #ifndef SEEN_STRINGLIST_H
 #define SEEN_STRINGLIST_H
 
+#include "ncview/anyptr.h"
+
 /*-------------------------------------------
  * How long the string in a stringlist can be
  *-------------------------------------------*/
@@ -37,7 +39,7 @@
 typedef struct {
 	int	magic;		/* Will be SL_MAGIC for valid elements */
 	char	*string;
-	void	*next, *prev;
+	AnyPtr	next, prev;
 	int	index;		/* initialized to position in list */
 	void	*aux;		/* auxiliary data */
 	int	sltype;		/* one of the defined SLTYPEs, indicating type of aux */

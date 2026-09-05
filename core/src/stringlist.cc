@@ -384,7 +384,7 @@ stringlist_dump( Stringlist *s )
 
 		printf( "MAGIC=%d ", s->magic );
 		printf( "ADDR=%ld ", (long)s );
-		printf( "PREV=%ld NEXT=%ld ", (long)s->prev, (long)s->next );
+		printf( "PREV=%ld NEXT=%ld ", (long)(void*)s->prev, (long)(void*)s->next );
 		printf( "INDEX=%d: ", s->index );
 		if( s->string == NULL ) 
 			printf( "(null string) " );

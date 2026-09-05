@@ -31,6 +31,8 @@
 #include <udunits2.h>
 #endif
 
+#include "ncview/anyptr.h"
+
 /* X11's <X11/X.h> visual-class constant, value 3, used by util.cc's
  * data_to_pixels() to decide whether to run pixel values through the
  * indexed-colormap pixel_transform table. Defined here (rather than pulling
@@ -283,7 +285,7 @@ typedef unsigned char ncv_pixel;/* If you change this, make sure to change
 /*****************************************************************************/
 /* This describes the file which the relevant variable lives in */
 typedef struct {
-	void	*next, *prev;
+	AnyPtr	next, prev;
 	int	id;		/* internally used ID number */
 	int	index;		/* starts at 0, increments by 1 for each file associated
 				 * with this variable */
@@ -370,7 +372,7 @@ typedef struct {
  */
 typedef struct {
 	char	*name;
-	void	*next, *prev;			/* for global list of variables */
+	AnyPtr	next, prev;			/* for global list of variables */
 	float	fill_value;			/* Any data with this special
 						 * value will be IGNORED. It
 						 * is assumed to indicate 
@@ -605,7 +607,7 @@ typedef struct {
  */
 typedef struct {
         void            *color_list;	/* XColor* in the UI layer; core never touches this */
-	void            *next, *prev;
+	AnyPtr          next, prev;
 	char            *name;
 	ncv_pixel       *pixel_transform;
 	int             enabled;        /* 1 if enabled, 0 otherwise */
