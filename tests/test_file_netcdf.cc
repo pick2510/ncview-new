@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <unistd.h>
 
@@ -20,8 +21,12 @@ namespace {
 // variables lat(lat), lon(lon), time(time), temp(time,lat,lon); returns its
 // path. Caller must std::remove() it.
 std::string make_sample_file() {
-    char path_template[] = "/tmp/ncview_test_XXXXXX";
-    int fd = mkstemp(path_template);
+    // A hardcoded "/tmp/..." template isn't valid on Windows -- mkstemp()
+    // itself is portable (mingw-w64 provides it), but the path needs to
+    // come from the platform's actual temp directory.
+    std::string path_template =
+        (std::filesystem::temp_directory_path() / "ncview_test_XXXXXX").string();
+    int fd = mkstemp(&path_template[0]);
     REQUIRE(fd >= 0);
     close(fd); // nc_create() below re-creates it; mkstemp() just reserves a unique name.
     std::string path = path_template;
