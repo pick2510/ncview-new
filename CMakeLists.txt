@@ -292,6 +292,24 @@ elseif(APPLE)
     )
 endif()
 
+# The two rpath fixes above only make ncview's own *direct* dependencies
+# resolve against the bundle. Neither ELF RUNPATH (Linux) nor an
+# @executable_path LC_RPATH (macOS) is transitive/consulted for a
+# dependency referenced by its original absolute/non-@rpath path, so
+# without this, a bundled library's *own* dependencies (e.g. libnetcdf.so
+# needing libhdf5.so, in turn needing libcurl.so) are never found in the
+# bundle at all -- confirmed with a real built package on both platforms
+# (ldd reporting bundled-but-still-"not found" libraries on Linux; ncview
+# itself referencing netcdf by its literal build-time Homebrew path on
+# macOS). See the two scripts themselves for the full explanation.
+if(UNIX AND NOT APPLE)
+    install(CODE "set(NCVIEW_BUNDLE_LIBDIR \"${CMAKE_INSTALL_LIBDIR}\")")
+    install(SCRIPT "${CMAKE_SOURCE_DIR}/cmake/fixup_linux_bundle.cmake")
+elseif(APPLE)
+    install(CODE "set(NCVIEW_BUNDLE_LIBDIR \"${CMAKE_INSTALL_LIBDIR}\")")
+    install(SCRIPT "${CMAKE_SOURCE_DIR}/cmake/fixup_macos_bundle.cmake")
+endif()
+
 # --------------------------------------------------------------------------
 # CPack (source/binary tarball)
 # --------------------------------------------------------------------------
