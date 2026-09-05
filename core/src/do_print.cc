@@ -51,6 +51,22 @@ extern Options 	options;
 
 static PrintOptions printopts;
 
+/* getlogin() is POSIX-only -- not provided by MinGW-w64's Windows CRT --
+ * used only to stamp a username on the "include ID" printout footer, so a
+ * portable fallback via the USERNAME environment variable (always set on
+ * Windows) is good enough; never fails outright, so callers always get a
+ * usable string.
+ */
+static char *get_login_name( void )
+{
+#ifdef _WIN32
+	char *name = getenv( "USERNAME" );
+#else
+	char *name = getlogin();
+#endif
+	return name ? name : (char *)"unknown";
+}
+
 static void print_header( FILE *out_file, float scale, size_t x, size_t y, size_t top_of_image );
 static void calc_scale( float *scale, size_t x, size_t y );
 static void set_font( FILE *outf, char *name, int size );
@@ -360,7 +376,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 
 	if( printopts.include_id ) {
 		sec_since_1970 = time(NULL);
-		snprintf( tstr, 1499, "%s %s", getlogin(), ctime(&sec_since_1970) );
+		snprintf( tstr, 1499, "%s %s", get_login_name(), ctime(&sec_since_1970) );
 		/* Make the id font a bit smaller */
 		set_font( outf, printopts.font_name, 
 				(int)((float)printopts.font_size*ID_FONT_SIZE_SCALE) );
