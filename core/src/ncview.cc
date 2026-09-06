@@ -50,19 +50,19 @@
 #include "ncview/colormaps_ssec.h"
 
 /* Program defaults in a easy-to-find place */
-#define DEFAULT_INVERT_PHYSICAL	FALSE
-#define DEFAULT_INVERT_COLORS	FALSE
+#define DEFAULT_INVERT_PHYSICAL	false
+#define DEFAULT_INVERT_COLORS	false
 #define DEFAULT_BLOWUP		1
 #define DEFAULT_MIN_MAX_METHOD	MIN_MAX_METHOD_FAST
 #define DEFAULT_N_COLORS	200
-#define DEFAULT_PRIVATE_CMAP	FALSE
+#define DEFAULT_PRIVATE_CMAP	false
 #define DEFAULT_BLOWUP_TYPE	BLOWUP_BILINEAR
 #define DEFAULT_SHRINK_METHOD	SHRINK_METHOD_MEAN
-#define DEFAULT_SAVEFRAMES	TRUE
-#define DEFAULT_NO_AUTOFLIP	FALSE
+#define DEFAULT_SAVEFRAMES	true
+#define DEFAULT_NO_AUTOFLIP	false
 #define DEFAULT_LISTSEL_MAX	40
-#define DEFAULT_COLOR_BY_NDIMS	TRUE
-#define DEFAULT_AUTO_OVERLAY	TRUE
+#define DEFAULT_COLOR_BY_NDIMS	true
+#define DEFAULT_AUTO_OVERLAY	true
 
 Options	  options;
 NCVar	  *variables;
@@ -91,9 +91,9 @@ ncview_main( int argc, char **argv )
 	read_in_state = NULL;	/* Note: a global var. Set to null to flag following routine to make a new stringlist */
 	err = read_state_from_file( &read_in_state );
 	if( err == 0 ) 	
-		found_state_file = TRUE;
+		found_state_file = true;
 	else
-		found_state_file = FALSE;
+		found_state_file = false;
 
 	in_parse_args               ( &argc, argv );
 	input_files = parse_options ( argc,  argv );	/* This parses ALL the non-X11 command line options, not just the input files */
@@ -114,11 +114,11 @@ ncview_main( int argc, char **argv )
 	 * I pass this information through the global "options" struct.
 	 */
 	if( any_var_in_group( variables )) {
-		options.enable_group_sel = TRUE;
+		options.enable_group_sel = true;
 		options.varsel_style = VARSEL_MENU;
 		}
 	else
-		options.enable_group_sel = FALSE;
+		options.enable_group_sel = false;
 
 	/* This initializes the colormaps, and then the X widows system */
 	if( options.debug ) printf( "Initializing display interface...\n" );
@@ -137,7 +137,7 @@ ncview_main( int argc, char **argv )
 	/* If we didn't find a state file (".ncviewrc") when we started up, then
 	 * write a new one out now that we are all initialized
 	 */
-	if( found_state_file == FALSE ) {
+	if( found_state_file == false ) {
 		state_to_save = get_persistent_state();
 		if( (err = write_state_to_file( state_to_save )) != 0 ) {
 			fprintf( stderr, "Error %d while trying to save options file \"$HOME/.ncviewrc\".\n", err );
@@ -209,25 +209,25 @@ parse_options( int argc, char *argv[] )
 				}
 
 			else if( strncmp( argv[i], "-pri", 4 ) == 0 )
-				options.private_colormap = TRUE;
+				options.private_colormap = true;
 
 			else if( strncmp( argv[i], "-deb", 4 ) == 0 )
-				options.debug = TRUE;
+				options.debug = true;
 
 			else if( strncmp( argv[i], "-beep", 5 ) == 0 )
-				options.beep_on_restart = TRUE;
+				options.beep_on_restart = true;
 
 			else if( strncmp( argv[i], "-pause_on_restart", 17 ) == 0 )
-				options.stop_on_restart = TRUE;
+				options.stop_on_restart = true;
 
 			else if( strncmp( argv[i], "-fra", 4 ) == 0 )
-				options.dump_frames = TRUE;
+				options.dump_frames = true;
 
 			else if( strncmp( argv[i], "-small", 6 ) == 0 )
-				options.small = TRUE;
+				options.small = true;
 
 			else if( strncmp( argv[i], "-ext", 4 ) == 0 )
-				options.want_extra_info = TRUE;
+				options.want_extra_info = true;
 
 			else if( strncmp( argv[i], "-mti", 3 ) == 0 ) {
 				options.window_title = argv[i+1];
@@ -235,19 +235,19 @@ parse_options( int argc, char *argv[] )
 				}
 
 			else if( strncmp( argv[i], "-noauto", 7 ) == 0 )
-				options.no_autoflip = TRUE;
+				options.no_autoflip = true;
 
 			else if( strncmp( argv[i], "-no1d", 5 ) == 0 )
-				options.no_1d_vars = TRUE;
+				options.no_1d_vars = true;
 
 			else if( strncmp( argv[i], "-show_sel", 9 ) == 0 )
-				options.show_sel = TRUE;
+				options.show_sel = true;
 
 			else if( strncmp( argv[i], "-no_char_dim", 12 ) == 0 )
-				options.no_char_dims = TRUE;
+				options.no_char_dims = true;
 
 			else if( strncmp( argv[i], "-notconv", 8 ) == 0 )
-				options.t_conv = FALSE;
+				options.t_conv = false;
 
 			else if( strncmp( argv[i], "-shrink_mode", 12) == 0 )
 				options.shrink_method = SHRINK_METHOD_MODE;
@@ -261,15 +261,15 @@ parse_options( int argc, char *argv[] )
 				}
 
 			else if( strncmp( argv[i], "-no_color_ndims", 7 ) == 0 ) {
-				options.color_by_ndims = FALSE;
+				options.color_by_ndims = false;
 				}
 
 			else if( strncmp( argv[i], "-no_auto_overlay", 7 ) == 0 ) {
-				options.auto_overlay = FALSE;
+				options.auto_overlay = false;
 				}
 
 			else if( strncmp( argv[i], "-autoscale", 9 ) == 0 ) {
-				options.autoscale = TRUE;
+				options.autoscale = true;
 				}
 
 			else if( strncmp( argv[i], "-scale", 6 ) == 0 ) {
@@ -378,28 +378,28 @@ initialize_misc()
 	options.n_colors 	 = DEFAULT_N_COLORS;
 	options.n_extra_colors 	 = 10;
 	options.private_colormap = DEFAULT_PRIVATE_CMAP;
-	options.debug		 = FALSE;
-	options.show_sel	 = FALSE;
-	options.want_extra_info  = FALSE;
-	options.beep_on_restart  = FALSE;
-	options.stop_on_restart  = FALSE;
-	options.small  		 = FALSE;
+	options.debug		 = false;
+	options.show_sel	 = false;
+	options.want_extra_info  = false;
+	options.beep_on_restart  = false;
+	options.stop_on_restart  = false;
+	options.small  		 = false;
 	options.blowup_type      = DEFAULT_BLOWUP_TYPE;
 	options.save_frames      = DEFAULT_SAVEFRAMES;
 	options.no_autoflip      = DEFAULT_NO_AUTOFLIP;
-	options.t_conv      	 = TRUE;
+	options.t_conv      	 = true;
 	options.varsel_style	 = VARSEL_LIST;
-	options.dump_frames	 = FALSE;
+	options.dump_frames	 = false;
 	options.listsel_max	 = DEFAULT_LISTSEL_MAX;
 	options.color_by_ndims	 = DEFAULT_COLOR_BY_NDIMS;
 	options.auto_overlay	 = DEFAULT_AUTO_OVERLAY;
-	options.autoscale	 = FALSE;
+	options.autoscale	 = false;
 	options.calendar	 = NULL;
 	options.scale		 = 1.e30;	/* This val means do NOT do any user scaling of data */
 	options.offset		 = 1.e30;	/* This val means do NOT do any user offset of data */
 
 	options.overlay          = (OverlayOptions *)malloc( sizeof( OverlayOptions ));
-	options.overlay->doit    = FALSE;
+	options.overlay->doit    = false;
 	options.overlay->overlay = NULL;
 
 	options.maxsize_pct	 = 75;	/* maximum size of a window, in percent of screen, before switching to scrollbars */
@@ -410,7 +410,7 @@ initialize_misc()
 	options.missval_b 	= 255;
 
 	framestore.frame = NULL;
-	framestore.valid = FALSE;
+	framestore.valid = false;
 
 }
 

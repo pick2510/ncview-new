@@ -163,11 +163,11 @@ new_fdblist( FDBlist **el )
 new_netcdf( NetCDFOptions **n )
 {
 	(*n) = (NetCDFOptions *)malloc( sizeof( NetCDFOptions ));
-	(*n)->valid_range_set  = FALSE;
-	(*n)->valid_min_set    = FALSE;
-	(*n)->valid_max_set    = FALSE;
-	(*n)->scale_factor_set = FALSE;
-	(*n)->add_offset_set   = FALSE;
+	(*n)->valid_range_set  = false;
+	(*n)->valid_min_set    = false;
+	(*n)->valid_max_set    = false;
+	(*n)->scale_factor_set = false;
+	(*n)->add_offset_set   = false;
 
 	(*n)->valid_range[0] = 0.0;
 	(*n)->valid_range[1] = 0.0;
@@ -275,7 +275,7 @@ data_to_pixels( View *v )
 			}
 	    	snprintf( error_message, 1022, "min and max both 0 for variable %s.\nI can check ALL the data instead of subsampling if that's OK,\nor just cancel viewing this variable.",
 	    				v->variable->name );
-		result = in_dialog( error_message, NULL, TRUE );
+		result = in_dialog( error_message, NULL, true );
 		if( result == MESSAGE_OK ) {
 			orig_minmax_method = options.min_max_method;
 			options.min_max_method = MIN_MAX_METHOD_EXHAUST;
@@ -462,7 +462,7 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 		new_var->user_max   = 0.0;
 		new_var->user_set_blowup   = -99999;
 		new_var->auto_set_no_range = 0;
-		new_var->have_set_range    = FALSE;
+		new_var->have_set_range    = false;
 		new_var->size       = fi_var_size( file_id, var_name );
 		new_var->fill_value = DEFAULT_FILL_VALUE;
 		fi_fill_value( new_var, &(new_var->fill_value) );
@@ -482,7 +482,7 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 
 		fill_dim_structs( new_var );
 		add_to_varlist  ( &variables, new_var );
-		new_var->is_virtual = FALSE;
+		new_var->is_virtual = false;
 
 		}
 	else	/* YES -- just add the FDB to the list of files in which 
@@ -506,7 +506,7 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 		new_fdb->index    = ((FDBlist *)(new_fdb->prev))->index + 1;	/* so index for this fdb is 1 more than index for prev one */
 		var->last_file    = new_fdb;
 		*(var->size)      += *(new_fdb->var_size);	/* this works b/c you can only concatenate across first (timelike) dim */
-		var->is_virtual   = TRUE;
+		var->is_virtual   = true;
 		}
 }
 
@@ -668,7 +668,7 @@ init_min_max( NCVar *var )
 	/* We always get the min and max of the first, middle, and last time 
 	 * entries if they are distinct.
 	 */
-	verbose = TRUE;
+	verbose = true;
 	step    = 0L;
 	get_min_max_onestep( var, n_other, step, data, 
 			&(var->global_min), &(var->global_max), verbose );
@@ -709,7 +709,7 @@ init_min_max( NCVar *var )
 			break;
 			
 		case MIN_MAX_METHOD_MED:     
-			verbose = TRUE;
+			verbose = true;
 			step = (n_timesteps-1L)/4L;
 			get_min_max_onestep( var, n_other, step, data, 
 				&(var->global_min), &(var->global_max), verbose );
@@ -721,7 +721,7 @@ init_min_max( NCVar *var )
 			break;
 				
 		case MIN_MAX_METHOD_SLOW:
-			verbose = TRUE;
+			verbose = true;
 			for( i=2; i<=9; i++ ) { 
 				printf( "." );
 				step = (i*(n_timesteps-1L))/10L;
@@ -733,7 +733,7 @@ init_min_max( NCVar *var )
 			break;
 			
 		case MIN_MAX_METHOD_EXHAUST:
-			verbose = TRUE;
+			verbose = true;
 			for( i=1; i<(n_timesteps-2L); i++ ) {
 				step = i;
 				get_min_max_onestep( var, n_other, step, data, 
@@ -766,13 +766,13 @@ check_ranges( NCVar *var )
 	if( netcdf_min_max_option_set( var, &min, &max ) ) {
 		if( var->global_min < min ) {
 			snprintf( temp_string, 1022, "Calculated minimum (%g) is less than\nvalid_range minimum (%g).  Reset\nminimum to valid_range minimum?", var->global_min, min );
-			message = in_dialog( temp_string, NULL, TRUE );
+			message = in_dialog( temp_string, NULL, true );
 			if( message == MESSAGE_OK )
 				var->global_min = min;
 			}
 		if( var->global_max > max ) {
 			snprintf( temp_string, 1022, "Calculated maximum (%g) is greater\nthan valid_range maximum (%g). Reset\nmaximum to valid_range maximum?", var->global_max, max );
-			message = in_dialog( temp_string, NULL, TRUE );
+			message = in_dialog( temp_string, NULL, true );
 			if( message == MESSAGE_OK )
 				var->global_max = max;
 			}
@@ -781,7 +781,7 @@ check_ranges( NCVar *var )
 	if( netcdf_min_option_set( var, &min ) ) {
 		if( var->global_min < min ) {
 			snprintf( temp_string, 1022, "Calculated minimum (%g) is less than\nvalid_min minimum (%g).  Reset\nminimum to valid_min value?", var->global_min, min );
-			message = in_dialog( temp_string, NULL, TRUE );
+			message = in_dialog( temp_string, NULL, true );
 			if( message == MESSAGE_OK )
 				var->global_min = min;
 			}
@@ -790,7 +790,7 @@ check_ranges( NCVar *var )
 	if( netcdf_max_option_set( var, &max ) ) {
 		if( var->global_max > max ) {
 			snprintf( temp_string, 1022, "Calculated maximum (%g) is greater than\nvalid_max maximum (%g).  Reset\nmaximum to valid_max value?", var->global_max, max );
-			message = in_dialog( temp_string, NULL, TRUE );
+			message = in_dialog( temp_string, NULL, true );
 			if( message == MESSAGE_OK )
 				var->global_max = max;
 			}
@@ -798,7 +798,7 @@ check_ranges( NCVar *var )
 
 	var->user_min = var->global_min;
 	var->user_max = var->global_max;
-	var->have_set_range = TRUE;
+	var->have_set_range = true;
 }
 
 /******************************************************************************
@@ -1385,12 +1385,12 @@ is_scannable( NCVar *v, int i )
 {
 	/* The unlimited record dimension is always scannable */
 	if( i == 0 )
-		return( TRUE );
+		return( true );
 
 	if( *(v->size+i) > 1 )
-		return( TRUE );
+		return( true );
 	else
-		return( FALSE );
+		return( false );
 }
 
 /******************************************************************************
@@ -2093,7 +2093,7 @@ warn_if_file_exits( char *fname )
 	fclose(f);
 
 	snprintf( message, 1022, "OK to overwrite existing file %s?\n", fname );
-	retval = in_dialog( message, NULL, TRUE );
+	retval = in_dialog( message, NULL, true );
 	return( retval );
 }
 

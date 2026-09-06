@@ -45,8 +45,8 @@ in_variable_selected( char *var_name )
 void
 in_colormap_selected( char *name )
 {
-	in_install_colormap_by_name( name, TRUE );
-	view_draw( TRUE, FALSE );
+	in_install_colormap_by_name( name, true );
+	view_draw( true, false );
 	view_recompute_colorbar();
 }
 
@@ -162,5 +162,5 @@ in_button_pressed( int button_id, int modifier )
 void
 in_error( char *message )
 {
-	in_dialog( message, NULL, FALSE );
+	in_dialog( message, NULL, false );
 }

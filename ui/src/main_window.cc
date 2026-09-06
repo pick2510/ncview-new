@@ -1088,9 +1088,9 @@ void MainWindow::setOptionsDialog()
 			do_overlay( new_overlay,
 				new_overlay == custom_idx && !custom_overlay_filename.empty() ?
 					(char *)custom_overlay_filename.c_str() : nullptr,
-				FALSE );
+				false );
 
-		view_draw( TRUE, FALSE );
+		view_draw( true, false );
 	}
 }
 

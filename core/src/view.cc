@@ -43,7 +43,7 @@ extern  FrameStore framestore;
 View  *view = NULL;
 
 /* See comments in routine "view_draw" */
-static int 	lockout_view_changes = FALSE;
+static int 	lockout_view_changes = false;
 
 /* Saved x/y values that are on the XY plot, used later for
  * dumping out.
@@ -248,7 +248,7 @@ set_scan_variable( NCVar *var )
 		 */
 		if( (xdim_new == NULL) || (xdim_old == NULL) || (ydim_new == NULL) || (ydim_old == NULL) || 
 				(xdim_new->size != xdim_old->size) || (ydim_new->size != ydim_old->size))
-			do_overlay(OVERLAY_NONE,NULL,TRUE);
+			do_overlay(OVERLAY_NONE,NULL,true);
 
 		/* Release the old storage */
 		free( old_view->data      );
@@ -271,7 +271,7 @@ set_scan_variable( NCVar *var )
 		fprintf( stderr, "...reading data from file\n" );
 	fill_view_data( view );
 
-	if( options.save_frames == TRUE )
+	if( options.save_frames == true )
 		{
 		if( options.debug )
 			fprintf( stderr, "calling init_saveframes from set_scan_variable\n" );
@@ -298,20 +298,20 @@ set_scan_variable( NCVar *var )
 		else
 			overlay2use = -1;
 		if( (overlay2use != -1) && (! view_data_has_missing( view )))
-			do_overlay(overlay2use,NULL,TRUE);
+			do_overlay(overlay2use,NULL,true);
 		}
 
 	/* Convert the data to pixels; return on error condition */
 	if( options.debug )
 		fprintf( stderr, "...converting data to pixels\n" );
-	lockout_view_changes = TRUE;
+	lockout_view_changes = true;
 	if( data_to_pixels( view ) < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );
 		return( -1 );
 		}
-	lockout_view_changes = FALSE;
+	lockout_view_changes = false;
 
 	/* put variable and file information on the screen */
 	if( options.debug )
@@ -446,7 +446,7 @@ change_view( int delta, int interpretation )
 
 	if(view->scan_axis_id == -1) {
 		if( delta == 0 ) {
-			view_draw( FALSE, FALSE );
+			view_draw( false, false );
 			return(0);
 			}
 		else
@@ -495,7 +495,7 @@ change_view( int delta, int interpretation )
 		place = size - 1L;
 
 	set_scan_view( place );
-	return( view_draw( TRUE, FALSE ) );
+	return( view_draw( true, false ) );
 }
 
 /********************************************************************************
@@ -615,14 +615,14 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	 */
 	if( lockout_view_changes )
 		return(0);
-	lockout_view_changes = TRUE;
+	lockout_view_changes = true;
 
 	/* These can happen because this routine is called when the ccontour
 	 * window gets 'expose' events, which happens on program startup,
 	 * before the view has been initialized.
 	 */
 	if( (view == NULL) || (view->data == NULL)) { 
-		lockout_view_changes = FALSE;
+		lockout_view_changes = false;
 		return(0);
 		}
 
@@ -651,7 +651,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		view->variable->user_max = max;
 		set_range_labels( min, max );
 		view->data_status = VDS_INVALID;
-		invalidate_all_saveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is TRUE, it won't happen */
+		invalidate_all_saveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is true, it won't happen */
 		view_recompute_colorbar();
 		}
 
@@ -675,12 +675,12 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 
 	/* Is this frame stored in the framestore? */
 	if( framestore.valid && allow_framestore_usage ) {
-		if( *(framestore.frame_valid + frameno) == TRUE ) {
+		if( *(framestore.frame_valid + frameno) == true ) {
 			if( options.debug )
 				printf( "drawing from framestore...\n" );
 			in_draw_2d_field( (framestore.frame + frameno*framesize), 
 				scaled_x_size, scaled_y_size, frameno );
-			lockout_view_changes = FALSE;
+			lockout_view_changes = false;
 
 			if( view->scan_axis_id != -1 ) {
 				scan_size  = *(view->variable->size  + view->scan_axis_id);
@@ -709,7 +709,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );
-		lockout_view_changes = FALSE;
+		lockout_view_changes = false;
 		return( -1 );
 		}
 
@@ -724,10 +724,10 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		printf( "Calling draw_2d_field...\n" );
 	in_draw_2d_field( view->pixels, scaled_x_size, scaled_y_size, frameno );
 
-	if( framestore.valid == TRUE ) {
+	if( framestore.valid == true ) {
 		for( i=0; i<framesize; i++ )
 			*(framestore.frame + frameno*framesize + i) = *(view->pixels + i);
-		*(framestore.frame_valid + frameno) = TRUE;
+		*(framestore.frame_valid + frameno) = true;
 		}
 
 	/* If we just drew the last time entry for this var, then
@@ -741,7 +741,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 			}
 		}
 
-	lockout_view_changes = FALSE;
+	lockout_view_changes = false;
 	return( 0 );
 }
 
@@ -857,19 +857,19 @@ view_check_new_data( int unused )
 
 		framestore.frame = (ncv_pixel *)realloc( framestore.frame, storage_size*sizeof(ncv_pixel) );
 		if( framestore.frame == NULL ) {
-			framestore.valid = FALSE;
+			framestore.valid = false;
 			return;
 			}
 
 		framestore.frame_valid = (int *)realloc( framestore.frame_valid, framestore.nt*sizeof(int) );
 		if( framestore.frame_valid == NULL ) {
-			framestore.valid = FALSE;
+			framestore.valid = false;
 			return;
 			}
 
 		/* Initialize to NOT a valid frame for the new frames */
 		for( i=old_nt; i<framestore.nt; i++ )
-			*(framestore.frame_valid+i) = FALSE;
+			*(framestore.frame_valid+i) = false;
 		}
 
 	view->variable->size[ timelike_index ] = nt_new;
@@ -1206,7 +1206,7 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 
 	view->pixels = (unsigned char *)malloc( scaled_x_size*scaled_y_size*sizeof(ncv_pixel) );
 
-	if( options.save_frames == TRUE ) {
+	if( options.save_frames == true ) {
 		if( options.debug )
 			fprintf( stderr, "calling init_saveframes from view_change_blowup\n" );
 		init_saveframes();
@@ -1219,7 +1219,7 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 		 * trigger this call without us having to do it.
 		 */
 		if( changed_size < 0 ) 
-			view_draw( FALSE, FALSE );
+			view_draw( false, false );
 		}
 	in_set_cursor_normal();
 }
@@ -1229,7 +1229,7 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 redraw_ccontour()
 {
 printf( "got an expose event\n" );
-	view_draw( TRUE, FALSE ); 
+	view_draw( true, false ); 
 }
 
 /************************************************************************
@@ -1308,7 +1308,7 @@ view_change_cur_dim( char *dim_name, int modifier )
 	view->data_status = VDS_INVALID;
 	init_saveframes();
 
-	view_draw( TRUE, FALSE ); /* 'TRUE' because we initialized saveframes above */
+	view_draw( true, false ); /* 'true' because we initialized saveframes above */
 }
 
 /**********************************************************************
@@ -1321,7 +1321,7 @@ view_change_cur_dim( char *dim_name, int modifier )
 view_set_scan_dims( void )
 {
 	Stringlist *dim_list, *new_dim_list = NULL, *inv_dim_list, *s;
-	int	   changed_something = FALSE;
+	int	   changed_something = false;
 	NCVar	   *v;
 	char	   *cur_x_name, *cur_y_name;
 	char	   scan_dim[256];
@@ -1351,7 +1351,7 @@ view_set_scan_dims( void )
 	s        = s->next;
 	new_x_id = fi_dim_name_to_id( v->first_file->id, v->name, s->string );
 	if( new_x_id < new_y_id ) {
-		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", NULL, TRUE );
+		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", NULL, true );
 		if( message == MESSAGE_CANCEL )
 			return;
 		inv_dim_list = NULL;
@@ -1368,16 +1368,16 @@ view_set_scan_dims( void )
 
 	if( strcmp( cur_y_name, new_dim_list->string ) != 0 ) {
 		view_set_axis( view, DIMENSION_Y, new_dim_list->string );
-		changed_something = TRUE;
+		changed_something = true;
 		}
 
 	new_dim_list = new_dim_list->next;
 	if( strcmp( cur_x_name, new_dim_list->string ) != 0 ) {
 		view_set_axis( view, DIMENSION_X, new_dim_list->string );
-		changed_something = TRUE;
+		changed_something = true;
 		}
 
-	if( changed_something == TRUE ) {
+	if( changed_something == true ) {
 		/* In general, we want to set the scan axis back to the
 		 * unlimited axis if possible, because no unlimited
 		 * dimension ever comes up in the pop-up box to be able
@@ -1390,7 +1390,7 @@ view_set_scan_dims( void )
 		alloc_view_storage( view );
 		init_saveframes();
 		set_scan_buttons( view );
-		view_draw( TRUE, FALSE ); /* 'TRUE' because we initialized saveframes above */
+		view_draw( true, false ); /* 'true' because we initialized saveframes above */
 		}
 
 	in_set_cursor_normal();
@@ -1542,14 +1542,14 @@ view_set_range( void )
 	set_range_labels( new_min, new_max );
 	view->data_status = VDS_INVALID;
 	invalidate_all_saveframes();
-	view_draw( TRUE, FALSE ); /* 'TRUE' because we just invalidated all saveframes */
+	view_draw( true, false ); /* 'true' because we just invalidated all saveframes */
 
-	if( allvars == TRUE ) {
+	if( allvars == true ) {
 		cursor = variables;
 		while( cursor != NULL ) {
 			cursor->user_min = new_min;
 			cursor->user_max = new_max;
-			cursor->have_set_range = TRUE;
+			cursor->have_set_range = true;
 			cursor = cursor->next;
 			}
 		}
@@ -1622,7 +1622,7 @@ set_range_labels( float min, float max )
 	void
 view_set_range_frame( void )
 {
-	view_draw( TRUE, TRUE );
+	view_draw( true, true );
 }
 
 /**************************************************************************************/
@@ -1641,7 +1641,7 @@ init_saveframes()
 	size_t	storage_size, n_scan_entries, xsize, ysize, n_extra_frames;
 	char	err_message[132];
 
-	if( options.save_frames == FALSE )
+	if( options.save_frames == false )
 		return;
 
 	if( framestore.frame != NULL ) {
@@ -1680,18 +1680,18 @@ init_saveframes()
 
 	framestore.frame = (ncv_pixel *)malloc( storage_size*sizeof( ncv_pixel ));
 	if( framestore.frame == NULL ) {
-		framestore.valid = FALSE;
+		framestore.valid = false;
 		snprintf( err_message, 131, "Can't allocate space for frame store.\nRequested size: %.1f MB",
 				(float)(storage_size*sizeof( ncv_pixel ))/1000000. );
-		options.save_frames = FALSE;
+		options.save_frames = false;
 		in_error( err_message );
 		}
 	else
 		{
-		framestore.valid = TRUE;
+		framestore.valid = true;
 		framestore.frame_valid = (int *)(malloc( framestore.nt * sizeof( int )));
 		for( i=0; i<framestore.nt; i++ )
-			*(framestore.frame_valid+i) = FALSE;
+			*(framestore.frame_valid+i) = false;
 		}
 }
 
@@ -1704,11 +1704,11 @@ invalidate_all_saveframes()
 	if( view == NULL )
 		return;
 
-	if( (view->scan_axis_id == -1) || ( framestore.valid == FALSE ))
+	if( (view->scan_axis_id == -1) || ( framestore.valid == false ))
 		return;
 
 	for( i=0L; i<framestore.nt; i++ )
-		*(framestore.frame_valid+i) = FALSE;
+		*(framestore.frame_valid+i) = false;
 }
 
 /**************************************************************************************/
@@ -1747,51 +1747,51 @@ set_buttons( int to_state )
 	switch (to_state ) {
 
 	    case BUTTONS_ALL_ON:
-		in_set_sensitive( BUTTON_RESTART, 	  TRUE );
-		in_set_sensitive( BUTTON_REWIND, 	  TRUE );
-		in_set_sensitive( BUTTON_BACKWARDS, 	  TRUE );
-		in_set_sensitive( BUTTON_PAUSE, 	  TRUE );
-		in_set_sensitive( BUTTON_FORWARD, 	  TRUE );
-		in_set_sensitive( BUTTON_FASTFORWARD, 	  TRUE );
-		in_set_sensitive( BUTTON_COLORMAP_SELECT, TRUE );
-		in_set_sensitive( BUTTON_INVERT_PHYSICAL, TRUE );
-		in_set_sensitive( BUTTON_INVERT_COLORMAP, TRUE );
-		in_set_sensitive( BUTTON_BLOWUP, 	  TRUE );
-		in_set_sensitive( BUTTON_TRANSFORM, 	  TRUE );
-		in_set_sensitive( BUTTON_PRINT, 	  TRUE );
-		in_set_sensitive( BUTTON_DIMSET, 	  TRUE );
-		in_set_sensitive( BUTTON_RANGE, 	  TRUE );
-		in_set_sensitive( BUTTON_BLOWUP_TYPE,	  TRUE );
-		in_set_sensitive( BUTTON_EDIT,	  	  TRUE );
-		in_set_sensitive( BUTTON_INFO,	  	  TRUE );
+		in_set_sensitive( BUTTON_RESTART, 	  true );
+		in_set_sensitive( BUTTON_REWIND, 	  true );
+		in_set_sensitive( BUTTON_BACKWARDS, 	  true );
+		in_set_sensitive( BUTTON_PAUSE, 	  true );
+		in_set_sensitive( BUTTON_FORWARD, 	  true );
+		in_set_sensitive( BUTTON_FASTFORWARD, 	  true );
+		in_set_sensitive( BUTTON_COLORMAP_SELECT, true );
+		in_set_sensitive( BUTTON_INVERT_PHYSICAL, true );
+		in_set_sensitive( BUTTON_INVERT_COLORMAP, true );
+		in_set_sensitive( BUTTON_BLOWUP, 	  true );
+		in_set_sensitive( BUTTON_TRANSFORM, 	  true );
+		in_set_sensitive( BUTTON_PRINT, 	  true );
+		in_set_sensitive( BUTTON_DIMSET, 	  true );
+		in_set_sensitive( BUTTON_RANGE, 	  true );
+		in_set_sensitive( BUTTON_BLOWUP_TYPE,	  true );
+		in_set_sensitive( BUTTON_EDIT,	  	  true );
+		in_set_sensitive( BUTTON_INFO,	  	  true );
 		break;
 
 	    case BUTTONS_TIMEAXIS_OFF:
-		in_set_sensitive( BUTTON_RESTART, 	  FALSE );
-		in_set_sensitive( BUTTON_REWIND, 	  FALSE );
-		in_set_sensitive( BUTTON_BACKWARDS, 	  FALSE );
-		in_set_sensitive( BUTTON_FORWARD, 	  FALSE );
-		in_set_sensitive( BUTTON_FASTFORWARD, 	  FALSE );
+		in_set_sensitive( BUTTON_RESTART, 	  false );
+		in_set_sensitive( BUTTON_REWIND, 	  false );
+		in_set_sensitive( BUTTON_BACKWARDS, 	  false );
+		in_set_sensitive( BUTTON_FORWARD, 	  false );
+		in_set_sensitive( BUTTON_FASTFORWARD, 	  false );
 		break;
 		
 	    case BUTTONS_ALL_OFF:
-		in_set_sensitive( BUTTON_RESTART, 	  FALSE );
-		in_set_sensitive( BUTTON_REWIND, 	  FALSE );
-		in_set_sensitive( BUTTON_BACKWARDS, 	  FALSE );
-		in_set_sensitive( BUTTON_PAUSE, 	  FALSE );
-		in_set_sensitive( BUTTON_FORWARD, 	  FALSE );
-		in_set_sensitive( BUTTON_FASTFORWARD, 	  FALSE );
-		in_set_sensitive( BUTTON_COLORMAP_SELECT, FALSE );
-		in_set_sensitive( BUTTON_INVERT_PHYSICAL, FALSE );
-		in_set_sensitive( BUTTON_INVERT_COLORMAP, FALSE );
-		in_set_sensitive( BUTTON_TRANSFORM, 	  FALSE );
-		in_set_sensitive( BUTTON_BLOWUP, 	  FALSE );
-		in_set_sensitive( BUTTON_PRINT, 	  FALSE );
-		in_set_sensitive( BUTTON_DIMSET, 	  FALSE );
-		in_set_sensitive( BUTTON_RANGE, 	  FALSE );
-		in_set_sensitive( BUTTON_BLOWUP_TYPE,	  FALSE );
-		in_set_sensitive( BUTTON_EDIT,	  	  FALSE );
-		in_set_sensitive( BUTTON_INFO,	  	  FALSE );
+		in_set_sensitive( BUTTON_RESTART, 	  false );
+		in_set_sensitive( BUTTON_REWIND, 	  false );
+		in_set_sensitive( BUTTON_BACKWARDS, 	  false );
+		in_set_sensitive( BUTTON_PAUSE, 	  false );
+		in_set_sensitive( BUTTON_FORWARD, 	  false );
+		in_set_sensitive( BUTTON_FASTFORWARD, 	  false );
+		in_set_sensitive( BUTTON_COLORMAP_SELECT, false );
+		in_set_sensitive( BUTTON_INVERT_PHYSICAL, false );
+		in_set_sensitive( BUTTON_INVERT_COLORMAP, false );
+		in_set_sensitive( BUTTON_TRANSFORM, 	  false );
+		in_set_sensitive( BUTTON_BLOWUP, 	  false );
+		in_set_sensitive( BUTTON_PRINT, 	  false );
+		in_set_sensitive( BUTTON_DIMSET, 	  false );
+		in_set_sensitive( BUTTON_RANGE, 	  false );
+		in_set_sensitive( BUTTON_BLOWUP_TYPE,	  false );
+		in_set_sensitive( BUTTON_EDIT,	  	  false );
+		in_set_sensitive( BUTTON_INFO,	  	  false );
 		break;
 
 	default:
@@ -1927,10 +1927,10 @@ calculate_blowup( View *view, NCVar *var, int val_to_set_to )
 
 	if( val_to_set_to != -99999 ) {
 		while( options.blowup > val_to_set_to ) {
-			view_change_blowup( -1, FALSE, view_var_is_valid );			
+			view_change_blowup( -1, false, view_var_is_valid );			
 			}
 		while( options.blowup < val_to_set_to ) {
-			view_change_blowup( 1, FALSE, view_var_is_valid );			
+			view_change_blowup( 1, false, view_var_is_valid );			
 			}
 		return;
 		}
@@ -1940,7 +1940,7 @@ calculate_blowup( View *view, NCVar *var, int val_to_set_to )
 	y_size = *(var->size + view->y_axis_id);
 	while( (options.blowup*x_size < options.blowup_default_size) && 
 	       (options.blowup*y_size < options.blowup_default_size) ) {
-		view_change_blowup( 1, FALSE, view_var_is_valid );
+		view_change_blowup( 1, false, view_var_is_valid );
 		}
 
 	/* If picture is too big, reduce it some */
@@ -1952,7 +1952,7 @@ calculate_blowup( View *view, NCVar *var, int val_to_set_to )
 	fbx = (fbx > fby) ? fbx : fby;
 	if( fbx > 3 ) {
 		ifbx = -(int)fbx;
-		view_change_blowup(ifbx,FALSE, view_var_is_valid);
+		view_change_blowup(ifbx,false, view_var_is_valid);
 		}
 }
 
@@ -2126,9 +2126,9 @@ flip_if_inverted( View *view )
 
 	y_dim = *(view->variable->dim+view->y_axis_id);
 	if( y_dim->min > y_dim->max )
-		options.invert_physical = TRUE;
+		options.invert_physical = true;
 	else
-		options.invert_physical = FALSE;
+		options.invert_physical = false;
 
 	x_force_set_invert_state( options.invert_physical );
 }
@@ -2412,7 +2412,7 @@ set_min_from_curdata()
 	view->variable->user_min = val;
 	set_range_labels( val, view->variable->user_max );
 	init_saveframes();
-	view_draw( TRUE, FALSE ); /* 'TRUE' because we just invalidated saveframes */
+	view_draw( true, false ); /* 'true' because we just invalidated saveframes */
 
 	view_recompute_colorbar();
 }
@@ -2459,7 +2459,7 @@ set_max_from_curdata()
 	view->variable->user_max = val;
 	set_range_labels( val, view->variable->user_max );
 	init_saveframes();
-	view_draw( TRUE, FALSE ); /* 'TRUE' because we just invalidated saveframes */
+	view_draw( true, false ); /* 'true' because we just invalidated saveframes */
 
 	view_recompute_colorbar();
 }
@@ -2520,14 +2520,14 @@ view_change_dat( size_t index, float new_val )
 
 	*((float *)view->data + x + (x_size)*y) = new_val;
 	init_saveframes();
-	lockout_view_changes = TRUE;
+	lockout_view_changes = true;
 	if( data_to_pixels( view ) < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );
 		return;
 		}
-	lockout_view_changes = FALSE;
+	lockout_view_changes = false;
 	in_set_2d_size  ( scaled_x_size, scaled_y_size );
 	in_draw_2d_field( view->pixels, scaled_x_size, scaled_y_size, 0 );
 }
@@ -2547,7 +2547,7 @@ view_data_edit_dump( void )
 
 	strcpy( filename, "dump.data" );
 	
-	message = in_dialog( "Filename to dump data to:", filename, TRUE );
+	message = in_dialog( "Filename to dump data to:", filename, true );
 	if( message == MESSAGE_OK ) {
 		ncid = nccreate( filename, NC_CLOBBER );
 
@@ -2587,7 +2587,7 @@ view_data_edit_warn()
 {
 	int	message;
 
-	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", NULL, TRUE );
+	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", NULL, true );
 	if( message == MESSAGE_CANCEL ) 
 		return;
 
@@ -2908,12 +2908,12 @@ plot_XY_sc( size_t *start, size_t *count )
 	/* Another hack to fix the plotter widget...it barfs if all
 	 * the Y values are the same thing.  Fix this case.
 	 */
-	all_same = TRUE;
+	all_same = true;
 	y_min    = 1.e35;
 	y_max    = -1.e35;
 	for( i=1; i<n; i++ ) {
 		if( *(plot_XY_yvals+i) != *plot_XY_yvals ) 
-			all_same = FALSE;
+			all_same = false;
 		if( *(plot_XY_yvals+i) < y_min ) 
 			y_min = *(plot_XY_yvals+i);
 		if( *(plot_XY_yvals+i) > y_max ) 
@@ -2949,17 +2949,17 @@ plot_XY_sc( size_t *start, size_t *count )
 	/* Make the legend */
 	legend[0] = '(';
 	legend[1] = '\0';
-	have_done_one = FALSE;
+	have_done_one = false;
 	for( i=0; i<view->variable->n_dims; i++ ) 
 		/* if( (i != dim_to_plot) && ((*(start+i) != 0) || (*(count+i) != 1))) { */
 		if( (i != dim_to_plot) && (*(view->variable->dim+i) != NULL)) {
 			if( have_done_one )
 				strcat( legend, ", " );
 			strncat( legend, (*(view->variable->dim + i))->name, 100 );
-			have_done_one = TRUE;
+			have_done_one = true;
 			}
 	strcat( legend, ") = (" );
-	have_done_one = FALSE;
+	have_done_one = false;
 	for( i=0; i<view->variable->n_dims; i++ ) 
 		if( (i != dim_to_plot) && (*(view->variable->dim+i) != NULL)) {
 			if( have_done_one )
@@ -2972,7 +2972,7 @@ plot_XY_sc( size_t *start, size_t *count )
 				}
 			else
 				strncat( legend, temp_string, 100 );
-			have_done_one = TRUE;
+			have_done_one = true;
 			}
 	strcat( legend, ")" );
 
@@ -3045,7 +3045,7 @@ view_information( void )
 	static void
 invalidate_variable( NCVar *var )
 {
-	x_set_var_sensitivity( view->variable->name, FALSE );
+	x_set_var_sensitivity( view->variable->name, false );
 	set_buttons( BUTTONS_ALL_OFF );
 	view = NULL;
 	options.blowup = 1;
@@ -3095,7 +3095,7 @@ mouse_xy_to_data_xy( int mouse_x, int mouse_y, int blowup, size_t *data_x, size_
 }
 
 /*======================================================================================
- * Return TRUE if there is *any* missing data in the current view, and FALSE otherwise
+ * Return true if there is *any* missing data in the current view, and false otherwise
  */
 	int
 view_data_has_missing( View *v )
@@ -3104,10 +3104,10 @@ view_data_has_missing( View *v )
 	float	dat;
 
 	if( (v == NULL) || (v->variable == NULL))
-		return(TRUE);
+		return(true);
 
 	if( v->x_axis_id < 0 ) 
-		return(TRUE);
+		return(true);
 	nx = *(v->variable->size + v->x_axis_id);
 
 	if( v->y_axis_id < 0 ) 
@@ -3118,10 +3118,10 @@ view_data_has_missing( View *v )
 	for( i=0; i<nx*ny; i++ ) {
 		dat = *((float *)(v->data) + i);
 		if( close_enough( dat, v->variable->fill_value) || (dat == FILL_FLOAT)) 
-			return(TRUE);
+			return(true);
 		}
 
-	return(FALSE);
+	return(false);
 }
 
 /***************************************************************************
@@ -3147,7 +3147,7 @@ view_change_transform( int delta )
 			exit( -1 );
 		}
 
-	view_draw( TRUE, FALSE );
+	view_draw( true, false );
 	view_recompute_colorbar();
 }
 

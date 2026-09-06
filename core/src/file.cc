@@ -44,8 +44,8 @@ extern Options options;
 static void fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data );
 
 /************************************************************************************/
-/* return TRUE if passed the name of a file which these routines were designed
- * to read, and FALSE otherwise.
+/* return true if passed the name of a file which these routines were designed
+ * to read, and false otherwise.
  */
 	int
 fi_confirm( char *name )
@@ -54,7 +54,7 @@ fi_confirm( char *name )
 }
 
 /************************************************************************************/
-/* return TRUE if the passed filename is writable, and false otherwise.
+/* return true if the passed filename is writable, and false otherwise.
  * It is assumed that the file exists and is readable.
  */
 	int
@@ -311,7 +311,7 @@ fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 
 	/* Check to see if we should loop over the timelike indices
 	 */
-	if( (var->is_virtual == TRUE) && (count[0] > 1) ) {
+	if( (var->is_virtual == true) && (count[0] > 1) ) {
 		fi_get_data_iterate( var, virt_start_pos, count, data );
 		return;
 		}

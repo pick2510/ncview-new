@@ -75,7 +75,7 @@ void in_initialize( void )
 		else if( std::strcmp( d, "info" ) == 0 ) view_information();
 		else if( std::strcmp( d, "dataedit" ) == 0 ) view_data_edit();
 		else if( std::strcmp( d, "plot" ) == 0 ) plot_XY();
-		else if( std::strcmp( d, "overlay" ) == 0 ) do_overlay( OVERLAY_P8DEG, nullptr, FALSE );
+		else if( std::strcmp( d, "overlay" ) == 0 ) do_overlay( OVERLAY_P8DEG, nullptr, false );
 		else if( std::strcmp( d, "print" ) == 0 ) {
 			// do_print() reads the printopts defaults that ncview_main()
 			// sets up via print_init() -- which runs *after* in_initialize()

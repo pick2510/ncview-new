@@ -42,7 +42,7 @@ TEST_CASE("view_data_edit: allocates exactly n_entries+1 slots and fills them co
     v.data       = data.data();
 
     view = &v;
-    options.invert_physical = TRUE; // so row j in line_array matches row j in `data` directly
+    options.invert_physical = true; // so row j in line_array matches row j in `data` directly
 
     g_last_dataedit_lines = nullptr;
     g_last_dataedit_nx    = 0;

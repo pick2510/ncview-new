@@ -37,12 +37,12 @@
 #define LEADING			3
 
 #define DEFAULT_DEVICE		DEVICE_PRINTER
-#define	INCLUDE_OUTLINE		TRUE
-#define	INCLUDE_TITLE		TRUE
-#define	INCLUDE_AXIS_LABELS	TRUE
-#define	INCLUDE_EXTRA_INFO	TRUE
-#define	INCLUDE_ID		TRUE
-#define TEST_ONLY		FALSE
+#define	INCLUDE_OUTLINE		true
+#define	INCLUDE_TITLE		true
+#define	INCLUDE_AXIS_LABELS	true
+#define	INCLUDE_EXTRA_INFO	true
+#define	INCLUDE_ID		true
+#define TEST_ONLY		false
 
 #define	ID_FONT_SIZE_SCALE	0.7	/* How much smaller ID font size is than regular */
 
@@ -175,7 +175,7 @@ do_print( void )
 
 	/***** dump out the color image *****/
 	if( ! printopts.test_only ) {
-		view_draw( FALSE, FALSE ); /* Don't allow saveframes -- force reload of image data */
+		view_draw( false, false ); /* Don't allow saveframes -- force reload of image data */
 		n_print = 0;
 		for( j=0; j<scaled_y_size; j++ ) {
 			for( i=0; i<scaled_x_size; i++ ) {

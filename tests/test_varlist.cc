@@ -91,7 +91,7 @@ TEST_CASE("is_scannable: dim 0 (the record dim) is always scannable, others need
     NCVar var{};
     var.size = size;
 
-    CHECK(is_scannable(&var, 0) != 0);  // dim 0 is special-cased TRUE regardless of size
+    CHECK(is_scannable(&var, 0) != 0);  // dim 0 is special-cased true regardless of size
     CHECK(is_scannable(&var, 1) == 0);  // size 1, not dim 0 -> not scannable
     CHECK(is_scannable(&var, 2) != 0);  // size 4 -> scannable
 }
@@ -125,7 +125,7 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
 
     NCVar *var = get_var(const_cast<char *>(var_name));
     REQUIRE(var != nullptr);
-    CHECK(var->is_virtual == FALSE); // only one file so far
+    CHECK(var->is_virtual == false); // only one file so far
     CHECK(var->size[0] == 3);        // time
     CHECK(var->n_dims == 3);
     CHECK(n_vars_in_list(variables) == nvars_before + 1); // exactly one new NCVar
@@ -138,7 +138,7 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
     // fetching documents that get_var() finds the same, not a new, node.
     NCVar *var2 = get_var(const_cast<char *>(var_name));
     CHECK(var2 == var);
-    CHECK(var->is_virtual == TRUE);
+    CHECK(var->is_virtual == true);
     CHECK(var->size[0] == 5); // 3 + 2, accumulated across both files
     CHECK(n_vars_in_list(variables) == nvars_before + 1); // still exactly one NCVar
 

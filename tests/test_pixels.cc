@@ -64,7 +64,7 @@ struct PixelFixture {
         var.fill_value = fill_value;
         var.user_min = user_min;
         var.user_max = user_max;
-        var.have_set_range = TRUE;
+        var.have_set_range = true;
         var.name = (char *)"test_var";
 
         data = std::move(values);
@@ -86,12 +86,12 @@ struct PixelFixture {
         options.blowup_type = blowup_type;
         options.blowup = blowup;
         options.invert_colors = invert_colors;
-        options.invert_physical = FALSE;
+        options.invert_physical = false;
         options.n_colors = n_colors;
         options.n_extra_colors = n_extra_colors;
         options.display_type = 0; // not PseudoColor -- see setup_identity_pixel_transform
-        options.autoscale = FALSE;
-        options.debug = FALSE;
+        options.autoscale = false;
+        options.debug = false;
         setup_identity_pixel_transform(n_colors, n_extra_colors);
 
         size_t new_nx, new_ny;
@@ -138,7 +138,7 @@ TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, exact pixel values with a m
     // arithmetic, not a captured/approximate baseline. pix = (uchar)(data_n
     // * 80) + 10; missing cells map to pixel_transform[0] == 0.
     //
-    // options.invert_physical defaults to FALSE, which data_to_pixels()
+    // options.invert_physical defaults to false, which data_to_pixels()
     // takes to mean row 0 of the *pixel* grid is the data's LAST row (see
     // its j2 = new_y_size - j - 1) -- upstream's normal "y increases
     // upward" image convention. That's why the expected grid below is the

@@ -44,13 +44,6 @@
 #define PROGRAM_VERSION_STRING	"2.1.11"
 #define APP_RES_VERSION 	1.93
 
-#ifndef TRUE
-#define TRUE		1
-#endif
-#ifndef FALSE
-#define FALSE		0
-#endif
-
 /******************** Buttons in the user interface **********************/
 #define	BUTTON_REWIND			1
 #define	BUTTON_BACKWARDS		2

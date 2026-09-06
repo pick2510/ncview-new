@@ -72,7 +72,7 @@ do_restart( int modifier )
 	in_timer_clear();
 
 	set_scan_view( 0 );
-	view_draw    ( TRUE, FALSE );
+	view_draw    ( true, false );
 
 	in_timer_clear();
 }
@@ -210,10 +210,10 @@ do_fastforward( int modifier )
 do_colormap_sel( int modifier )
 {
 	if( modifier == MOD_3 )
-		in_install_prev_colormap( TRUE );
+		in_install_prev_colormap( true );
 	else
-		in_install_next_colormap( TRUE );
-	view_draw( TRUE, FALSE );
+		in_install_next_colormap( true );
+	view_draw( true, false );
 	view_recompute_colorbar();
 }
 
@@ -223,10 +223,10 @@ do_invert_physical( int modifier )
 {
 	init_saveframes();
 	if( options.invert_physical )
-		options.invert_physical = FALSE;
+		options.invert_physical = false;
 	else
-		options.invert_physical = TRUE;
-	view_draw( TRUE, FALSE );
+		options.invert_physical = true;
+	view_draw( true, false );
 	redraw_dimension_info();
 }
 
@@ -244,10 +244,10 @@ do_invert_colormap( int modifier )
 {
 	init_saveframes();
 	if( options.invert_colors )
-		options.invert_colors = FALSE;
+		options.invert_colors = false;
 	else
-		options.invert_colors = TRUE;
-	view_draw( TRUE, FALSE );
+		options.invert_colors = true;
+	view_draw( true, false );
 	view_recompute_colorbar();
 }
 
@@ -267,36 +267,36 @@ do_set_maximum( int modifier )
 	void
 do_blowup( int modifier )
 {
-	int view_var_is_valid = TRUE;
+	int view_var_is_valid = true;
 
 	if( modifier == MOD_3 )
-		view_change_blowup( -1, TRUE, view_var_is_valid );
+		view_change_blowup( -1, true, view_var_is_valid );
 
 	else if( modifier == MOD_2 ) {
 		/* Double the current blowup -- make image BIGGER */
 		if( options.blowup > 0 )
-			view_change_blowup( options.blowup, TRUE, view_var_is_valid );
+			view_change_blowup( options.blowup, true, view_var_is_valid );
 		else	
-			view_change_blowup( -(options.blowup)/2, TRUE, view_var_is_valid );
+			view_change_blowup( -(options.blowup)/2, true, view_var_is_valid );
 		}
 
 	else if( modifier == MOD_4 ) {
 		/* Halve the current blowup -- make image SMALLER */
 		if( options.blowup > 0 ) 
-			view_change_blowup( -(options.blowup/2), TRUE, view_var_is_valid );
+			view_change_blowup( -(options.blowup/2), true, view_var_is_valid );
 		else
-			view_change_blowup( options.blowup, TRUE, view_var_is_valid );
+			view_change_blowup( options.blowup, true, view_var_is_valid );
 		}
 		
 	else
-		view_change_blowup( 1, TRUE, view_var_is_valid );
+		view_change_blowup( 1, true, view_var_is_valid );
 	
 	/* If we are shrinking magnification, then try re-saving
 	 * the frames because now there might be enough room.
 	 */
 	init_saveframes();
 	if( modifier == MOD_3 )
-		options.save_frames = TRUE;
+		options.save_frames = true;
 }
 
 /*===========================================================================================*/
@@ -319,7 +319,7 @@ do_blowup_type( int modifier )
 		set_blowup_type( BLOWUP_BILINEAR );
 	else
 		set_blowup_type( BLOWUP_REPLICATE );
-	view_draw( TRUE, FALSE );
+	view_draw( true, false );
 }
 
 /*===========================================================================================*/

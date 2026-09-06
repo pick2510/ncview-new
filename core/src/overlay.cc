@@ -69,7 +69,7 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 	switch(n) {
 		
 		case OVERLAY_NONE:
-			options.overlay->doit = FALSE;
+			options.overlay->doit = false;
 			if( ! suppress_screen_changes ) {
 				view->data_status = VDS_INVALID;
 				invalidate_all_saveframes();
@@ -99,7 +99,7 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 				}
 			options.overlay->overlay = gen_overlay( view, custom_filename ); 
 			if( options.overlay->overlay != NULL ) {
-				options.overlay->doit = TRUE;
+				options.overlay->doit = true;
 				if( ! suppress_screen_changes ) {
 					invalidate_all_saveframes();
 					change_view( 0, FRAMES );
@@ -124,7 +124,7 @@ do_overlay_inner( View *v, float *data, long nvals, int suppress_screen_changes 
 {
 	options.overlay->overlay = gen_overlay_internal( v, data, nvals );
 	if( options.overlay->overlay != NULL ) {
-		options.overlay->doit = TRUE;
+		options.overlay->doit = true;
 		if( ! suppress_screen_changes ) {
 			invalidate_all_saveframes();
 			change_view( 0, FRAMES );
@@ -141,7 +141,7 @@ overlay_init()
 {
 	my_current_overlay       = OVERLAY_NONE;
 	options.overlay->overlay = NULL;
-	options.overlay->doit    = FALSE;
+	options.overlay->doit    = false;
 }
 
 /*======================================================================================

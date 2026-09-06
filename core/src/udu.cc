@@ -304,13 +304,13 @@ is_unique( char *units )
 		strcpy( ul_new->name, units );
 		ul_new->next = NULL;
 		uniq = ul_new;
-		return( TRUE );
+		return( true );
 		}
 	
 	ul = uniq;
 	while( ul != NULL ) {
 		if( strcmp( ul->name, units ) == 0 ) 
-			return( FALSE );
+			return( false );
 		prev_ul = ul;
 		ul = ul->next;
 		}
@@ -320,7 +320,7 @@ is_unique( char *units )
 	strcpy( ul_new->name, units );
 	ul_new->next = NULL;
 	prev_ul->next = ul_new;
-	return( TRUE );
+	return( true );
 }
 
 /******************************************************************************/

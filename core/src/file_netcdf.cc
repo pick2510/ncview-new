@@ -69,10 +69,10 @@ int netcdf_fi_confirm( char *name )
 
 	ierr = nc_open( name, NC_NOWRITE, &fd );
 	if( ierr != NC_NOERR )
-		return( FALSE );
+		return( false );
 
 	ierr = nc_close( fd );
-	return ( TRUE );
+	return ( true );
 }
 
 /*******************************************************************************************/
@@ -84,9 +84,9 @@ int netcdf_fi_writable( char *name )
 	dummyerr = nc_close( fd );
 
 	if( ierr != NC_NOERR )
-		return( FALSE );
+		return( false );
 	else
-		return( TRUE );
+		return( true );
 }
 
 /*******************************************************************************************/
@@ -1215,9 +1215,9 @@ int netcdf_has_dim_values( int fileid, char *dim_name )
 	dimvar_id = netcdf_dimvar_id( fileid, dim_name, &dimvar_gid );
 
 	if( dimvar_id < 0 )
-		return( FALSE );
+		return( false );
 	else
-		return( TRUE );
+		return( true );
 }
 
 /*******************************************************************************************/
@@ -1498,7 +1498,7 @@ void netcdf_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 }
 
 /*******************************************************************************************/
-/* return TRUE if found and set the value, and FALSE otherwise */
+/* return true if found and set the value, and false otherwise */
 int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int expected_len, void *value )
 {
 	int	i, err;
@@ -1512,14 +1512,14 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 	if( netcdf_att_id( id, varid, att_name ) >= 0 ) {
 		err = nc_inq_att( id, varid, att_name, &type, &len );
 		if( err != NC_NOERR )
-			return( FALSE );
+			return( false );
 		if( type != NC_FLOAT ) {
 			switch( type ) {
 				case NC_CHAR:	
 					char_att = (char *)malloc( len+1 );
 					err = nc_get_att_text( id, varid, att_name, char_att );
 					if( err != NC_NOERR )
-						return( FALSE );
+						return( false );
 					sscanf( char_att, "%f", (float *)value );
 					free(char_att);
 					break;
@@ -1529,7 +1529,7 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 					short_att = (short *)malloc( len*sizeof(short) );
 					err = nc_get_att_short( id, varid, att_name, short_att );
 					if( err != NC_NOERR )
-						return( FALSE );
+						return( false );
 					for( i=0; i<len; i++ ) {
 						short_1 = *(short_att+i);
 						*((float *)value + i) = (float)short_1;
@@ -1541,7 +1541,7 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 					double_att = (double *)malloc( len*sizeof(double));
 					err = nc_get_att_double( id, varid, att_name, double_att );
 					if( err != NC_NOERR )
-						return( FALSE );
+						return( false );
 					for( i=0; i<len; i++ ) {
 						double_1 = *(double_att+i);
 						*((float *)value + i) = (float)double_1;
@@ -1553,7 +1553,7 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 					long_att = (long *)malloc( len*sizeof(long));
 					err = nc_get_att_long( id, varid, att_name, long_att );
 					if( err != NC_NOERR )
-						return( FALSE );
+						return( false );
 					for( i=0; i<len; i++ ) {
 						long_1 = *(long_att+i);
 						*((float *)value + i) = (float)long_1;
@@ -1563,14 +1563,14 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 				default:	
 					fprintf( stderr, "can't handle conversions from %s to FLOAT yet\n", nc_type_to_string( type ) );
 				}
-			return( TRUE );
+			return( true );
 			}
 
 		else if( len != expected_len ) {
 			fprintf( stderr, "error in specification of \"%s\" attribute for\n", att_name);
 			fprintf( stderr, "variable %s: %ld values specified (should be %d)\n",
 				var_name, len, expected_len );
-			return( FALSE );
+			return( false );
 			}
 
 		else
@@ -1578,12 +1578,12 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 			/* If we get here, type is a NC_FLOAT */
 			err = nc_get_att_float( id, varid, att_name, (float *)value );
 			if( err != NC_NOERR )
-				return( FALSE );
-			return( TRUE );
+				return( false );
+			return( true );
 			}
 		}
 	else
-		return( FALSE );
+		return( false );
 }
 
 /*******************************************************************************************/
@@ -1591,7 +1591,7 @@ int netcdf_min_max_option_set( NCVar *var, float *ret_min, float *ret_max )
 {
 	FDBlist		*f;
 	NetCDFOptions 	*netcdf;
-	int		range_set = FALSE;
+	int		range_set = false;
 	float		min, max, t_min, t_max;
 
 	min =  9.9e30;
@@ -1601,7 +1601,7 @@ int netcdf_min_max_option_set( NCVar *var, float *ret_min, float *ret_max )
 	while( f != NULL ) {
 		netcdf = (NetCDFOptions *)(f->aux_data);
 		if( netcdf->valid_range_set ) {
-			range_set = TRUE;
+			range_set = true;
 			if( netcdf->valid_range[0] <  netcdf->valid_range[1] ) {
 				t_min = netcdf->valid_range[0];
 				t_max = netcdf->valid_range[1];
@@ -1630,7 +1630,7 @@ int netcdf_min_option_set( NCVar *var, float *ret_min )
 {
 	FDBlist		*f;
 	NetCDFOptions 	*netcdf;
-	int		min_set = FALSE;
+	int		min_set = false;
 	float		min, t_min;
 
 	min =  9.9e30;
@@ -1639,7 +1639,7 @@ int netcdf_min_option_set( NCVar *var, float *ret_min )
 	while( f != NULL ) {
 		netcdf = (NetCDFOptions *)(f->aux_data);
 		if( netcdf->valid_min_set ) {
-			min_set = TRUE;
+			min_set = true;
 			t_min   = netcdf->valid_min;
 			min     = (t_min < min) ? t_min : min;
 			}
@@ -1657,7 +1657,7 @@ int netcdf_max_option_set( NCVar *var, float *ret_max )
 {
 	FDBlist		*f;
 	NetCDFOptions 	*netcdf;
-	int		max_set = FALSE;
+	int		max_set = false;
 	float		max, t_max;
 
 	max =  -9.9e30;
@@ -1666,7 +1666,7 @@ int netcdf_max_option_set( NCVar *var, float *ret_max )
 	while( f != NULL ) {
 		netcdf = (NetCDFOptions *)(f->aux_data);
 		if( netcdf->valid_max_set ) {
-			max_set = TRUE;
+			max_set = true;
 			t_max   = netcdf->valid_max;
 			max     = (t_max > max) ? t_max : max;
 			}
@@ -1691,7 +1691,7 @@ void netcdf_fill_value( int file_id, char *var_name, float *v, NetCDFOptions *au
 	if( options.debug ) 
 		printf( "Checking %s for a missing value...\n", var_name );
 
-	foundit = FALSE;
+	foundit = false;
 	err = nc_inq_varid_grp( file_id, var_name, &varid, &gid );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "Error in netcdf_fill_value: could not find var named \"%s\" in file!\n",
@@ -1705,14 +1705,14 @@ void netcdf_fill_value( int file_id, char *var_name, float *v, NetCDFOptions *au
 		if( options.debug )
 			printf( "found a \"missing_value\" attribute=%g\n",
 				*v );
-		foundit = TRUE;
+		foundit = true;
 		}
 
 	if( netcdf_get_att_util( gid, varid, var_name_ng, "_FillValue", 1, v ) ) {
 		if( options.debug )
 			printf( "found a \"_FillValue\" attribute=%g\n",
 				*v );
-		foundit = TRUE;
+		foundit = true;
 		}
 
 	/* Is there a global missing value? */
@@ -1720,7 +1720,7 @@ void netcdf_fill_value( int file_id, char *var_name, float *v, NetCDFOptions *au
 		if( options.debug )
 			printf( "found a \"missing_value\" attribute=%g\n",
 				*v );
-		foundit = TRUE;
+		foundit = true;
 		}
 
 #ifdef ELIM_DENORMS
@@ -2015,7 +2015,7 @@ char *netcdf_global_att_string( int fileid )
 /*******************************************************************************************/
 void warn_about_char_dims()
 {
-	static int	have_done_it = FALSE;
+	static int	have_done_it = false;
 
 	if( ! have_done_it ) {
 		fprintf( stderr, "******************************************************\n" );
@@ -2025,7 +2025,7 @@ void warn_about_char_dims()
 		fprintf( stderr, "intuit what you have done.  If the program crashes,\n" );
 		fprintf( stderr, "try rerunning with the -no_char_dims option.\n" ); 
 		fprintf( stderr, "******************************************************\n" );
-		have_done_it = TRUE;
+		have_done_it = true;
 		}
 }
 
