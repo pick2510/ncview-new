@@ -223,7 +223,7 @@ data_to_pixels( View *v )
 	    (v->variable->user_min == 0) &&
 	    (! options.autoscale) ) {
 		in_set_cursor_normal();
-		in_button_pressed( BUTTON_PAUSE, Modifier::M1 );
+		in_button_pressed( Button::Pause, Modifier::M1 );
 		if( options.min_max_method == MinMaxMethod::Exhaust ) {
 	    		snprintf( error_message, 1022, "min and max both 0 for variable %s (checked all data)\nSetting range to (-1,1)", 
 								v->variable->name.c_str() );
@@ -773,7 +773,7 @@ get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data,
  * convert a variable name to a NCVar structure
  */
 	NCVar *
-get_var( char *var_name )
+get_var( const char *var_name )
 {
 	for( auto &vptr : variables )
 		if( vptr->name == var_name )
@@ -1928,9 +1928,9 @@ expand_data( float *big_data, View *v, size_t array_size )
 set_blowup_type( BlowupType new_type )
 {
 	if( new_type == BlowupType::Replicate ) 
-		in_set_label( LABEL_BLOWUP_TYPE, "Repl"   );
+		in_set_label( Label::BlowupType, "Repl"   );
 	else
-		in_set_label( LABEL_BLOWUP_TYPE, "Bi-lin" );
+		in_set_label( Label::BlowupType, "Bi-lin" );
 
 	options.blowup_type = new_type;
 }

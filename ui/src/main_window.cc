@@ -417,29 +417,29 @@ MainWindow::MainWindow()
 	const int W = 900, H = 760;
 	win_ = new NcviewWindow( W, H, "ncview" );
 
-	labels_[LABEL_TITLE]        = new Fl_Box( 10, 5, W-20, 20 );
-	labels_[LABEL_SCANVAR_NAME] = new Fl_Box( 10, 25, 200, 18 );
-	labels_[LABEL_SCAN_PLACE]   = new Fl_Box( 220, 25, 200, 18 );
-	labels_[LABEL_DATA_EXTREMA] = new Fl_Box( 10, 43, 300, 18 );
+	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, 5, W-20, 20 );
+	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, 25, 200, 18 );
+	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 220, 25, 200, 18 );
+	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, 43, 300, 18 );
 	// Wide enough to actually show the full "Current: (i=.., j=..) val
 	// (x=.., y=..)" string view_report_position() builds -- the old fixed
 	// 200px width clipped it right after "(x=", silently hiding the x/y
 	// coordinate values even though they were always part of the label
 	// text and updating on every mouse move. Resized to track the window
-	// edge in layout() below, same as LABEL_TITLE.
-	labels_[LABEL_DATA_VALUE]   = new Fl_Box( 320, 43, W-330, 18 );
-	labels_[LABEL_COLORMAP_NAME]= new Fl_Box( 10, 61, 150, 18 );
-	// No LABEL_BLOWUP ("M X<n>") box -- it showed core's discrete
+	// edge in layout() below, same as Label::Title.
+	labels_[static_cast<int>(Label::DataValue)]   = new Fl_Box( 320, 43, W-330, 18 );
+	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 10, 61, 150, 18 );
+	// No Label::Blowup ("M X<n>") box -- it showed core's discrete
 	// pre-zoom pixel-buffer scale factor, which upstream's now-removed
-	// BUTTON_BLOWUP let you cycle. With that gone (replaced by ImageView's
+	// Button::Blowup let you cycle. With that gone (replaced by ImageView's
 	// continuous scroll/drag zoom, which this label never reflected anyway)
 	// it was a static, unexplained number nobody could act on.
-	labels_[LABEL_TRANSFORM]    = new Fl_Box( 170, 61, 80, 18 );
-	labels_[LABEL_BLOWUP_TYPE]  = new Fl_Box( 260, 61, 100, 18 );
-	labels_[LABEL_CCINFO_1]     = new Fl_Box( 370, 61, 200, 18 );
-	labels_[LABEL_CCINFO_2]     = new Fl_Box( 370, 79, 200, 18 );
-	labels_[LABEL_SKIP]         = new Fl_Box( 10, 79, 150, 18 );
-	labels_[LABEL_SCALAR_DIMS]  = new Fl_Box( 170, 79, 280, 18 );
+	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 170, 61, 80, 18 );
+	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 260, 61, 100, 18 );
+	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 370, 61, 200, 18 );
+	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 370, 79, 200, 18 );
+	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, 79, 150, 18 );
+	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, 79, 280, 18 );
 	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT ); }
 
 	var_pack_ = new Fl_Pack( 10, 100, 180, H-220 );
@@ -510,10 +510,10 @@ void MainWindow::layout( int w, int h )
 	if( var_pack_h < 40 ) var_pack_h = 40;
 	var_pack_->resize( kSideMargin, kTopY, 180, var_pack_h );
 
-	if( labels_[LABEL_TITLE] ) labels_[LABEL_TITLE]->size( w - 2*kSideMargin, labels_[LABEL_TITLE]->h() );
-	if( labels_[LABEL_DATA_VALUE] ) {
-		int lx = labels_[LABEL_DATA_VALUE]->x();
-		labels_[LABEL_DATA_VALUE]->size( w - kSideMargin - lx, labels_[LABEL_DATA_VALUE]->h() );
+	if( labels_[static_cast<int>(Label::Title)] ) labels_[static_cast<int>(Label::Title)]->size( w - 2*kSideMargin, labels_[static_cast<int>(Label::Title)]->h() );
+	if( labels_[static_cast<int>(Label::DataValue)] ) {
+		int lx = labels_[static_cast<int>(Label::DataValue)]->x();
+		labels_[static_cast<int>(Label::DataValue)]->size( w - kSideMargin - lx, labels_[static_cast<int>(Label::DataValue)]->h() );
 	}
 
 	win_->redraw();
@@ -523,31 +523,31 @@ void MainWindow::layout( int w, int h )
 // since a uniform 60px was too narrow for "Transform"/etc, leaving their
 // labels crowding the button edges.
 //
-// No BUTTON_COLORMAP_SELECT entry here -- replaced by the colormap combobox
+// No Button::ColormapSelect entry here -- replaced by the colormap combobox
 // in var_pack_ (see rebuildColormapChoice()), which shows every colormap's
 // name and a preview swatch instead of cycling through them blind one at a
-// time. BUTTON_COLORMAP_SELECT/do_colormap_sel() still exist for the
+// time. Button::ColormapSelect/do_colormap_sel() still exist for the
 // NCVIEW_TEST_BUTTON headless-test hook and any script driving buttons by
 // id directly; they just have no on-screen button anymore.
-struct ButtonSpec { int id; const char *text; int width; };
+struct ButtonSpec { Button id; const char *text; int width; };
 static const ButtonSpec kButtonSpecs[] = {
-	{ BUTTON_REWIND, "@|<", 40 }, { BUTTON_BACKWARDS, "@<", 40 }, { BUTTON_PAUSE, "@||", 40 },
-	{ BUTTON_FORWARD, "@>", 40 }, { BUTTON_FASTFORWARD, "@>|", 40 }, { BUTTON_RESTART, "Restart", 65 },
-	{ BUTTON_INVERT_PHYSICAL, "Inv.Phys", 75 },
-	{ BUTTON_INVERT_COLORMAP, "Inv.Cmap", 78 }, { BUTTON_MINIMUM, "Min", 50 }, { BUTTON_MAXIMUM, "Max", 50 },
-	// No BUTTON_BLOWUP here -- replaced by ImageView's scroll-to-zoom (mouse
+	{ Button::Rewind, "@|<", 40 }, { Button::Backwards, "@<", 40 }, { Button::Pause, "@||", 40 },
+	{ Button::Forward, "@>", 40 }, { Button::Fastforward, "@>|", 40 }, { Button::Restart, "Restart", 65 },
+	{ Button::InvertPhysical, "Inv.Phys", 75 },
+	{ Button::InvertColormap, "Inv.Cmap", 78 }, { Button::Minimum, "Min", 50 }, { Button::Maximum, "Max", 50 },
+	// No Button::Blowup here -- replaced by ImageView's scroll-to-zoom (mouse
 	// wheel) and drag-to-pan (left-button drag), which give continuous
-	// navigation instead of upstream's discrete button. BUTTON_BLOWUP_TYPE
+	// navigation instead of upstream's discrete button. Button::BlowupType
 	// is unrelated to navigation (it toggles how core resamples pixels --
 	// replicate vs bilinear -- independent of the on-screen zoom level), so
-	// unlike BUTTON_BLOWUP it still needs a real control; its current state
-	// is shown by the passive LABEL_BLOWUP_TYPE box up in the info area
+	// unlike Button::Blowup it still needs a real control; its current state
+	// is shown by the passive Label::BlowupType box up in the info area
 	// (unchanged from upstream), this button is just the trigger.
-	{ BUTTON_BLOWUP_TYPE, "Interp", 60 },
-	{ BUTTON_TRANSFORM, "Transform", 85 },
-	{ BUTTON_DIMSET, "DimSet", 65 }, { BUTTON_RANGE, "Range", 60 }, { BUTTON_EDIT, "Edit", 50 },
-	{ BUTTON_INFO, "Info", 50 }, { BUTTON_PRINT, "Print", 55 }, { BUTTON_OPTIONS, "Options", 70 },
-	{ BUTTON_QUIT, "Quit", 55 },
+	{ Button::BlowupType, "Interp", 60 },
+	{ Button::Transform, "Transform", 85 },
+	{ Button::Dimset, "DimSet", 65 }, { Button::Range, "Range", 60 }, { Button::Edit, "Edit", 50 },
+	{ Button::Info, "Info", 50 }, { Button::Print, "Print", 55 }, { Button::Options, "Options", 70 },
+	{ Button::Quit, "Quit", 55 },
 };
 
 // Rebuilds the button bar as however many rows of buttons fit in
@@ -579,9 +579,9 @@ int MainWindow::rebuildButtonBar( int available_width )
 			n_rows++;
 		}
 		auto *btn = new Fl_Button( 0, 0, spec.width, kButtonHeight, spec.text );
-		btn->callback( &MainWindow::buttonCallback, (void*)(intptr_t)spec.id );
+		btn->callback( &MainWindow::buttonCallback, (void*)(intptr_t)static_cast<int>(spec.id) );
 		row->add( btn );
-		buttons_[spec.id] = btn;
+		buttons_[static_cast<int>(spec.id)] = btn;
 		row_width += ( row_width > 0 ? kSpacing : 0 ) + spec.width;
 	}
 
@@ -590,7 +590,7 @@ int MainWindow::rebuildButtonBar( int available_width )
 
 void MainWindow::buttonCallback( Fl_Widget *, void *data )
 {
-	int id = (int)(intptr_t)data;
+	Button id = static_cast<Button>( (int)(intptr_t)data );
 	in_button_pressed( id, Modifier::M1 );
 }
 
@@ -603,7 +603,7 @@ void MainWindow::varChoiceCallback( Fl_Widget *w, void * )
 	auto *choice = static_cast<Fl_Choice*>( w );
 	const Fl_Menu_Item *item = choice->mvalue();
 	if( item == nullptr || item->user_data() == nullptr ) return;
-	in_variable_selected( (char *)item->user_data() );
+	in_variable_selected( (const char *)item->user_data() );
 }
 
 namespace {
@@ -708,35 +708,37 @@ void MainWindow::colormapChoiceCallback( Fl_Widget *w, void * )
 	size_t idx = (size_t)(intptr_t)item->user_data();
 	auto *mw = instance();
 	if( idx >= mw->colormaps_.size() ) return;
-	in_colormap_selected( (char *)mw->colormaps_[idx].name.c_str() );
+	in_colormap_selected( mw->colormaps_[idx].name.c_str() );
 }
 
-void MainWindow::setLabel( int label_id, const char *s )
+void MainWindow::setLabel( Label label_id, const char *s )
 {
-	if( label_id < 0 || label_id >= (int)(sizeof(labels_)/sizeof(labels_[0])) ) return;
-	if( labels_[label_id] == nullptr ) return;
-	labels_[label_id]->copy_label( s );
+	int idx = static_cast<int>( label_id );
+	if( idx < 0 || idx >= (int)(sizeof(labels_)/sizeof(labels_[0])) ) return;
+	if( labels_[idx] == nullptr ) return;
+	labels_[idx]->copy_label( s );
 	// copy_label() alone doesn't schedule a repaint -- without this, the
-	// i/j/value label under the cursor (LABEL_DATA_VALUE, updated on every
+	// i/j/value label under the cursor (Label::DataValue, updated on every
 	// FL_MOVE via view_report_position()) only appeared to change when some
 	// unrelated event happened to trigger a redraw (a click, a resize),
 	// making mouse-over tracking look frozen.
-	labels_[label_id]->redraw();
+	labels_[idx]->redraw();
 }
 
-void MainWindow::setSensitive( int button_id, int state )
+void MainWindow::setSensitive( Button button_id, int state )
 {
-	// BUTTON_COLORMAP_SELECT has no entry in buttons_[] any more (see
+	// Button::ColormapSelect has no entry in buttons_[] any more (see
 	// kButtonSpecs) -- core's set_buttons() still toggles it as part of
 	// BUTTONS_ALL_ON/BUTTONS_ALL_OFF, so route it to the combobox instead.
-	if( button_id == BUTTON_COLORMAP_SELECT ) {
+	if( button_id == Button::ColormapSelect ) {
 		if( colormap_choice_ ) { if( state ) colormap_choice_->activate(); else colormap_choice_->deactivate(); }
 		return;
 	}
-	if( button_id < 0 || button_id >= (int)(sizeof(buttons_)/sizeof(buttons_[0])) ) return;
-	if( buttons_[button_id] == nullptr ) return;
-	if( state ) buttons_[button_id]->activate();
-	else buttons_[button_id]->deactivate();
+	int idx = static_cast<int>( button_id );
+	if( idx < 0 || idx >= (int)(sizeof(buttons_)/sizeof(buttons_[0])) ) return;
+	if( buttons_[idx] == nullptr ) return;
+	if( state ) buttons_[idx]->activate();
+	else buttons_[idx]->deactivate();
 }
 
 void MainWindow::indicateActiveVar( const char *var_name )
@@ -785,7 +787,7 @@ void MainWindow::dimStepCallback( Fl_Widget *, void *data )
 	view_change_cur_dim( (char *)p->first.c_str(), p->second );
 }
 
-void MainWindow::makeDimButtons( Stringlist *dim_list )
+void MainWindow::makeDimButtons( const Stringlist *dim_list )
 {
 	clearDimButtons();
 	if( dim_list != nullptr )
@@ -812,7 +814,7 @@ void MainWindow::clearDimButtons()
 	dim_rows_.clear();
 }
 
-void MainWindow::fillDimInfo( NCDim *d, int /*please_flip*/ )
+void MainWindow::fillDimInfo( const NCDim *d, int /*please_flip*/ )
 {
 	if( d == nullptr ) return;
 	for( auto &row : dim_rows_ ) {
@@ -892,7 +894,7 @@ char *MainWindow::installNextColormap( int do_widgets )
 	image_->setColormap( cm.r, cm.g, cm.b );
 	colorbar_->setColormap( cm.r, cm.g, cm.b );
 	if( do_widgets ) {
-		setLabel( LABEL_COLORMAP_NAME, cm.name.c_str() );
+		setLabel( Label::ColormapName, cm.name.c_str() );
 		if( colormap_choice_ ) { colormap_choice_->value( current_colormap_ ); colormap_choice_->redraw(); }
 	}
 	return (char *)cm.name.c_str();
@@ -906,7 +908,7 @@ char *MainWindow::installPrevColormap( int do_widgets )
 	image_->setColormap( cm.r, cm.g, cm.b );
 	colorbar_->setColormap( cm.r, cm.g, cm.b );
 	if( do_widgets ) {
-		setLabel( LABEL_COLORMAP_NAME, cm.name.c_str() );
+		setLabel( Label::ColormapName, cm.name.c_str() );
 		if( colormap_choice_ ) { colormap_choice_->value( current_colormap_ ); colormap_choice_->redraw(); }
 	}
 	return (char *)cm.name.c_str();
@@ -921,7 +923,7 @@ char *MainWindow::installColormapByName( const char *name, int do_widgets )
 		image_->setColormap( cm.r, cm.g, cm.b );
 		colorbar_->setColormap( cm.r, cm.g, cm.b );
 		if( do_widgets ) {
-			setLabel( LABEL_COLORMAP_NAME, cm.name.c_str() );
+			setLabel( Label::ColormapName, cm.name.c_str() );
 			if( colormap_choice_ ) { colormap_choice_->value( current_colormap_ ); colormap_choice_->redraw(); }
 		}
 		return (char *)cm.name.c_str();
@@ -1139,7 +1141,7 @@ Message MainWindow::rangeDialog( float old_min, float old_max, float global_min,
 	return Message::OK;
 }
 
-int MainWindow::scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y_axis_name,
+int MainWindow::scanDimsDialog( const Stringlist *dim_list, const char *x_axis_name, const char *y_axis_name,
 		Stringlist **new_dim_list )
 {
 	std::vector<std::string> names;

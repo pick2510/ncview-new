@@ -99,7 +99,7 @@ class PlotWindow {
 public:
 	static PlotWindow *create( size_t n, int dimindex, const double *xvals, const double *yvals,
 			const char *x_axis_title, const char *y_axis_title, const char *title,
-			const char *legend, Stringlist *scannable_dims, int screen_x, int screen_y );
+			const char *legend, const Stringlist *scannable_dims, int screen_x, int screen_y );
 
 	void addLine( size_t n, const double *xvals, const double *yvals, const char *legend );
 	bool locked() const { return locked_; }
@@ -135,7 +135,7 @@ private:
 // Entry points used by ui/src/interface_fltk.cc.
 int  popupXYGraph( size_t n, int dimindex, double *xvals, double *yvals,
 		const char *x_axis_title, const char *y_axis_title, const char *title,
-		const char *legend, Stringlist *scannable_dims );
+		const char *legend, const Stringlist *scannable_dims );
 void unlockPlot();
 
 } // namespace ncview_ui

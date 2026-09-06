@@ -66,7 +66,7 @@ void in_initialize( void )
 			for( auto &c : variables )
 				if( c->name == sel ) { v = c.get(); break; }
 		if( v != nullptr )
-			in_variable_selected( const_cast<char *>(v->name.c_str()) );
+			in_variable_selected( v->name.c_str() );
 	}
 	if( const char *d = getenv( "NCVIEW_TEST_DIALOG" ) ) {
 		if( std::strcmp( d, "range" ) == 0 ) do_range( Modifier::M1 );
@@ -90,22 +90,22 @@ void in_initialize( void )
 		// MainWindow::buttonCallback uses for a real click -- for
 		// regression-checking buttons (blowup, transform, invert, ...)
 		// under Xvfb without a real mouse. Deferred one tick for the same
-		// reason "print" is: some of these (BUTTON_BLOWUP, BUTTON_RESTART)
+		// reason "print" is: some of these (Button::Blowup, Button::Restart)
 		// interact with state that in_initialize()'s caller (ncview_main())
 		// only finishes setting up after in_initialize() returns.
-		static const struct { const char *name; int id; } kButtons[] = {
-			{ "rewind", BUTTON_REWIND }, { "backwards", BUTTON_BACKWARDS },
-			{ "pause", BUTTON_PAUSE }, { "forward", BUTTON_FORWARD },
-			{ "fastforward", BUTTON_FASTFORWARD }, { "colormap", BUTTON_COLORMAP_SELECT },
-			{ "invert_physical", BUTTON_INVERT_PHYSICAL }, { "invert_colormap", BUTTON_INVERT_COLORMAP },
-			{ "minimum", BUTTON_MINIMUM }, { "maximum", BUTTON_MAXIMUM },
-			{ "blowup", BUTTON_BLOWUP }, { "restart", BUTTON_RESTART },
-			{ "transform", BUTTON_TRANSFORM }, { "blowup_type", BUTTON_BLOWUP_TYPE },
+		static const struct { const char *name; Button id; } kButtons[] = {
+			{ "rewind", Button::Rewind }, { "backwards", Button::Backwards },
+			{ "pause", Button::Pause }, { "forward", Button::Forward },
+			{ "fastforward", Button::Fastforward }, { "colormap", Button::ColormapSelect },
+			{ "invert_physical", Button::InvertPhysical }, { "invert_colormap", Button::InvertColormap },
+			{ "minimum", Button::Minimum }, { "maximum", Button::Maximum },
+			{ "blowup", Button::Blowup }, { "restart", Button::Restart },
+			{ "transform", Button::Transform }, { "blowup_type", Button::BlowupType },
 		};
 		for( const auto &e : kButtons )
 			if( std::strcmp( b, e.name ) == 0 ) {
-				int id = e.id;
-				Fl::add_timeout( 0.0, [](void *data) { in_button_pressed( (int)(intptr_t)data, Modifier::M1 ); },
+				Button id = e.id;
+				Fl::add_timeout( 0.0, [](void *data) { in_button_pressed( static_cast<Button>((intptr_t)data), Modifier::M1 ); },
 					(void*)(intptr_t)id );
 				break;
 			}
@@ -161,38 +161,38 @@ void in_timer_set( std::function<void()> callback, unsigned long delay_millisec 
 
 /* ---- labels / sensitivity / dim buttons -------------------------------- */
 
-void in_set_label( int label_id, char *string )
+void in_set_label( Label label_id, const char *string )
 {
 	if( string == nullptr ) return;
 	instance()->setLabel( label_id, string );
 }
 
-void in_set_sensitive( int button_id, int state )
+void in_set_sensitive( Button button_id, int state )
 {
 	instance()->setSensitive( button_id, state );
 }
 
-void in_var_set_sensitive( char *var_name, int sensitivity )
+void in_var_set_sensitive( const char *var_name, int sensitivity )
 {
 	x_set_var_sensitivity( var_name, sensitivity );
 }
 
-void in_indicate_active_var( char *var_name )
+void in_indicate_active_var( const char *var_name )
 {
 	instance()->indicateActiveVar( var_name );
 }
 
-void in_indicate_active_dim( Dimension dimension, char *dim_name )
+void in_indicate_active_dim( Dimension dimension, const char *dim_name )
 {
 	instance()->indicateActiveDim( dimension, dim_name );
 }
 
-void in_fill_dim_info( NCDim *d, int please_flip )
+void in_fill_dim_info( const NCDim *d, int please_flip )
 {
 	instance()->fillDimInfo( d, please_flip );
 }
 
-void in_set_cur_dim_value( char *name, char *string )
+void in_set_cur_dim_value( const char *name, const char *string )
 {
 	instance()->setCurDimValue( name, string );
 }
@@ -229,14 +229,14 @@ void dumpFrameToPng( const unsigned char *data, size_t width, size_t height, siz
 }
 } // namespace
 
-void in_draw_2d_field( unsigned char *data, size_t width, size_t height, size_t timestep )
+void in_draw_2d_field( const unsigned char *data, size_t width, size_t height, size_t timestep )
 {
 	if( options.dump_frames )
 		dumpFrameToPng( data, width, height, timestep );
 	instance()->draw2DField( data, width, height, timestep );
 }
 
-void in_create_colormap( char *name, ncv_pixel r[256], ncv_pixel g[256], ncv_pixel b[256] )
+void in_create_colormap( const char *name, const ncv_pixel r[256], const ncv_pixel g[256], const ncv_pixel b[256] )
 {
 	instance()->createColormap( name, r, g, b );
 }
@@ -251,7 +251,7 @@ char *in_install_prev_colormap( int do_widgets )
 	return instance()->installPrevColormap( do_widgets );
 }
 
-char *in_install_colormap_by_name( char *name, int do_widgets )
+char *in_install_colormap_by_name( const char *name, int do_widgets )
 {
 	return instance()->installColormapByName( name, do_widgets );
 }
@@ -287,7 +287,7 @@ void in_query_pointer_position( int *x, int *y )
 
 /* ---- dialogs / errors ---------------------------------------------------- */
 
-Message in_dialog( char *message, char *ret_string, int want_cancel_button )
+Message in_dialog( const char *message, char *ret_string, int want_cancel_button )
 {
 	if( ret_string != nullptr ) {
 		const char *result = fl_input( "%s", ret_string, message );
@@ -303,14 +303,14 @@ Message in_dialog( char *message, char *ret_string, int want_cancel_button )
 	return Message::OK;
 }
 
-void x_error( char *message )
+void x_error( const char *message )
 {
 	fl_alert( "%s", message ? message : "(unknown error)" );
 }
 
 /* ---- variable-info popup -------------------------------------------------- */
 
-void in_display_stuff( char *s, char *var_name )
+void in_display_stuff( const char *s, const char *var_name )
 {
 	char window_title[132];
 	snprintf( window_title, sizeof(window_title), "Attributes of \"%s\"", var_name ? var_name : "" );
@@ -466,21 +466,21 @@ void in_set_edit_place( size_t index, int x, int y, int nx, int ny )
 	g_dataedit_table->redraw();
 }
 
-int in_set_scan_dims( Stringlist *dim_list, char *x_axis_name, char *y_axis_name, Stringlist **new_dim_list )
+int in_set_scan_dims( const Stringlist *dim_list, const char *x_axis_name, const char *y_axis_name, Stringlist **new_dim_list )
 {
 	return instance()->scanDimsDialog( dim_list, x_axis_name, y_axis_name, new_dim_list );
 }
 
-void in_change_min( char *label )
+void in_change_min( const char *label )
 {
 	(void)label;
 }
 
-int in_popup_XY_graph( size_t n, int dimindex, double *xvals, double *yvals, char *x_axis_title,
-	char *y_axis_title, char *title, char *legend, Stringlist *scannable_dims )
+int in_popup_XY_graph( size_t n, int dimindex, double *xvals, double *yvals, const char *x_axis_title,
+	const char *y_axis_title, const char *title, const char *legend, const Stringlist *scannable_dims )
 {
 	if( scannable_dims == nullptr ) {
-		in_error( (char *)"Internal error: got NULL scannable_dims in in_popup_XY_graph!" );
+		in_error( "Internal error: got NULL scannable_dims in in_popup_XY_graph!" );
 		return -1;
 	}
 	return ncview_ui::popupXYGraph( n, dimindex, xvals, yvals, x_axis_title, y_axis_title,
@@ -523,7 +523,7 @@ Message x_range( float old_min, float old_max, float global_min, float global_ma
 	return instance()->rangeDialog( old_min, old_max, global_min, global_max, new_min, new_max, allvars );
 }
 
-int x_seen_colormap_name( char *name )
+int x_seen_colormap_name( const char *name )
 {
 	return instance()->seenColormapName( name ) ? 1 : 0;
 }
@@ -548,12 +548,12 @@ void x_force_set_invert_state( int state )
 	(void)state;
 }
 
-void x_init_dim_info( Stringlist *dim_list )
+void x_init_dim_info( const Stringlist *dim_list )
 {
 	instance()->makeDimButtons( dim_list );
 }
 
-void x_set_var_sensitivity( char *varname, int sens )
+void x_set_var_sensitivity( const char *varname, int sens )
 {
 	(void)varname; (void)sens;
 }

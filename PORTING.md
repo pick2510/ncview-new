@@ -131,6 +131,52 @@ Testing note: `ui/src/interface_fltk.cc`'s `in_initialize()` has env-var-gated t
 
 Also dropped, discovered during M1: `qsort.c` (calls an undefined `sort()`, not in any Makefile.am — dead code, never actually built upstream) and `geteuid.c` (a separate `noinst_PROGRAMS` diagnostic executable with its own `main()`, unrelated to the `ncview` binary).
 
+## Post-port modernization
+
+Once the M0-M6 port above landed, a second, separate effort modernized
+`core/`'s internals to idiomatic C++17 on the `modernization` branch (see
+`modernization.md` for the full phase-by-phase log), under a strict-parity
+rule: every commit had to leave `ctest` output and the Xvfb UI screenshot
+harness byte-identical to the pre-change build. In order:
+
+- **Phase 0**: built the safety net first -- `-Wall -Wextra` baseline
+  (`core/WARNINGS.md`), characterization tests, an Xvfb screenshot harness
+  driving the real binary headlessly, and an ASan/UBSan CI job.
+- **Phases 2-4**: bounded `strcpy`/`strcat` (`snprintf`), `Stringlist`'s
+  intrusive linked list to `std::vector`, and `char*`-returning core
+  functions to `std::string`.
+- **Phase 5**: `NCVar`/`FDBlist`/`NCDim`/`NCDim_map_info`'s intrusive lists
+  to owning `std::vector<std::unique_ptr<...>>` containers -- the largest,
+  highest-risk phase, ~1650 lines across 20 files.
+- **Phase 6**: `View`/`FrameStore`/`Options`/`OverlayOptions`/`PrintOptions`'
+  raw buffers (`malloc`/`realloc`/fixed `char[]`) to `std::vector`/
+  `std::string`/`std::unique_ptr`.
+- **Phase 7**: the `interface.h`/`protos.h` seam -- `char*` parameters that
+  are only ever read became `const char*`/`std::string_view`, and
+  `BUTTON_*`/`LABEL_*` became `enum class Button`/`Label`.
+
+**What this deliberately left alone**: `core/`'s 181 raw `exit()` calls
+(this codebase's uniform error-handling convention -- an unrecoverable
+condition terminates the process outright, both in original upstream code
+and in every phase of this modernization; no exception-based error handling
+was introduced) and its 5 global variables (`options`, `variables`,
+`pixel_transform`, `framestore` in `ncview.cc`, `view` in `view.cc`) --
+each already documented at its declaration as the seam through which
+`core` and `ncview_ui` share state, and none of the seven phases found a
+reason to eliminate them.
+
+**Defects found along the way** (full detail in `modernization.md`'s
+"Sanitizer findings" and per-phase sections): an ASan-caught
+heap-buffer-overflow off-by-one in `view_data_edit()` (fixed, with a
+regression test); a segfault in `add_var_to_list()` from a Phase 5
+draft's field-initialization ordering (caught by the Xvfb smoke test, not
+the unit suite, before it ever reached this branch's history); a
+pre-existing `-cal` argument allocation-size bug (fixed in Phase 2, inline
+with the `strcpy`->`snprintf` conversion that depended on it); and one
+upstream defect in `fill_dim_structs()`'s unit-mismatch check (an
+infinite-loop-shaped `while` condition) preserved verbatim per the
+strict-parity rule rather than silently fixed.
+
 ## Verification
 
 1. **Build**: `git submodule update --init --recursive && cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo && cmake --build build -j` — must succeed with no system FLTK/udunits2 installed.

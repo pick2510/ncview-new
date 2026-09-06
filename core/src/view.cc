@@ -393,10 +393,10 @@ set_scan_buttons( View *local_view )
 		}
 
 	set_buttons( set_state );
-	in_set_label( LABEL_SCAN_PLACE, label );
+	in_set_label( Label::ScanPlace, label );
 
 	view_construct_scalar_coord_str( scalar_coord_str, 1020 );
-	in_set_label( LABEL_SCALAR_DIMS, scalar_coord_str );
+	in_set_label( Label::ScalarDims, scalar_coord_str );
 }
 
 /**************************************************************************************
@@ -582,18 +582,18 @@ set_scan_view( size_t scan_place )
 		; /* don't have to do anything, since string-type dimval
 		   * is already in variable "temp_string"
 		   */
-	in_set_label( LABEL_SCAN_PLACE, view_place );
+	in_set_label( Label::ScanPlace, view_place );
 	in_set_cur_dim_value( dim_name, temp_string );
 	view->data_status = ViewDataStatus::Invalid;
 	if( options.want_extra_info ) {
-		in_set_label( LABEL_CCINFO_2, temp_string );
+		in_set_label( Label::CcInfo2, temp_string );
 		}
 
 	/* Construct string showing the values of the scalar coordinates
 	 * for this variable, if any 
 	 */
 	view_construct_scalar_coord_str( scalar_coord_str, 1020 );
-	in_set_label( LABEL_SCALAR_DIMS, scalar_coord_str );
+	in_set_label( Label::ScalarDims, scalar_coord_str );
 }
 
 /********************************************************************************
@@ -688,7 +688,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 
 			if( view->scan_axis_id != -1 ) {
 				scan_size  = view->variable->size[view->scan_axis_id];
-				if( (frameno == (scan_size-1)) && (which_button_pressed() == BUTTON_PAUSE)) {
+				if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
 					in_timer_set( [](){ view_check_new_data(0); }, 1000L );
 					}
 				}
@@ -740,7 +740,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	 */
 	if( view->scan_axis_id != -1 ) {
 		scan_size  = view->variable->size[view->scan_axis_id];
-		if( (frameno == (scan_size-1)) && (which_button_pressed() == BUTTON_PAUSE)) {
+		if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
 			in_timer_set( [](){ view_check_new_data(0); }, 1000L );
 			}
 		}
@@ -844,7 +844,7 @@ view_check_new_data( int unused )
 			if( message[i] == 10 )
 				message[i] = ' ';
 		}
-	in_set_label( LABEL_TITLE, message );
+	in_set_label( Label::Title, message );
 
 	/* See if we need to reallocate the framestore */
 	if( nt_new >= framestore.nt ) {
@@ -1181,7 +1181,7 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 	else
 		snprintf( blowup_label, 31, "M 1/%1d", -options.blowup );
 
-        in_set_label( LABEL_BLOWUP, blowup_label );
+        in_set_label( Label::Blowup, blowup_label );
 
 	if( view_var_is_valid ) {
 		view->variable->user_set_blowup = options.blowup;
@@ -1567,10 +1567,10 @@ set_range_labels( float min, float max )
 					limit_string(units).c_str() );
 		}
 
-	in_set_label( LABEL_DATA_EXTREMA, temp_label );
+	in_set_label( Label::DataExtrema, temp_label );
 
 	if( options.want_extra_info ) {
-		in_set_label( LABEL_CCINFO_1, extra_label );
+		in_set_label( Label::CcInfo1, extra_label );
 		}
 
 }
@@ -1705,51 +1705,51 @@ set_buttons( int to_state )
 	switch (to_state ) {
 
 	    case BUTTONS_ALL_ON:
-		in_set_sensitive( BUTTON_RESTART, 	  true );
-		in_set_sensitive( BUTTON_REWIND, 	  true );
-		in_set_sensitive( BUTTON_BACKWARDS, 	  true );
-		in_set_sensitive( BUTTON_PAUSE, 	  true );
-		in_set_sensitive( BUTTON_FORWARD, 	  true );
-		in_set_sensitive( BUTTON_FASTFORWARD, 	  true );
-		in_set_sensitive( BUTTON_COLORMAP_SELECT, true );
-		in_set_sensitive( BUTTON_INVERT_PHYSICAL, true );
-		in_set_sensitive( BUTTON_INVERT_COLORMAP, true );
-		in_set_sensitive( BUTTON_BLOWUP, 	  true );
-		in_set_sensitive( BUTTON_TRANSFORM, 	  true );
-		in_set_sensitive( BUTTON_PRINT, 	  true );
-		in_set_sensitive( BUTTON_DIMSET, 	  true );
-		in_set_sensitive( BUTTON_RANGE, 	  true );
-		in_set_sensitive( BUTTON_BLOWUP_TYPE,	  true );
-		in_set_sensitive( BUTTON_EDIT,	  	  true );
-		in_set_sensitive( BUTTON_INFO,	  	  true );
+		in_set_sensitive( Button::Restart, 	  true );
+		in_set_sensitive( Button::Rewind, 	  true );
+		in_set_sensitive( Button::Backwards, 	  true );
+		in_set_sensitive( Button::Pause, 	  true );
+		in_set_sensitive( Button::Forward, 	  true );
+		in_set_sensitive( Button::Fastforward, 	  true );
+		in_set_sensitive( Button::ColormapSelect, true );
+		in_set_sensitive( Button::InvertPhysical, true );
+		in_set_sensitive( Button::InvertColormap, true );
+		in_set_sensitive( Button::Blowup, 	  true );
+		in_set_sensitive( Button::Transform, 	  true );
+		in_set_sensitive( Button::Print, 	  true );
+		in_set_sensitive( Button::Dimset, 	  true );
+		in_set_sensitive( Button::Range, 	  true );
+		in_set_sensitive( Button::BlowupType,	  true );
+		in_set_sensitive( Button::Edit,	  	  true );
+		in_set_sensitive( Button::Info,	  	  true );
 		break;
 
 	    case BUTTONS_TIMEAXIS_OFF:
-		in_set_sensitive( BUTTON_RESTART, 	  false );
-		in_set_sensitive( BUTTON_REWIND, 	  false );
-		in_set_sensitive( BUTTON_BACKWARDS, 	  false );
-		in_set_sensitive( BUTTON_FORWARD, 	  false );
-		in_set_sensitive( BUTTON_FASTFORWARD, 	  false );
+		in_set_sensitive( Button::Restart, 	  false );
+		in_set_sensitive( Button::Rewind, 	  false );
+		in_set_sensitive( Button::Backwards, 	  false );
+		in_set_sensitive( Button::Forward, 	  false );
+		in_set_sensitive( Button::Fastforward, 	  false );
 		break;
 		
 	    case BUTTONS_ALL_OFF:
-		in_set_sensitive( BUTTON_RESTART, 	  false );
-		in_set_sensitive( BUTTON_REWIND, 	  false );
-		in_set_sensitive( BUTTON_BACKWARDS, 	  false );
-		in_set_sensitive( BUTTON_PAUSE, 	  false );
-		in_set_sensitive( BUTTON_FORWARD, 	  false );
-		in_set_sensitive( BUTTON_FASTFORWARD, 	  false );
-		in_set_sensitive( BUTTON_COLORMAP_SELECT, false );
-		in_set_sensitive( BUTTON_INVERT_PHYSICAL, false );
-		in_set_sensitive( BUTTON_INVERT_COLORMAP, false );
-		in_set_sensitive( BUTTON_TRANSFORM, 	  false );
-		in_set_sensitive( BUTTON_BLOWUP, 	  false );
-		in_set_sensitive( BUTTON_PRINT, 	  false );
-		in_set_sensitive( BUTTON_DIMSET, 	  false );
-		in_set_sensitive( BUTTON_RANGE, 	  false );
-		in_set_sensitive( BUTTON_BLOWUP_TYPE,	  false );
-		in_set_sensitive( BUTTON_EDIT,	  	  false );
-		in_set_sensitive( BUTTON_INFO,	  	  false );
+		in_set_sensitive( Button::Restart, 	  false );
+		in_set_sensitive( Button::Rewind, 	  false );
+		in_set_sensitive( Button::Backwards, 	  false );
+		in_set_sensitive( Button::Pause, 	  false );
+		in_set_sensitive( Button::Forward, 	  false );
+		in_set_sensitive( Button::Fastforward, 	  false );
+		in_set_sensitive( Button::ColormapSelect, false );
+		in_set_sensitive( Button::InvertPhysical, false );
+		in_set_sensitive( Button::InvertColormap, false );
+		in_set_sensitive( Button::Transform, 	  false );
+		in_set_sensitive( Button::Blowup, 	  false );
+		in_set_sensitive( Button::Print, 	  false );
+		in_set_sensitive( Button::Dimset, 	  false );
+		in_set_sensitive( Button::Range, 	  false );
+		in_set_sensitive( Button::BlowupType,	  false );
+		in_set_sensitive( Button::Edit,	  	  false );
+		in_set_sensitive( Button::Info,	  	  false );
 		break;
 
 	default:
@@ -1923,11 +1923,9 @@ draw_file_info( NCVar *var )
 
 	title = fi_title( var->files.front().get()->id );
 	if( title.empty() )
-		in_set_label( LABEL_TITLE, PROGRAM_ID );
+		in_set_label( Label::Title, PROGRAM_ID );
 	else
-		/* in_set_label's own char* param is unconverted until Phase 7's
-		 * seam sweep; it only reads/copies the string, never mutates it. */
-		in_set_label( LABEL_TITLE, const_cast<char *>( title.c_str() ));
+		in_set_label( Label::Title, title.c_str() );
 
 	units = fi_var_units( var->files.front().get()->id, var->name );
 	if( units.empty() ) {
@@ -1958,26 +1956,26 @@ draw_file_info( NCVar *var )
 					limit_string(units).c_str() );
 		}
 	snprintf( temp_label, 599, "displayed range: %s", range_label );
-	in_set_label( LABEL_DATA_EXTREMA, temp_label );
+	in_set_label( Label::DataExtrema, temp_label );
 
 	var_long_name = fi_long_var_name( view->variable->files.front().get()->id,
 					view->variable->name );
 	if( var_long_name.empty() ) {
 		snprintf( temp_label, 255, "variable=%s", limit_string(view->variable->name).c_str() );
-		in_set_label( LABEL_SCANVAR_NAME, temp_label );
+		in_set_label( Label::ScanvarName, temp_label );
 		if( options.want_extra_info ) {
 			snprintf( temp_label, 599, "%s (%s)", limit_string(view->variable->name).c_str(),
 								range_label );
-			in_set_label( LABEL_CCINFO_1, temp_label );
+			in_set_label( Label::CcInfo1, temp_label );
 			}
 		}
 	else
 		{
 		snprintf( temp_label, 599, "displaying %s", limit_string(var_long_name).c_str() );
-		in_set_label( LABEL_SCANVAR_NAME, temp_label );
+		in_set_label( Label::ScanvarName, temp_label );
 		if( options.want_extra_info ) {
 			snprintf( temp_label, 599, "%s (%s)",  limit_string(var_long_name).c_str(), range_label );
-			in_set_label( LABEL_CCINFO_1, temp_label );
+			in_set_label( Label::CcInfo1, temp_label );
 			}
 		}
 }
@@ -2186,7 +2184,7 @@ view_report_position( int x, int y, unsigned int button_mask )
 
 	snprintf( current_value_label, 499, "Current: (i=%1ld, j=%1ld) %g (x=%s, y=%s)\n", 
 				data_x, data_y, val, xdim_str, ydim_str );
-	in_set_label( LABEL_DATA_VALUE, current_value_label );
+	in_set_label( Label::DataValue, current_value_label );
 }
 
 /**************************************************************************************/
@@ -2287,7 +2285,7 @@ view_report_position_vals( float xval, float yval, int plot_index )
 	else
 		snprintf( current_value_label, 79, "Current: x=%g, y=%g", 
 				xval, yval );
-	in_set_label( LABEL_DATA_VALUE, current_value_label );
+	in_set_label( Label::DataValue, current_value_label );
 }
 
 /**************************************************************************************/
@@ -3000,13 +2998,9 @@ view_plot_XY_fmt_x_val( float val, int dimindex, char *s, size_t s_len )
 	void
 view_information( void )
 {
-	/* in_display_stuff's own char* param is unconverted until Phase 7's
-	 * seam sweep; it copies the string into a widget synchronously, so
-	 * the temporary from netcdf_att_string() -- alive for this whole
-	 * full-expression -- is safe to hand it. */
-	in_display_stuff( const_cast<char *>( netcdf_att_string( view->variable->files.front().get()->id,
-						view->variable->name ).c_str() ),
-			const_cast<char *>( view->variable->name.c_str() ) );
+	in_display_stuff( netcdf_att_string( view->variable->files.front().get()->id,
+						view->variable->name ).c_str(),
+			view->variable->name.c_str() );
 }
 
 /**************************************************************************************/
@@ -3106,10 +3100,10 @@ view_change_transform( int delta )
 	options.transform = static_cast<Transform>(transform_int);
 
 	switch( options.transform ) {
-		case Transform::None   : in_set_label( LABEL_TRANSFORM, "Linear" ); break;
-		case Transform::Low    : in_set_label( LABEL_TRANSFORM, "Low"    ); break;
-		case Transform::Hi     : in_set_label( LABEL_TRANSFORM, "Hi"     ); break;
-		case Transform::Center : in_set_label( LABEL_TRANSFORM, "Center" ); break;
+		case Transform::None   : in_set_label( Label::Transform, "Linear" ); break;
+		case Transform::Low    : in_set_label( Label::Transform, "Low"    ); break;
+		case Transform::Hi     : in_set_label( Label::Transform, "Hi"     ); break;
+		case Transform::Center : in_set_label( Label::Transform, "Center" ); break;
 		default:
 			fprintf( stderr, "ncview: change_transform: unknown transform %d\n",
 				transform_int );

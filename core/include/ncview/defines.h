@@ -47,28 +47,30 @@
 constexpr double APP_RES_VERSION = 1.93;
 
 /******************** Buttons in the user interface **********************/
-#define	BUTTON_REWIND			1
-#define	BUTTON_BACKWARDS		2
-#define	BUTTON_PAUSE			3
-#define	BUTTON_FORWARD			4
-#define	BUTTON_FASTFORWARD		5
-#define	BUTTON_COLORMAP_SELECT		6	/* this is also a label */
-#define	BUTTON_INVERT_PHYSICAL		7
-#define	BUTTON_INVERT_COLORMAP		8
-#define	BUTTON_MINIMUM			9
-#define	BUTTON_MAXIMUM			10
-#define	BUTTON_QUIT			11
-#define BUTTON_BLOWUP			12	/* this is also a label */
-#define	BUTTON_RESTART			13
-#define	BUTTON_TRANSFORM		14	/* this is also a label */
-#define BUTTON_DIMSET			15
-#define BUTTON_RANGE			16
-#define BUTTON_BLOWUP_TYPE		17	/* this is also a label */
-#define BUTTON_SKIP			18	/* this is also a label */
-#define BUTTON_EDIT			19
-#define BUTTON_INFO			20
-#define BUTTON_PRINT			21
-#define BUTTON_OPTIONS			22
+enum class Button {
+	Rewind		= 1,
+	Backwards	= 2,
+	Pause		= 3,
+	Forward		= 4,
+	Fastforward	= 5,
+	ColormapSelect	= 6,	/* this is also a label */
+	InvertPhysical	= 7,
+	InvertColormap	= 8,
+	Minimum		= 9,
+	Maximum		= 10,
+	Quit		= 11,
+	Blowup		= 12,	/* this is also a label */
+	Restart		= 13,
+	Transform	= 14,	/* this is also a label */
+	Dimset		= 15,
+	Range		= 16,
+	BlowupType	= 17,	/* this is also a label */
+	Skip		= 18,	/* this is also a label */
+	Edit		= 19,
+	Info		= 20,
+	Print		= 21,
+	Options		= 22,
+};
 
 /***************************************************************************
  * These are the overlays we know about
@@ -83,31 +85,35 @@ constexpr int OVERLAY_N_OVERLAYS = 5;
 
 
 /***************************************************************************
- * General purpose writable labels in the user interface.  These are the 
- * 'real' names; to actually use them, associate a more easily 
- * remembered #define with them, as shown below.
+ * General purpose writable labels in the user interface. Each numbered
+ * slot (L1..L6) also has a semantic name for the one thing it's actually
+ * used to display (Title, ScanvarName, ...) -- both names are the same
+ * enumerator, exactly as the old LABEL_TITLE/LABEL_1-style #define aliasing
+ * was.
  */
-#define LABEL_1			1
-#define LABEL_2			2
-#define LABEL_3			3
-#define LABEL_4			4
-#define LABEL_5			11
-#define LABEL_6			13
-/* Specific purpose writable labels in the user interface. */
-#define LABEL_COLORMAP_NAME	5		/* this is also a button */
-#define LABEL_BLOWUP		6		/* this is also a button */
-#define LABEL_TRANSFORM		7
-#define LABEL_CCINFO_1		8
-#define LABEL_CCINFO_2		9
-#define LABEL_BLOWUP_TYPE	10		/* this is also a button */
-#define LABEL_SKIP		12		/* this is also a button */
+enum class Label {
+	L1		= 1,
+	L2		= 2,
+	L3		= 3,
+	L4		= 4,
+	/* Specific purpose writable labels in the user interface. */
+	ColormapName	= 5,	/* this is also a button */
+	Blowup		= 6,	/* this is also a button */
+	Transform	= 7,
+	CcInfo1		= 8,
+	CcInfo2		= 9,
+	BlowupType	= 10,	/* this is also a button */
+	L5		= 11,
+	Skip		= 12,	/* this is also a button */
+	L6		= 13,
 
-#define LABEL_TITLE		LABEL_1
-#define LABEL_SCANVAR_NAME	LABEL_2
-#define LABEL_SCAN_PLACE	LABEL_3
-#define LABEL_DATA_EXTREMA	LABEL_4
-#define LABEL_DATA_VALUE	LABEL_5
-#define LABEL_SCALAR_DIMS	LABEL_6		/* information from the scalar dims */
+	Title		= L1,
+	ScanvarName	= L2,
+	ScanPlace	= L3,
+	DataExtrema	= L4,
+	DataValue	= L5,
+	ScalarDims	= L6,	/* information from the scalar dims */
+};
 
 /*****************************************************************************/
 /* Transforming the data before turning it into pixels is supported */

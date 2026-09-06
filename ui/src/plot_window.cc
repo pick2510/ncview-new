@@ -289,7 +289,7 @@ PlotWindow::PlotWindow( int dimindex ) : dimindex_( dimindex ) {}
 
 PlotWindow *PlotWindow::create( size_t n, int dimindex, const double *xvals, const double *yvals,
 		const char *x_axis_title, const char *y_axis_title, const char *title,
-		const char *legend, Stringlist *scannable_dims, int screen_x, int screen_y )
+		const char *legend, const Stringlist *scannable_dims, int screen_x, int screen_y )
 {
 	auto *pw = new PlotWindow( dimindex );
 
@@ -475,7 +475,7 @@ void PlotWindow::yRangeCallback( Fl_Widget *, void *data ) { static_cast<PlotWin
 
 int popupXYGraph( size_t n, int dimindex, double *xvals, double *yvals,
 		const char *x_axis_title, const char *y_axis_title, const char *title,
-		const char *legend, Stringlist *scannable_dims )
+		const char *legend, const Stringlist *scannable_dims )
 {
 	int locked_index = lockedPlotIndex();
 	if( locked_index != -1 ) {
@@ -485,7 +485,7 @@ int popupXYGraph( size_t n, int dimindex, double *xvals, double *yvals,
 
 	int index = freePlotIndex();
 	if( index == -1 ) {
-		x_error( (char *)"Reached maximum # of XY plots!" );
+		x_error( "Reached maximum # of XY plots!" );
 		return -1;
 	}
 

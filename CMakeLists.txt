@@ -24,8 +24,10 @@ else()
 endif()
 
 # tests/ whole-archive-links ncview_core (and transitively libudunits2) into
-# a shared library to force full symbol resolution (see tests/CMakeLists.txt);
-# that requires every static lib involved to be PIC.
+# an executable, ncview_core_linkcheck, to force full symbol resolution --
+# deliberately an executable rather than a shared library (see
+# tests/CMakeLists.txt for why); that still requires every static lib
+# involved to be PIC.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(NCVIEW_BUILD_TESTS "Build ncview_core headless tests" ON)

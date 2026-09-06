@@ -46,31 +46,31 @@
  * entry points core uses are x_init_dim_info() and in_fill_dim_info(),
  * both below.
  */
-void 	in_display_stuff	( char *s, char *var_name );
+void 	in_display_stuff	( const char *s, const char *var_name );
 void 	in_set_edit_place	( size_t index, int x, int y, int nx, int ny );
-void 	in_indicate_active_var  ( char *var_name );
-void 	in_indicate_active_dim  ( Dimension dimension, char *dim_name );
+void 	in_indicate_active_var  ( const char *var_name );
+void 	in_indicate_active_dim  ( Dimension dimension, const char *dim_name );
 void 	in_parse_args		( int *p_argc, char **argv );
 void 	in_initialize		( void );
-void 	in_set_label		( int label_id, char *string );
+void 	in_set_label		( Label label_id, const char *string );
 void	in_process_user_input	( void );
-void	in_draw_2d_field 	( unsigned char *data, size_t width, size_t height, size_t timestep );
-void	in_create_colormap	( char *name, ncv_pixel r[256], ncv_pixel g[256], ncv_pixel b[256] );
+void	in_draw_2d_field 	( const unsigned char *data, size_t width, size_t height, size_t timestep );
+void	in_create_colormap	( const char *name, const ncv_pixel r[256], const ncv_pixel g[256], const ncv_pixel b[256] );
 char	*in_install_next_colormap( int do_widgets_flag );
 int	in_set_2d_size   	( size_t width, size_t height );
-void	in_set_sensitive	( int button_id, int state );
-Message	in_dialog		( char *message, char *ret_string, int want_cancel_button );
-void 	in_var_set_sensitive	( char *var_name, int sensitivity );
-void 	in_fill_dim_info	( NCDim *d, int please_flip );
-void	in_set_cur_dim_value	( char *name, char *string );
+void	in_set_sensitive	( Button button_id, int state );
+Message	in_dialog		( const char *message, char *ret_string, int want_cancel_button );
+void 	in_var_set_sensitive	( const char *var_name, int sensitivity );
+void 	in_fill_dim_info	( const NCDim *d, int please_flip );
+void	in_set_cur_dim_value	( const char *name, const char *string );
 void 	in_set_cursor_busy	( void );
 void 	in_set_cursor_normal	( void );
-int 	in_set_scan_dims	( Stringlist *dim_list, char *x_axis, char *y_axis, Stringlist **new_dim_list );
-void	in_change_min		( char *label );
+int 	in_set_scan_dims	( const Stringlist *dim_list, const char *x_axis, const char *y_axis, Stringlist **new_dim_list );
+void	in_change_min		( const char *label );
 void 	in_flush		( void );
-int	in_popup_XY_graph	( size_t n, int dimindex, double *xvals, double *yvals, char *x_axis_title,
-				char *y_axis_title, char *title, char *legend,
-				Stringlist *scannable_dims );
+int	in_popup_XY_graph	( size_t n, int dimindex, double *xvals, double *yvals, const char *x_axis_title,
+				const char *y_axis_title, const char *title, const char *legend,
+				const Stringlist *scannable_dims );
 void 	in_query_pointer_position( int *x, int *y );
 void	in_popup_2d_window	( void );
 void	in_popdown_2d_window	( void );
@@ -80,7 +80,7 @@ int	in_report_auto_overlay  ( void );
  * uses std::function so the seam has no toolkit type in it. */
 void 	in_timer_set            ( std::function<void()> callback, unsigned long delay_millisec );
 char    *in_install_prev_colormap( int do_widgets );
-char	*in_install_colormap_by_name( char *name, int do_widgets );
+char	*in_install_colormap_by_name( const char *name, int do_widgets );
 
 /******************************************************************************
  * Functions core calls directly (not via in_*) that are nonetheless UI
@@ -92,14 +92,14 @@ void	printer_options_init	( void );
 Message	x_range( float old_min, float old_max, float global_min, float global_max,
 		float *new_min, float *new_max, int *allvars );
 void	x_dataedit( char **text, int nx );
-int	x_seen_colormap_name( char *name );
+int	x_seen_colormap_name( const char *name );
 void	x_check_legal_colormap_loaded( void );
 void	x_create_colorbar( float user_min, float user_max, Transform transform );
 void	x_draw_colorbar( void );
-void	x_error( char *message );
+void	x_error( const char *message );
 void	x_force_set_invert_state( int state );
-void	x_init_dim_info( Stringlist *dim_list );
-void	x_set_var_sensitivity( char *varname, int sens );
+void	x_init_dim_info( const Stringlist *dim_list );
+void	x_set_var_sensitivity( const char *varname, int sens );
 void	unlock_plot( void );
 Stringlist *get_persistent_X_state( void );
 void	pix_to_rgb( ncv_pixel pix, int *r, int *g, int *b );

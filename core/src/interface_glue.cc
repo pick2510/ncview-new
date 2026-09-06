@@ -20,7 +20,7 @@
  * selected by the user, by pressing some sort of button.
  */
 void
-in_variable_selected( char *var_name )
+in_variable_selected( const char *var_name )
 {
 	NCVar	*var;
 
@@ -43,7 +43,7 @@ in_variable_selected( char *var_name )
  * exactly like a cycled one does.
  */
 void
-in_colormap_selected( char *name )
+in_colormap_selected( const char *name )
 {
 	in_install_colormap_by_name( name, true );
 	view_draw( true, false );
@@ -61,96 +61,96 @@ in_colormap_selected( char *name )
  * use Modifier::M1.
  */
 void
-in_button_pressed( int button_id, Modifier modifier )
+in_button_pressed( Button button_id, Modifier modifier )
 {
 	switch( button_id ) {
-		case BUTTON_RANGE:
+		case Button::Range:
 			do_range( modifier );
 			break;
 
-		case BUTTON_DIMSET:
+		case Button::Dimset:
 			do_dimset( modifier );
 			break;
 
-		case BUTTON_TRANSFORM:
+		case Button::Transform:
 			do_transform( modifier );
 			break;
 
-		case BUTTON_BLOWUP:
+		case Button::Blowup:
 			do_blowup( modifier );
 			break;
 
-		case BUTTON_QUIT:
+		case Button::Quit:
 			do_quit( modifier );
 			break;
 
-		case BUTTON_RESTART:
+		case Button::Restart:
 			do_restart( modifier );
 			break;
 
-		case BUTTON_REWIND:
+		case Button::Rewind:
 			do_rewind( modifier );
 			break;
 
-		case BUTTON_BACKWARDS:
+		case Button::Backwards:
 			do_backwards( modifier );
 			break;
 
-		case BUTTON_PAUSE:
+		case Button::Pause:
 			do_pause( modifier );
 			break;
 
-		case BUTTON_FORWARD:
+		case Button::Forward:
 			do_forward( modifier );
 			break;
 
-		case BUTTON_FASTFORWARD:
+		case Button::Fastforward:
 			do_fastforward( modifier );
 			break;
 
-		case BUTTON_COLORMAP_SELECT:
+		case Button::ColormapSelect:
 			do_colormap_sel( modifier );
 			break;
 
-		case BUTTON_INVERT_PHYSICAL:
+		case Button::InvertPhysical:
 			do_invert_physical( modifier );
 			break;
 
-		case BUTTON_INVERT_COLORMAP:
+		case Button::InvertColormap:
 			do_invert_colormap( modifier );
 			break;
 
-		case BUTTON_MINIMUM:
+		case Button::Minimum:
 			do_set_minimum( modifier );
 			break;
 
-		case BUTTON_MAXIMUM:
+		case Button::Maximum:
 			do_set_maximum( modifier );
 			break;
 
-		case BUTTON_BLOWUP_TYPE:
+		case Button::BlowupType:
 			do_blowup_type( modifier );
 			break;
 
-		case BUTTON_EDIT:
+		case Button::Edit:
 			do_data_edit( modifier );
 			break;
 
-		case BUTTON_INFO:
+		case Button::Info:
 			do_info( modifier );
 			break;
 
-		case BUTTON_PRINT:
+		case Button::Print:
 			do_print();
 			break;
 
-		case BUTTON_OPTIONS:
+		case Button::Options:
 			do_options( modifier );
 			break;
 
 		default:
 			fprintf( stderr, "in_button_pressed: unknown " );
-			fprintf( stderr, "button id: %d\n", button_id  );
+			fprintf( stderr, "button id: %d\n", static_cast<int>(button_id) );
 			exit( -1 );
 		}
 }
@@ -160,7 +160,7 @@ in_button_pressed( int button_id, Modifier modifier )
  * in_dialog (a real ncview_ui responsibility) rather than being one itself.
  */
 void
-in_error( char *message )
+in_error( const char *message )
 {
 	in_dialog( message, NULL, false );
 }

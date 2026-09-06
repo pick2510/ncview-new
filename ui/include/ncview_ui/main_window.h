@@ -132,13 +132,13 @@ public:
 	Fl_Double_Window *window() { return win_; }
 
 	// ---- ncview/interface.h contract -------------------------------
-	void setLabel( int label_id, const char *s );
-	void setSensitive( int button_id, int state );
+	void setLabel( Label label_id, const char *s );
+	void setSensitive( Button button_id, int state );
 	void indicateActiveVar( const char *var_name );
 	void indicateActiveDim( Dimension dimension, const char *dim_name );
-	void makeDimButtons( Stringlist *dim_list );
+	void makeDimButtons( const Stringlist *dim_list );
 	void clearDimButtons();
-	void fillDimInfo( NCDim *d, int please_flip );
+	void fillDimInfo( const NCDim *d, int please_flip );
 	void setCurDimValue( const char *name, const char *value );
 	void draw2DField( const unsigned char *data, size_t width, size_t height, size_t timestep );
 	void createColormap( const char *name, const unsigned char *r, const unsigned char *g, const unsigned char *b );
@@ -160,7 +160,7 @@ public:
 	void setOptionsDialog();
 	Message  rangeDialog( float old_min, float old_max, float global_min, float global_max,
 			float *new_min, float *new_max, int *allvars );
-	int  scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y_axis_name,
+	int  scanDimsDialog( const Stringlist *dim_list, const char *x_axis_name, const char *y_axis_name,
 			Stringlist **new_dim_list );
 	Message  printerOptionsDialog( PrintOptions *po );
 

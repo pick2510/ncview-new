@@ -143,7 +143,7 @@ int 	close_enough	   ( float data, float fill );
 void 	new_netcdf         ( NetCDFOptions **n );
 int	data_to_pixels     ( View *v );
 void	add_var_to_list    ( char *var_name, int file_id, char *filename, int nfiles );
-NCVar	*get_var	   ( char *var_name );
+NCVar	*get_var	   ( const char *var_name );
 void	init_min_max	   ( NCVar *var );
 void	clip_f		   ( float *val, float min, float max );
 void	clip_i		   ( int   *val, int   min, int   max );
@@ -175,7 +175,7 @@ unsigned char interp( int i, int range_i, unsigned char *mat, int n_entries );
 /******************************************************************************
  * in do_buttons.c
  */
-int 	which_button_pressed( void );
+Button	which_button_pressed( void );
 void 	do_range 	  ( Modifier modifier );
 void 	do_quit		  ( Modifier modifier );
 void 	do_data_edit	  ( Modifier modifier );
@@ -278,7 +278,7 @@ Stringlist *get_persistent_state();
  * src/interface/interface.c because core itself calls these (not just the
  * UI); see that file's header comment.
  */
-void	in_variable_selected	( char *var_name );
-void	in_colormap_selected	( char *name );
-void	in_button_pressed	( int button_id, Modifier modifier );
-void	in_error		( char *message );
+void	in_variable_selected	( const char *var_name );
+void	in_colormap_selected	( const char *name );
+void	in_button_pressed	( Button button_id, Modifier modifier );
+void	in_error		( const char *message );

@@ -36,10 +36,10 @@
 
 extern Options options;
 
-static int cur_button = BUTTON_PAUSE;
+static Button cur_button = Button::Pause;
 
 /*===========================================================================================*/
-	int
+	Button
 which_button_pressed( void )
 {
 	return( cur_button );
@@ -67,7 +67,7 @@ do_dimset( Modifier modifier )
 	void
 do_restart( Modifier modifier )
 {
-	cur_button = BUTTON_PAUSE;
+	cur_button = Button::Pause;
 
 	in_timer_clear();
 
@@ -86,7 +86,7 @@ do_rewind( Modifier modifier )
 	double	d_delta;
 	int	i_delta;
 
-	cur_button = BUTTON_REWIND;
+	cur_button = Button::Rewind;
 
 	delay_millisec = (long)(DELAY_DELTA * options.frame_delay) + DELAY_OFFSET;
  
@@ -138,14 +138,14 @@ do_backwards( Modifier modifier )
 	else
 		change_view( -1, FRAMES );
 
-	cur_button = BUTTON_PAUSE;
+	cur_button = Button::Pause;
 }
 
 /*===========================================================================================*/
 	void
 do_pause( Modifier modifier )
 {
-	cur_button = BUTTON_PAUSE;
+	cur_button = Button::Pause;
 	in_timer_clear();
 }
 
@@ -155,7 +155,7 @@ do_forward( Modifier modifier )
 {
 	size_t	size;
 
-	cur_button = BUTTON_PAUSE;
+	cur_button = Button::Pause;
 	in_timer_clear();
 
 	if( modifier == Modifier::M2 ) {
@@ -182,7 +182,7 @@ do_fastforward( Modifier modifier )
 	double	d_delta;
 	int	i_delta;
 
-	cur_button = BUTTON_FASTFORWARD;
+	cur_button = Button::Fastforward;
 
 	in_timer_clear();
 
