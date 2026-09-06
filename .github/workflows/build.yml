@@ -28,8 +28,29 @@ jobs:
           # against DejaVu Sans (FLTK's resolved default font wherever it's
           # installed). ui_smoke.sh does an exact-pixel compare, so the
           # runner needs the identical font available or every text label
-          # renders with different glyph shapes and every case "fails" on
-          # anti-aliasing differences alone, not a real regression.
+          # renders with different glyph shapes.
+
+      # ui_smoke's exact-pixel compare's actual first failure on this runner
+      # (diagnosed via the ui_smoke-failure artifact) wasn't the font itself
+      # -- it was this runner's fontconfig defaulting to RGB subpixel (LCD)
+      # antialiasing, producing colored fringing (e.g. a pixel golden-gray
+      # (72,72,72) came out amber (136,72,14) here) at every glyph and shape
+      # edge, versus the plain grayscale antialiasing the goldens were
+      # captured with. Force grayscale everywhere so glyph/edge rendering
+      # matches byte-for-byte instead of just approximately.
+      - name: Force grayscale font antialiasing (match ui_smoke goldens)
+        run: |
+          sudo tee /etc/fonts/local.conf > /dev/null <<'EOF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <match target="font">
+              <edit name="rgba" mode="assign"><const>none</const></edit>
+              <edit name="antialias" mode="assign"><bool>true</bool></edit>
+            </match>
+          </fontconfig>
+          EOF
+          fc-cache -f
 
       # -DFLTK_BACKEND_WAYLAND=OFF: this project always forces
       # FLTK_BACKEND=x11 at runtime (see README), and none of the
