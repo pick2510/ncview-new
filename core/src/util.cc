@@ -49,7 +49,7 @@ extern ncv_pixel *pixel_transform;
 extern FrameStore framestore;
 
 static void handle_time_dim( int fileid, NCVar *v, int dimid );
-static int  months_calc_tgran( int fileid, NCDim *d );
+static TimeGranularity  months_calc_tgran( int fileid, NCDim *d );
 static float util_mean( float *x, size_t n, float fill_value );
 static float util_mode( float *x, size_t n, float fill_value );
 static void contract_data( float *small_data, View *v, float fill_value );
@@ -2110,19 +2110,19 @@ handle_time_dim( int fileid, NCVar *v, int dimid )
 
 	if( udu_utistime( d->name, d->units ) ) {
 		d->timelike = 1;
-		d->time_std = TSTD_UDUNITS;
+		d->time_std = TimeStandard::Udunits;
 		d->tgran    = udu_calc_tgran( fileid, v, dimid );
 		}
 	else if( epic_istime0( fileid, v, d )) {
 		d->timelike = 1;
-		d->time_std = TSTD_EPIC_0;
+		d->time_std = TimeStandard::Epic0;
 		d->tgran    = epic_calc_tgran( fileid, d );
 		}
 	else if( (d->units != NULL) &&
 		 (strlen(d->units) >= 5) &&
 		 (strncasecmp( d->units, "month", 5 ) == 0 ))  {
 		d->timelike = 1;
-		d->time_std = TSTD_MONTHS;
+		d->time_std = TimeStandard::Months;
 		d->tgran    = months_calc_tgran( fileid, d );
 		}
 	else
@@ -2130,7 +2130,7 @@ handle_time_dim( int fileid, NCVar *v, int dimid )
 }
 
 /******************************************************************************/
-	static int
+	static TimeGranularity
 months_calc_tgran( int fileid, NCDim *d )
 {
 	char	temp_string[128];
@@ -2139,7 +2139,7 @@ months_calc_tgran( int fileid, NCDim *d )
 	double	temp_double, bounds_min, bounds_max;
 
 	if( d->size < 2 ) {
-		return( TGRAN_DAY );
+		return( TimeGranularity::Day );
 		}
 
 	type = netcdf_dim_value( fileid, d->name, 0L, &temp_double, temp_string, 0L, &has_bounds, &bounds_min, &bounds_max );
@@ -2149,7 +2149,7 @@ months_calc_tgran( int fileid, NCDim *d )
 		{
 		fprintf( stderr, "Note: can't calculate time granularity, unrecognized timevar type (%d)\n",
 			type );
-		return( TGRAN_DAY );
+		return( TimeGranularity::Day );
 		}
 
 	type = netcdf_dim_value( fileid, d->name, 1L, &temp_double, temp_string, 1L, &has_bounds, &bounds_min, &bounds_max );
@@ -2159,19 +2159,19 @@ months_calc_tgran( int fileid, NCDim *d )
 		{
 		fprintf( stderr, "Note: can't calculate time granularity, unrecognized timevar type (%d)\n",
 			type );
-		return( TGRAN_DAY );
+		return( TimeGranularity::Day );
 		}
 	
 	delta = v1 - v0;
 
 	if( delta > 11.5 ) 
-		return( TGRAN_YEAR );
+		return( TimeGranularity::Year );
 	if( delta > .95 ) 
-		return( TGRAN_MONTH );
+		return( TimeGranularity::Month );
 	if( delta > .03 ) 
-		return( TGRAN_DAY );
+		return( TimeGranularity::Day );
 
-	return( TGRAN_MIN );
+	return( TimeGranularity::Min );
 }
 
 /******************************************************************************/
@@ -2185,13 +2185,13 @@ void fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCD
 		exit( -1 );
 		}
 
-	if( dim->time_std == TSTD_UDUNITS ) 
+	if( dim->time_std == TimeStandard::Udunits ) 
 		udu_fmt_time( temp_string, temp_string_len, new_dimval, dim, include_granularity );
 
-	else if( dim->time_std == TSTD_EPIC_0 ) 
+	else if( dim->time_std == TimeStandard::Epic0 ) 
 		epic_fmt_time( temp_string, temp_string_len, new_dimval, dim );
 
-	else if( dim->time_std == TSTD_MONTHS ) {
+	else if( dim->time_std == TimeStandard::Months ) {
 		/* Format for months standard */
 		year  = (int)( (new_dimval-1.0) / 12.0 );
 		month = (int)( (new_dimval-1.0) - year*12 + .01 );
@@ -2205,7 +2205,7 @@ void fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCD
 
 	else
 		{
-		fprintf( stderr, "Internal error: uncaught value of tim_std=%d\n", dim->time_std );
+		fprintf( stderr, "Internal error: uncaught value of tim_std=%d\n", static_cast<int>(dim->time_std) );
 		exit( -1 );
 		}
 }

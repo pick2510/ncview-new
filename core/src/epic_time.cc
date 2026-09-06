@@ -66,7 +66,7 @@ epic_istime0( int fileid, NCVar *v, NCDim *d )
 
 
 /*************************************************************************/
-	int
+	TimeGranularity
 epic_calc_tgran( int fileid, NCDim *d )
 {
 	/* EPIC is strange because it can use TWO dimvars for time.
@@ -74,7 +74,7 @@ epic_calc_tgran( int fileid, NCDim *d )
 	 * just fake it by indicating day-like granularity.  Will
 	 * have to be fixed at some point.
 	 */
-	return( TGRAN_DAY );	
+	return( TimeGranularity::Day );	
 }
 
 /*************************************************************************/

@@ -222,19 +222,16 @@ enum class VarselStyle { List = 1, Menu = 2 };
 /*******************************************************************
  * Recognized standards by which the time axis may be described
  */
-#define TSTD_UDUNITS		1	/* Ex: units="days since 1900-01-01" */
-#define TSTD_EPIC_0		2	/* Ex: units="True Julian Day" w/att epic_code=624 */
-#define TSTD_MONTHS		3	/* Ex: units="months", Jan 1 AD = month 1 */
+enum class TimeStandard {
+	Udunits = 1,	/* Ex: units="days since 1900-01-01" */
+	Epic0   = 2,	/* Ex: units="True Julian Day" w/att epic_code=624 */
+	Months  = 3,	/* Ex: units="months", Jan 1 AD = month 1 */
+};
 
 /*******************************************************************
  * Kinds of time-like granularity.
  */
-#define TGRAN_SEC	1
-#define TGRAN_MIN	2
-#define TGRAN_HOUR	3
-#define TGRAN_DAY	4
-#define TGRAN_MONTH	5
-#define TGRAN_YEAR	6
+enum class TimeGranularity { Sec = 1, Min = 2, Hour = 3, Day = 4, Month = 5, Year = 6 };
 
 /*******************************************************************
  * Maximum number of scalar "coord" attributes we can have for
@@ -321,9 +318,9 @@ typedef struct {
 	size_t	size;
 	int	timelike;	/* 0 if NOT timelike, 1 if is.  If is, MUST */
 				/* have an identified time standard (below). */
-	int	time_std;	/* TSTD_UDUNITS, TSTD_EPIC_0, TSTD_MONTHS */
-	char	*calendar;	/* ONLY applicable if time_std==TSTD_UDUNITS; can be any CF-1.0 value. Defaults to "standard" */
-	int	tgran; 		/* time granularity; i.e., frequency of entries (daily, hourly, etc). Must be one of the TGRAN_* defined above */
+	TimeStandard	time_std;	/* TimeStandard::Udunits, Epic0, Months */
+	char	*calendar;	/* ONLY applicable if time_std==TimeStandard::Udunits; can be any CF-1.0 value. Defaults to "standard" */
+	TimeGranularity	tgran; 		/* time granularity; i.e., frequency of entries (daily, hourly, etc) */
 	int	global_id;	/* Used internally, goes from 1..total number of dims we know about */
 	int	is_lat, is_lon; /* Just a guess if these are lat/lon. Used to put on coastlines automatically */
 } NCDim;

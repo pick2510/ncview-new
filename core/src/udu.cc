@@ -124,10 +124,11 @@ int udu_utistime( char *dimname, char *unitstr )
 }
 
 /******************************************************************************/
-int udu_calc_tgran( int fileid, NCVar *v, int dimid )
+TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 {
 	ut_unit		*unit, *seconds;
-	int		ii, retval;
+	int		ii;
+	TimeGranularity	retval;
 	int		verbose, has_bounds;
 	double		tval0_user, tval0_sec, tval1_user, tval1_sec, delta_sec, bound_min, bound_max;
 	char		cval0[1024], cval1[1024];
@@ -140,12 +141,14 @@ int udu_calc_tgran( int fileid, NCVar *v, int dimid )
 
 	/* Not enough data to analyze */
 	if( d->size < 3 )
-		return(TGRAN_SEC);
+		return(TimeGranularity::Sec);
 
 	verbose = 0;
 
 	if( ! valid_udunits_pkg )
-		return( 0 );
+		/* Preserved verbatim: upstream returned a bare 0 here, not
+		 * one of the TGRAN_* values. */
+		return( static_cast<TimeGranularity>(0) );
 
 	if( (unit = ut_parse( unitsys, d->units, UT_ASCII )) == NULL ) {
 		fprintf( stderr, "internal error: udu_calc_tgran with invalid unit string: %s\n",
@@ -161,11 +164,11 @@ int udu_calc_tgran( int fileid, NCVar *v, int dimid )
 	/* Get converter to convert from "units" to "seconds" */
 	if( ut_are_convertible( unit, seconds ) == 0 ) {
 		/* Units are not convertible */
-		return( TGRAN_SEC );
+		return( TimeGranularity::Sec );
 		}
 	if( (convert_units_to_sec = ut_get_converter( unit, seconds )) == NULL ) {
 		/* This shouldn't happen */
-		return( TGRAN_SEC );
+		return( TimeGranularity::Sec );
 		}
 
 	/* Get a delta time to analyze */
@@ -189,33 +192,33 @@ int udu_calc_tgran( int fileid, NCVar *v, int dimid )
 	if( delta_sec < 57. ) {
 		if(verbose)
 			printf("data is TGRAN_SEC\n");
-		retval = TGRAN_SEC;
+		retval = TimeGranularity::Sec;
 		}
 	else if( delta_sec < 3590. ) {
 		if(verbose)
 			printf("data is TGRAN_MIN\n");
-		retval = TGRAN_MIN;
+		retval = TimeGranularity::Min;
 		}
 	else if( delta_sec < 86300. ) {
 		if(verbose)
 			printf("data is TGRAN_HOUR\n");
-		retval = TGRAN_HOUR;
+		retval = TimeGranularity::Hour;
 		}
 	else if( delta_sec < 86395.*28. ) {
 		if(verbose)
 			printf("data is TGRAN_DAY\n");
-		retval = TGRAN_DAY;
+		retval = TimeGranularity::Day;
 		}
 	else if(  delta_sec < 86395.*365. ) {
 		if(verbose)
 			printf("data is TGRAN_MONTH\n");
-		retval = TGRAN_MONTH;
+		retval = TimeGranularity::Month;
 		}
 	else
 		{
 		if(verbose)
 			printf("data is TGRAN_YEAR\n");
-		retval = TGRAN_YEAR;
+		retval = TimeGranularity::Year;
 		}
 
 	return( retval );
@@ -268,14 +271,14 @@ void udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval,
 	if( include_granularity ) {
 		switch( dim->tgran ) {
 			
-			case TGRAN_YEAR:
-			case TGRAN_MONTH:
-			case TGRAN_DAY:
+			case TimeGranularity::Year:
+			case TimeGranularity::Month:
+			case TimeGranularity::Day:
 				snprintf( temp_string, temp_string_len-1, "%1d-%s-%04d", day, months[month-1], year );
 				break;
 
-			case TGRAN_HOUR:
-			case TGRAN_MIN:
+			case TimeGranularity::Hour:
+			case TimeGranularity::Min:
 				snprintf( temp_string, temp_string_len-1, "%1d-%s-%04d %02d:%02d", day, 
 						months[month-1], year, hour, minute );
 				break;
@@ -336,9 +339,11 @@ int udu_utistime( char *dimname, char *units )
 	return( 0 );
 }
 
-int udu_calc_tgran( int fileid, NCVar *v, int dimid )
+TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 {
-	return( 0 );
+	/* No-UDUNITS2 build stub, preserved verbatim: upstream returned a
+	 * bare 0 here, not one of the TGRAN_* values. */
+	return( static_cast<TimeGranularity>(0) );
 }
 
 void udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity )

@@ -249,7 +249,7 @@ void	overlay_init		( void );
  */
 void 	udu_utinit( char *path );
 int 	udu_utistime( char *dimname, char *units );
-int 	udu_calc_tgran( int fileid, NCVar *v, int dimid );
+TimeGranularity 	udu_calc_tgran( int fileid, NCVar *v, int dimid );
 void 	udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity );
 
 /******************************************************************************
@@ -257,7 +257,7 @@ void 	udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval
  */
 void epic_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim );
 int  epic_istime0( int fileid, NCVar *v, NCDim *d );
-int  epic_calc_tgran( int fileid, NCDim *d );
+TimeGranularity  epic_calc_tgran( int fileid, NCDim *d );
 
 /******************************************************************************
  * in do_print.c
