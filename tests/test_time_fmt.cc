@@ -190,37 +190,40 @@ TEST_CASE("fmt_time: TimeStandard::Epic0 (True Julian Day) formats a known epoch
     CHECK(run_fmt_time(dim, 2440588 + 10000) == expected);
 }
 
-TEST_CASE("udu_calc_tgran: always reports TimeGranularity::Sec for CF-style \"since\" units") {
-    // Surprising, but genuine, current behavior -- not a bug introduced by
-    // this test or by the port. udu_calc_tgran() (core/src/udu.cc) computes
-    // its granularity classification via ut_are_convertible(unit, seconds)
-    // + ut_get_converter()/cv_convert_double(); confirmed by hand against
-    // this project's vendored UDUNITS-2 (third_party/udunits2, pinned
-    // v2.2.28) that a unit WITH a reference origin -- e.g. any CF-
-    // convention "<units> since <reference-date>" string, which is how
-    // essentially every real netCDF time axis is declared -- is reported
-    // NOT convertible to plain "seconds" by ut_are_convertible() (a bare
-    // "days", with no "since", correctly reports convertible=1). So the
-    // `if (ut_are_convertible(unit, seconds) == 0) return TimeGranularity::Sec;` guard
-    // a few lines into udu_calc_tgran() fires for every realistic input,
-    // regardless of the actual timestep spacing -- this function currently
-    // can only ever return TimeGranularity::Sec or TimeGranularity::Sec-via-the-"<3 samples"
-    // early-out, never MIN/HOUR/DAY/MONTH/YEAR, for ordinary CF data.
+TEST_CASE("udu_calc_tgran: classifies CF-style \"since\" units by actual timestep spacing") {
+    // udu_calc_tgran() (core/src/udu.cc) computes its granularity
+    // classification via ut_are_convertible(unit, seconds) +
+    // ut_get_converter()/cv_convert_double(). This used to be broken for
+    // every realistic input: confirmed by hand against this project's
+    // vendored UDUNITS-2 (third_party/udunits2, pinned v2.2.28) that a unit
+    // WITH a reference origin -- e.g. any CF-convention "<units> since
+    // <reference-date>" string, which is how essentially every real netCDF
+    // time axis is declared -- is reported NOT convertible to plain,
+    // unreferenced "seconds" by ut_are_convertible() (a bare "days", with
+    // no "since", correctly reports convertible=1). UDUNITS-2 treats a
+    // "since"-qualified unit as "encoded time", a different kind from a
+    // plain interval unit, and only considers two encoded-time units (or
+    // two plain interval units) convertible to each other -- not one of
+    // each. So the original `if (ut_are_convertible(unit, seconds) == 0)
+    // return TimeGranularity::Sec;` guard fired for every realistic input,
+    // regardless of the actual timestep spacing.
     //
-    // Per modernization.md's strict-parity rule this is logged here, not
-    // fixed: whatever currently reads a TGRAN_* value downstream (e.g.
-    // udu_fmt_time()'s granularity-dependent format, or view.cc's callers)
-    // must keep behaving exactly as it does today, bug and all, through the
-    // core modernization. A real fix is separate follow-up work.
+    // Fixed by falling back to comparing against a "seconds since <epoch>"
+    // unit (any epoch works -- the two converted values are only ever
+    // subtracted below, so a constant offset cancels out) when the bare
+    // "seconds" comparison fails. Confirmed against the vendored UDUNITS-2
+    // that converting an encoded-time unit to a *differently-referenced*
+    // encoded-time unit works correctly (e.g. "days since 2000-01-01" ->
+    // "seconds since 1970-01-01" scales by exactly 86400 per day).
     ensure_ncview_misc_initialized();
 
     TgranFixture daily("temp_daily", 5, 1.0);       // 1-day spacing
     TgranFixture monthly("temp_monthly", 5, 30.0);  // 30-day spacing
     TgranFixture yearly("temp_yearly", 5, 365.0);   // 365-day spacing
 
-    CHECK(udu_calc_tgran(daily.fileid, daily.var, 0) == TimeGranularity::Sec);
-    CHECK(udu_calc_tgran(monthly.fileid, monthly.var, 0) == TimeGranularity::Sec);
-    CHECK(udu_calc_tgran(yearly.fileid, yearly.var, 0) == TimeGranularity::Sec);
+    CHECK(udu_calc_tgran(daily.fileid, daily.var, 0) == TimeGranularity::Day);
+    CHECK(udu_calc_tgran(monthly.fileid, monthly.var, 0) == TimeGranularity::Month);
+    CHECK(udu_calc_tgran(yearly.fileid, yearly.var, 0) == TimeGranularity::Year);
 }
 
 TEST_CASE("fmt_time: a non-timelike dimension is a fatal internal error") {

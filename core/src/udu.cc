@@ -121,7 +121,7 @@ int udu_utistime( char *dimname, char *unitstr )
 /******************************************************************************/
 TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 {
-	ut_unit		*unit, *seconds;
+	ut_unit		*unit, *seconds, *seconds_since_epoch = NULL;
 	int		ii;
 	TimeGranularity	retval;
 	int		verbose, has_bounds;
@@ -154,11 +154,28 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 		fprintf( stderr, "internal error: udu_calc_tgran can't parse seconds unit string!\n" );
 		exit( -1 );
 		}
-	
-	/* Get converter to convert from "units" to "seconds" */
+
+	/* Get converter to convert from "units" to "seconds". A bare interval
+	 * unit ("days") is directly convertible to bare "seconds", but a
+	 * CF-convention "units since <reference-date>" unit -- what every real
+	 * netCDF time axis actually uses -- is UDUNITS-2 "encoded time", which
+	 * ut_are_convertible() reports as NOT convertible to a plain,
+	 * unreferenced "seconds". Encoded-time units convert fine to *another*
+	 * encoded-time unit, though (the reference date doesn't need to match;
+	 * it only shifts the offset, and we only ever look at a difference
+	 * between two converted values below), so fall back to comparing
+	 * against a "seconds since <epoch>" unit before giving up.
+	 */
 	if( ut_are_convertible( unit, seconds ) == 0 ) {
-		/* Units are not convertible */
-		return( TimeGranularity::Sec );
+		if( (seconds_since_epoch = ut_parse( unitsys, "seconds since 1970-01-01 00:00:00", UT_ASCII )) == NULL ) {
+			fprintf( stderr, "internal error: udu_calc_tgran can't parse epoch seconds unit string!\n" );
+			exit( -1 );
+			}
+		if( ut_are_convertible( unit, seconds_since_epoch ) == 0 ) {
+			/* Units are genuinely not convertible to any notion of seconds */
+			return( TimeGranularity::Sec );
+			}
+		seconds = seconds_since_epoch;
 		}
 	if( (convert_units_to_sec = ut_get_converter( unit, seconds )) == NULL ) {
 		/* This shouldn't happen */
