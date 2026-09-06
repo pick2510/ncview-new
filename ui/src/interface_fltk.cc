@@ -182,7 +182,7 @@ void in_indicate_active_var( char *var_name )
 	instance()->indicateActiveVar( var_name );
 }
 
-void in_indicate_active_dim( int dimension, char *dim_name )
+void in_indicate_active_dim( Dimension dimension, char *dim_name )
 {
 	instance()->indicateActiveDim( dimension, dim_name );
 }

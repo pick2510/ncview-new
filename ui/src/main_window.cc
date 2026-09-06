@@ -839,7 +839,7 @@ void MainWindow::setCurDimValue( const char *name, const char *value )
 	}
 }
 
-void MainWindow::indicateActiveDim( int /*dimension*/, const char *dim_name )
+void MainWindow::indicateActiveDim( Dimension /*dimension*/, const char *dim_name )
 {
 	for( auto &row : dim_rows_ )
 		row.name_box->labelfont( row.name == dim_name ? FL_HELVETICA_BOLD : FL_HELVETICA );

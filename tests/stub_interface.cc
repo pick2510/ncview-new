@@ -13,7 +13,7 @@
 void in_display_stuff(char*, char*) {}
 void in_set_edit_place(size_t, int, int, int, int) {}
 void in_indicate_active_var(char*) {}
-void in_indicate_active_dim(int, char*) {}
+void in_indicate_active_dim(Dimension, char*) {}
 void in_parse_args(int*, char**) {}
 void in_initialize() {}
 void in_set_label(int, char*) {}

@@ -49,7 +49,7 @@
 void 	in_display_stuff	( char *s, char *var_name );
 void 	in_set_edit_place	( size_t index, int x, int y, int nx, int ny );
 void 	in_indicate_active_var  ( char *var_name );
-void 	in_indicate_active_dim  ( int dimension, char *dim_name );
+void 	in_indicate_active_dim  ( Dimension dimension, char *dim_name );
 void 	in_parse_args		( int *p_argc, char **argv );
 void 	in_initialize		( void );
 void 	in_set_label		( int label_id, char *string );

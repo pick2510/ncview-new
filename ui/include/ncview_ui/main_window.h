@@ -135,7 +135,7 @@ public:
 	void setLabel( int label_id, const char *s );
 	void setSensitive( int button_id, int state );
 	void indicateActiveVar( const char *var_name );
-	void indicateActiveDim( int dimension, const char *dim_name );
+	void indicateActiveDim( Dimension dimension, const char *dim_name );
 	void makeDimButtons( Stringlist *dim_list );
 	void clearDimButtons();
 	void fillDimInfo( NCDim *d, int please_flip );

@@ -156,10 +156,7 @@ constexpr int MAX_DISPLAYED_STRING_LENGTH = 250;
 
 /*****************************************************************************/
 /* What dimension button sets we have */
-#define DIMENSION_X	1
-#define DIMENSION_Y	2
-#define DIMENSION_SCAN	3
-#define DIMENSION_NONE	4
+enum class Dimension { X = 1, Y = 2, Scan = 3, None = 4 };
 
 /*****************************************************************************/
 /* Button-press modification indicators */

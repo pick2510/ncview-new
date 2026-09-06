@@ -65,7 +65,7 @@ static NCDim *plot_XY_dim[MAX_PLOT_XY];
 static void 		determine_scan_axes( View *view, NCVar *var, View *old_view );
 static void 		initial_determine_scan_axes( View *view, NCVar *var );
 static void 		fill_view_data( View *v );
-static void 		view_set_axis( View *local_view, int dimension, char *new_dim_name );
+static void 		view_set_axis( View *local_view, Dimension dimension, char *new_dim_name );
 static void 		alloc_view_storage( View *view );
 static void 		init_view( View **view, NCVar *var );
 static void 		set_buttons( int to_state );
@@ -1373,13 +1373,13 @@ view_set_scan_dims( void )
 	in_set_cursor_busy();
 
 	if( strcmp( cur_y_name, new_dim_list->string ) != 0 ) {
-		view_set_axis( view, DIMENSION_Y, new_dim_list->string );
+		view_set_axis( view, Dimension::Y, new_dim_list->string );
 		changed_something = true;
 		}
 
 	new_dim_list = new_dim_list->next;
 	if( strcmp( cur_x_name, new_dim_list->string ) != 0 ) {
-		view_set_axis( view, DIMENSION_X, new_dim_list->string );
+		view_set_axis( view, Dimension::X, new_dim_list->string );
 		changed_something = true;
 		}
 
@@ -1389,7 +1389,7 @@ view_set_scan_dims( void )
 		 * dimension ever comes up in the pop-up box to be able
 		 * to set it that way.  Use the previously saved value.
 		 */
-		view_set_axis( view, DIMENSION_SCAN, scan_dim );
+		view_set_axis( view, Dimension::Scan, scan_dim );
 		flip_if_inverted( view );
 		redraw_dimension_info();
 		view->data_status = ViewDataStatus::Invalid;
@@ -1404,7 +1404,7 @@ view_set_scan_dims( void )
 
 /**************************************************************************************/
 	static void
-view_set_axis( View *local_view, int dimension, char *new_dim_name )
+view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 {
 	int	new_id, old_id;
 	NCVar	*v;
@@ -1414,7 +1414,7 @@ view_set_axis( View *local_view, int dimension, char *new_dim_name )
 	old_id = -1;
 
 	switch( dimension ) {
-		case DIMENSION_X:
+		case Dimension::X:
 			new_id = fi_dim_name_to_id( v->first_file->id, 
 						v->name, new_dim_name );
 			if( options.debug ) 
@@ -1425,7 +1425,7 @@ view_set_axis( View *local_view, int dimension, char *new_dim_name )
 			*(local_view->var_place+new_id) = 0L;
 			break;
 
-		case DIMENSION_Y:
+		case Dimension::Y:
 			new_id = fi_dim_name_to_id( v->first_file->id, 
 						v->name, new_dim_name );
 			if( options.debug ) 
@@ -1436,7 +1436,7 @@ view_set_axis( View *local_view, int dimension, char *new_dim_name )
 			*(local_view->var_place+new_id) = 0L;
 			break;
 
-		case DIMENSION_SCAN:
+		case Dimension::Scan:
 			if( strlen( new_dim_name ) == 0 ) {
 				set_buttons( BUTTONS_TIMEAXIS_OFF );
 				local_view->scan_axis_id = -1;
@@ -1452,7 +1452,7 @@ view_set_axis( View *local_view, int dimension, char *new_dim_name )
 						new_dim_name );
 			break;
 
-		case DIMENSION_NONE:
+		case Dimension::None:
 			new_id = fi_dim_name_to_id( v->first_file->id, 
 						v->name, new_dim_name );
 			if( options.debug ) 
@@ -2101,21 +2101,21 @@ label_dimensions( View *view )
 	if( view->x_axis_id != -1 ) {
 		dim      = *(view->variable->dim+view->x_axis_id);
 		dim_name = dim->name;
-		in_indicate_active_dim( DIMENSION_X, dim_name );
+		in_indicate_active_dim( Dimension::X, dim_name );
 		in_set_cur_dim_value  ( dim_name, "-X-" );
 		}
 	
 	if( view->y_axis_id != -1 ) {
 		dim      = *(view->variable->dim+view->y_axis_id);
 		dim_name = dim->name;
-		in_indicate_active_dim( DIMENSION_Y, dim_name );
+		in_indicate_active_dim( Dimension::Y, dim_name );
 		in_set_cur_dim_value  ( dim_name, "-Y-" );
 		}
 
 	if( view->scan_axis_id != -1 ) {
 		dim      = *(view->variable->dim+view->scan_axis_id);
 		dim_name = dim->name;
-		in_indicate_active_dim( DIMENSION_SCAN, dim_name );
+		in_indicate_active_dim( Dimension::Scan, dim_name );
 		}
 }
 
