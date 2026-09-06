@@ -30,6 +30,16 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(NCVIEW_BUILD_TESTS "Build ncview_core headless tests" ON)
 
+# modernization.md Phase 0c: an end-to-end screenshot regression harness
+# (tests/ui_smoke.sh) that drives the real ncview binary under Xvfb via the
+# NCVIEW_TEST_AUTOSELECT/NCVIEW_TEST_DIALOG/NCVIEW_TEST_BUTTON hooks already
+# in ui/src/interface_fltk.cc and compares screenshots pixel-for-pixel
+# against tests/ui_smoke/golden/*.png. Off by default: it needs Xvfb +
+# ImageMagick + ncgen on PATH (Linux/X11 only -- this project always forces
+# FLTK_BACKEND=x11, see README), none of which every dev machine or CI
+# platform has.
+option(NCVIEW_BUILD_UI_TESTS "Build the Xvfb screenshot regression test (needs Xvfb, ImageMagick, ncgen)" OFF)
+
 # HPC clusters routinely lack (or have mismatched-version) shared libraries
 # for anything outside their own module system -- this pulls netCDF/HDF5 and
 # the C++ runtime in statically so the binary doesn't touch either at

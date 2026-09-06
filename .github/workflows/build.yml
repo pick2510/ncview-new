@@ -22,7 +22,8 @@ jobs:
             libnetcdf-dev libexpat1-dev \
             libx11-dev libxext-dev libxft-dev libxinerama-dev \
             libxcursor-dev libxrender-dev libxfixes-dev \
-            flex bison texinfo patchelf
+            flex bison texinfo patchelf \
+            xvfb imagemagick netcdf-bin
 
       # -DFLTK_BACKEND_WAYLAND=OFF: this project always forces
       # FLTK_BACKEND=x11 at runtime (see README), and none of the
@@ -36,10 +37,15 @@ jobs:
       # part of this runner image's default install (only the loader
       # library is) -- skip it rather than pull in a GL dev package for
       # code that's never linked into ncview anyway.
+      # -DNCVIEW_BUILD_UI_TESTS=ON: this job has Xvfb/ImageMagick/ncgen
+      # installed above, so it's the one place tests/ui_smoke.sh (the
+      # Xvfb screenshot regression harness, modernization.md Phase 0c) can
+      # actually run -- macOS/Windows jobs don't get this flag.
       - name: Configure
         run: >
           cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
           -DFLTK_BACKEND_WAYLAND=OFF -DFLTK_BUILD_GL=OFF
+          -DNCVIEW_BUILD_UI_TESTS=ON
 
       - name: Build
         run: cmake --build build -j"$(nproc)"

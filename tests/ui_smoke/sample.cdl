@@ -1,0 +1,50 @@
+// Small synthetic dataset for the Xvfb screenshot harness (tests/ui_smoke.sh).
+// Not committed as a binary .nc -- generated at harness run time via
+// `ncgen -o sample.nc sample.cdl`, same reasoning as
+// tests/test_file_netcdf.cc's make_sample_file(): a real, deterministic
+// data source rather than a checked-in binary blob.
+netcdf sample {
+dimensions:
+	time = 2 ;
+	lat = 8 ;
+	lon = 8 ;
+variables:
+	double time(time) ;
+		time:units = "days since 2000-01-01" ;
+	float lat(lat) ;
+		lat:units = "degrees_north" ;
+	float lon(lon) ;
+		lon:units = "degrees_east" ;
+	float temp(time, lat, lon) ;
+		temp:units = "K" ;
+		temp:long_name = "synthetic temperature" ;
+		temp:_FillValue = -999.f ;
+
+data:
+	time = 0, 1 ;
+	lat = -70, -50, -30, -10, 10, 30, 50, 70 ;
+	lon = -157.5, -112.5, -67.5, -22.5, 22.5, 67.5, 112.5, 157.5 ;
+
+	// A real (non-constant) sin(lat)*cos(lon) pattern per timestep, scaled
+	// into a plausible temperature range, so the rendered color-contour has
+	// visible structure rather than a flat fill. One corner cell is the
+	// fill value, so the "missing data" rendering path is exercised too.
+	temp =
+	  -999,  289.7,  278.4,  267.7,  267.7,  278.4,  289.7,  295.0,
+	   295.0,  289.7,  278.4,  267.7,  267.7,  278.4,  289.7,  295.0,
+	   288.0,  283.1,  273.9,  265.2,  265.2,  273.9,  283.1,  287.9,
+	   279.6,  275.4,  267.9,  260.9,  260.9,  267.9,  275.4,  279.6,
+	   279.6,  275.4,  267.9,  260.9,  260.9,  267.9,  275.4,  279.6,
+	   288.0,  283.1,  273.9,  265.2,  265.2,  273.9,  283.1,  287.9,
+	   295.0,  289.7,  278.4,  267.7,  267.7,  278.4,  289.7,  295.0,
+	   295.0,  289.7,  278.4,  267.7,  267.7,  278.4,  289.7,  295.0,
+
+	   295.0,  289.7,  278.4,  267.7,  267.7,  278.4,  289.7,  295.0,
+	   295.0,  289.7,  278.4,  267.7,  267.7,  278.4,  289.7,  295.0,
+	   288.0,  283.1,  273.9,  265.2,  265.2,  273.9,  283.1,  287.9,
+	   279.6,  275.4,  267.9,  260.9,  260.9,  267.9,  275.4,  279.6,
+	   279.6,  275.4,  267.9,  260.9,  260.9,  267.9,  275.4,  279.6,
+	   288.0,  283.1,  273.9,  265.2,  265.2,  273.9,  283.1,  287.9,
+	   295.0,  289.7,  278.4,  267.7,  267.7,  278.4,  289.7,  295.0,
+	   295.0,  289.7,  278.4,  267.7,  267.7,  278.4,  289.7,  -999 ;
+}

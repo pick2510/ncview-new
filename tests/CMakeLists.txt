@@ -61,3 +61,14 @@ add_test(NAME ncview_core_tests COMMAND ncview_core_tests)
 # timeout instead of stalling the whole workflow until the job-level limit
 # kills it with no indication of which test or why.
 set_tests_properties(ncview_core_tests PROPERTIES TIMEOUT 60)
+
+# modernization.md Phase 0c: end-to-end Xvfb screenshot regression test,
+# driving the real `ncview` binary (needs ncview_ui, so only buildable once
+# that target exists -- see the top-level CMakeLists.txt's add_subdirectory
+# order: core, ui, app, then tests). Off by default (NCVIEW_BUILD_UI_TESTS);
+# see that option's own doc string in the top-level CMakeLists.txt for why.
+if(NCVIEW_BUILD_UI_TESTS)
+    add_test(NAME ncview_ui_smoke
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/ui_smoke.sh $<TARGET_FILE:ncview>)
+    set_tests_properties(ncview_ui_smoke PROPERTIES TIMEOUT 120)
+endif()
