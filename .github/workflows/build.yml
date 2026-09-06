@@ -59,6 +59,17 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      # Debug aid while diagnosing ui_smoke's first real run on this runner
+      # image -- ui_smoke.sh leaves its scratch dir (actual screenshots,
+      # logs) behind under /tmp on failure instead of cleaning it up.
+      - name: Upload ui_smoke failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui_smoke-failure
+          path: /tmp/tmp.*
+          if-no-files-found: ignore
+
       - name: Package
         run: cmake --build build --target package -j"$(nproc)"
 
