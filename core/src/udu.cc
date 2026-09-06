@@ -127,7 +127,6 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 	int		verbose, has_bounds;
 	double		tval0_user, tval0_sec, tval1_user, tval1_sec, delta_sec, bound_min, bound_max;
 	char		cval0[1024], cval1[1024];
-	nc_type 	rettype;
 	size_t		cursor_place[MAX_NC_DIMS];
 	cv_converter	*convert_units_to_sec;
 
@@ -169,8 +168,8 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 	/* Get a delta time to analyze */
 	for( ii=0L; ii<v->n_dims; ii++ )
 		cursor_place[ii] = (int)((v->size[ii])/2.0);
-	rettype = fi_dim_value( v, dimid, 1L, &tval0_user, cval0, &has_bounds, &bound_min, &bound_max, cursor_place );
-	rettype = fi_dim_value( v, dimid, 2L, &tval1_user, cval1, &has_bounds, &bound_min, &bound_max, cursor_place );
+	fi_dim_value( v, dimid, 1L, &tval0_user, cval0, &has_bounds, &bound_min, &bound_max, cursor_place );
+	fi_dim_value( v, dimid, 2L, &tval1_user, cval1, &has_bounds, &bound_min, &bound_max, cursor_place );
 
 	/* Convert time vals from user units to seconds */
 	tval0_sec = cv_convert_double( convert_units_to_sec, tval0_user );

@@ -146,7 +146,6 @@ void	add_var_to_list    ( char *var_name, int file_id, char *filename, int nfile
 NCVar	*get_var	   ( const char *var_name );
 void	init_min_max	   ( NCVar *var );
 void	clip_f		   ( float *val, float min, float max );
-void	clip_i		   ( int   *val, int   min, int   max );
 void 	fill_dim_structs   ( NCVar *v );
 void 	expand_data	   ( float *big_data, View *v, size_t array_size );
 void 	check_ranges       ( NCVar *var );

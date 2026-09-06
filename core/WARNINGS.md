@@ -1,4 +1,4 @@
-# `core/` warning baseline (modernization.md Phase 0a, updated after Phase 7)
+# `core/` warning baseline (modernization.md Phase 0a, updated after the post-Phase-7 dead code cleanup)
 
 Captured with `-Wall -Wextra -Wno-unused-parameter` (GCC 14, Debian trixie),
 `RelWithDebInfo`, from a clean build.
@@ -39,9 +39,15 @@ Since Phase 7's own scope statement (`modernization.md`) was explicit that
 this is a seam-and-const-correctness pass, not a whole-codebase sweep,
 clearing the remaining categories is left as further follow-up work (not
 labeled as a numbered phase in `modernization.md`, since the plan doesn't
-define one) rather than done here under the Phase 7 banner. `-Werror` is
-**not** enabled for `ncview_core`: 237 warnings remain, concentrated in
-files this phase deliberately did not touch.
+define one) rather than done here under the Phase 7 banner.
+
+A separate, small dead-code cleanup pass after Phase 7 (see
+`modernization.md`'s "Dead code cleanup" section) cleared the three
+remaining categories that actually were dead code rather than type/format
+mismatches: `-Wunused-variable` (13), `-Wunused-but-set-variable` (9), and
+`-Waddress` (1). `-Werror` is still **not** enabled for `ncview_core`: 214
+warnings remain, all `-Wwrite-strings`/`-Wsign-compare`/etc. in files
+neither Phase 7 nor the cleanup pass touched.
 
 Regenerate with:
 ```
@@ -56,44 +62,28 @@ cmake --build build -j 2>&1 | grep -E 'warning:' \
 |---|---:|---|---|
 | `-Wwrite-strings` | 136 | calcalcs.cc, file_netcdf.cc, ncview.cc, overlay.cc, util.cc, view.cc | A dedicated string-literal-table sweep (`char *foo[]` -> `const char *foo[]`/`std::string`) -- not part of Phase 7's seam scope |
 | `-Wsign-compare` | 71 | do_print.cc, file_netcdf.cc, overlay.cc, util.cc, view.cc | A dedicated loop-index retyping sweep (`int`/`long` -> `size_t` to match the arrays being walked) -- not part of Phase 7's seam scope |
-| `-Wunused-variable` | 13 | file_netcdf.cc, util.cc | Mechanical -- delete outright, no behavior to preserve |
-| `-Wunused-but-set-variable` | 9 | do_print.cc, file_netcdf.cc, udu.cc, util.cc, view.cc | Verify each is genuinely dead (several are netCDF status codes never checked, matching upstream) before deleting |
 | `-Wstringop-truncation` | 3 | view.cc | Alongside a future `char *` -> `std::string` sweep of the fixed local buffers these `strncpy`/`strncat` calls format into |
-| `-Wparentheses` | 1 | file_netcdf.cc:1126 | `if (x = f())` assignment-as-condition, needs a read to confirm intent |
+| `-Wparentheses` | 1 | file_netcdf.cc:1124 | `if (x = f())` assignment-as-condition, needs a read to confirm intent |
 | `-Wempty-body` | 1 | view.cc:582 | Trivial brace fix |
-| `-Waddress` | 1 | file_netcdf.cc:488 | `&groupname` where `groupname` is an array, always true; delete the dead check after confirming it guards nothing else |
 | `-Wformat-truncation=` | 1 | file_netcdf.cc:491 | Bounded `snprintf` into a fixed buffer, same family as the `-Wstringop-truncation` line above |
 | `-Wformat=` | 1 | view.cc:707 | `printf("%d", view->data_status)` where `data_status` is `ViewDataStatus`, an `enum class` |
 
 ## `-Wwrite-strings` (136) — string literal assigned/passed as `char*`
 
 core/src/calcalcs.cc:783,784,785,786,787,788,789,790,791,792,793,794,795,796,797,798,799,800,801,802,803,804,805,806,807,808,809,810,811,812,813,814,815,816 (two conversions per line: 68 total)
-core/src/file_netcdf.cc:946,1179,1426,1428,1430,1432,1434,1686,1693,1701,1834,1836,1838,1840,1842,1844,1846,1914,1928,1982,1996,2028
-core/src/ncview.cc:454,525,526,527,531,532,533,534,535,536,537,538,539,540,544,545,546,547,548,549,550
+core/src/file_netcdf.cc:946,1177,1424,1426,1428,1430,1432,1684,1691,1699,1832,1834,1836,1838,1840,1842,1844,1912,1926,1980,1994,2026
+core/src/ncview.cc:456,527,528,529,533,534,535,536,537,538,539,540,541,542,546,547,548,549,550,551,552
 core/src/overlay.cc:37,38,39,40,41,307
-core/src/util.cc:68 (six conversions),69 (six conversions),1470,1471,1472,1473
+core/src/util.cc:68 (six conversions),69 (six conversions),1468,1469,1470,1471
 core/src/view.cc:381,392
 
 ## `-Wsign-compare` (71) — `size_t` vs. `int`/`long` comparison
 
 core/src/do_print.cc:180,181
-core/src/file_netcdf.cc:610,619,1276,1524,1536,1548,1560,1916
+core/src/file_netcdf.cc:610,619,1274,1522,1534,1546,1558,1914
 core/src/overlay.cc:158,169,207,236,282,329,499,506,583,594,600 (two per line)
-core/src/util.cc:201,287,294,650,1317,1359,1450,1464,1522,1523,1528,1530,1589 (two per line),1596,1597,1605,1625,1626,1673,1674,1715,1726,1727,1740,1746,1783,1798,1813,1828,1907,1908,2111,2114,2200,2253,2317
+core/src/util.cc:201,287,294,650,1315,1357,1448,1462,1520,1521,1526,1528,1587 (two per line),1594,1595,1603,1623,1624,1671,1672,1713,1724,1725,1738,1744,1781,1796,1811,1826,1905,1906,2109,2112,2198,2250,2313
 core/src/view.cc:642,720,721,732,843,866,1899,1900,2258,2443,2444,2798
-
-## `-Wunused-variable` (9)
-
-core/src/file_netcdf.cc:163 (n_groups), 1090 (gn_slash), 1094 (parent_id), 1095 (id1, id2, id3), 1779 (n_vars), 1781 (n_gatts, rec_dim), 2121 (tlen)
-core/src/util.cc:2312 (i0, i1), 2313 (ts)
-
-## `-Wunused-but-set-variable` (9)
-
-core/src/do_print.cc:222 (istat)
-core/src/file_netcdf.cc:80 (dummyerr), 2107 (ierr), 2120 (ierr), 2135 (ierr)
-core/src/udu.cc:130 (rettype)
-core/src/util.cc:1306 (sum), 2216 (ierr)
-core/src/view.cc:759 (ierr)
 
 ## `-Wstringop-truncation` (3)
 
@@ -101,15 +91,11 @@ core/src/view.cc:2172,2183,2263
 
 ## `-Wparentheses` (1)
 
-core/src/file_netcdf.cc:1126
+core/src/file_netcdf.cc:1124
 
 ## `-Wempty-body` (1)
 
 core/src/view.cc:582
-
-## `-Waddress` (1)
-
-core/src/file_netcdf.cc:488
 
 ## `-Wformat-truncation=` (1)
 

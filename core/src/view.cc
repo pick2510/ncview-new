@@ -756,7 +756,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 view_check_new_data( int unused )
 {
 	size_t 	file_var_size[MAX_NC_DIMS], *t, n_other;
-	int	i, has_grown, ierr, t_ncid, timelike_index;
+	int	i, has_grown, t_ncid, timelike_index;
 	size_t	dt, nt_new, n_scan_entries, n_extra_frames, storage_size, old_nt;
 	char	message[1024], rate_units[50];
 	time_t	tt;
@@ -781,7 +781,7 @@ view_check_new_data( int unused )
 	for( i=0; i<view->variable->n_dims; i++ )
 		file_var_size[i] = t[i];
 	free( t );
-	ierr = nc_close( t_ncid );
+	nc_close( t_ncid );
 
 	has_grown = 0;
 	if( file_var_size[ timelike_index ] > view->variable->files.back().get()->var_size[ timelike_index ] ) {
@@ -871,7 +871,7 @@ view_check_new_data( int unused )
 	view->variable->files.back().get()->var_size[ timelike_index ] += dt;
 
 	/* Resync so we will read the last time entry */
-	ierr = nc_sync( view->variable->files.back().get()->id );
+	nc_sync( view->variable->files.back().get()->id );
 
 	/* Special check: if we were started with no range in the variable,
 	 * but now we have one, then reset the displayed range

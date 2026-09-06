@@ -1303,7 +1303,6 @@ is_scannable( NCVar *v, int i )
 util_mode( float *x, size_t n, float fill_value )
 {
 	long 	i, n_vals;
-	double 	sum;
 	long 	ival, max_count;
 	std::vector<long> count_vals, unique_vals;
 	int	foundval, j, max_index;
@@ -1312,7 +1311,6 @@ util_mode( float *x, size_t n, float fill_value )
 	count_vals.resize( n );
 	unique_vals.resize( n );
 
-	sum = 0.0;
 	n_vals = 0;
 	for( i=0L; i<n; i++ ) {
 		if( close_enough( x[i], fill_value )) {
@@ -2213,15 +2211,14 @@ Stringlist *get_group_list( const std::vector<std::unique_ptr<NCVar>> &vars )
 {
 	Stringlist	*retval = NULL;
 	char		group_name[ MAX_NC_NAME*20 ];	/* Assume no more than 20 levels of groups */
-	int		ierr;
 
 	for( const auto &cursor : vars ) {
 
-		ierr = unpack_groupname( const_cast<char *>(cursor->name.c_str()), -1, group_name );	/* -1 means get full group name */
+		unpack_groupname( const_cast<char *>(cursor->name.c_str()), -1, group_name );	/* -1 means get full group name */
 
 		/* Only add to list if not already there */
 		if( stringlist_match_string_exact( retval, group_name ) == nullptr )
-			ierr = stringlist_add_string( &retval, group_name );
+			stringlist_add_string( &retval, group_name );
 		}
 
 	return( retval );
@@ -2309,8 +2306,7 @@ int unpack_groupname( char *varname, int ig, char *groupname )
  */
 void varname_no_groups( char *varname, char *varname_sans_groups, char *groupname )
 {
-	int	i, i0, i1, idx_slash[MAX_NC_NAME], nslash;
-	char	ts[MAX_NC_NAME];
+	int	i, idx_slash[MAX_NC_NAME], nslash;
 
 	/* Get indices of the slashes */
 	nslash = 0;

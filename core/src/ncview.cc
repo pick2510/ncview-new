@@ -99,7 +99,6 @@ ncview_main( int argc, char **argv )
 	input_files = parse_options ( argc,  argv );	/* This parses ALL the non-X11 command line options, not just the input files */
 	determine_file_type         ( input_files );
 
-	options.window_title = (*input_files)[0].string;
 	options.blowup       = 1;
 
 	/* this routine sets up the 'variables' structure */
@@ -228,10 +227,13 @@ parse_options( int argc, char *argv[] )
 			else if( strncmp( argv[i], "-ext", 4 ) == 0 )
 				options.want_extra_info = true;
 
-			else if( strncmp( argv[i], "-mti", 3 ) == 0 ) {
-				options.window_title = argv[i+1];
+			else if( strncmp( argv[i], "-mti", 3 ) == 0 )
+				/* -mtitle's argument was stored into options.window_title,
+				 * a field that nothing ever read (removed as dead code) --
+				 * this flag has been a documented no-op since at least the
+				 * start of this port. Still consume its argument so later
+				 * flags parse correctly. */
 				i++;
-				}
 
 			else if( strncmp( argv[i], "-noauto", 7 ) == 0 )
 				options.no_autoflip = true;

@@ -219,7 +219,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		main_long_name, main_units, dim_longname, file_title;
 	FDBlist	*fdb;
 	NCDim	*d;
-	int	i, type, has_bounds, istat;
+	int	i, type, has_bounds;
 	size_t	*actual_place;
 	time_t	sec_since_1970;
 	double	temp_double, bound_min, bound_max;
@@ -402,7 +402,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			}
 		fclose( f_dummy );
 		snprintf( tstr, 1499, "lpr \"%s\"\n", printopts.out_file_name.c_str() );
-		istat = system( tstr );
+		system( tstr );
 		unlink( printopts.out_file_name.c_str() );
 		}
 

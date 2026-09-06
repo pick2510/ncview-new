@@ -77,10 +77,10 @@ int netcdf_fi_confirm( char *name )
 /*******************************************************************************************/
 int netcdf_fi_writable( char *name )
 {
-	int	fd, ierr, dummyerr;
+	int	fd, ierr;
 
 	ierr = nc_open( name, NC_WRITE, &fd );
-	dummyerr = nc_close( fd );
+	nc_close( fd );
 
 	if( ierr != NC_NOERR )
 		return( false );
@@ -160,7 +160,7 @@ void netcdf_fi_list_vars_inner( Stringlist **ret_val, int gid, char *groupname )
 	int	n_vars, err, i, jj, kk, n_dims, n_var_dims, eff_ndims;
 	char	*var_name, *grp_var_name;
 	Stringlist *dimlist;
-	int	n_gatts, rec_dim, n_groups;
+	int	n_gatts, rec_dim;
 	size_t	*size, total_size;
 
 	err = nc_inq( gid, &n_dims, &n_vars, &n_gatts, &rec_dim );
@@ -485,7 +485,7 @@ std::string netcdf_dim_id_to_name( int fileid, std::string_view var_name, int di
 	/* 2024-11-05: return fully qualified dim name, not short version */
 	/* return( dim_name ); */
 
-	if( (groupname == NULL) || (groupname[0] == '\0') )
+	if( groupname[0] == '\0' )
 		snprintf( fq_dim_name, MAX_NC_NAME, "%s", dim_name );
 	else
 		snprintf( fq_dim_name, MAX_NC_NAME, "%s/%s", groupname, dim_name );
@@ -1087,12 +1087,10 @@ std::string netcdf_dim_units( int fileid, std::string_view dim_name )
 int netcdf_dimvar_id( int fileid, char *dim_name, int *dimvar_gid )
 {
 	int	i, err, n_dims, n_vars, rec_dim, gid, fileid2use;
-	char	var_name[256], dim_name_ng[MAX_NC_NAME], groupname[MAX_NC_NAME], gn_slash[MAX_NC_NAME];
+	char	var_name[256], dim_name_ng[MAX_NC_NAME], groupname[MAX_NC_NAME];
 	char	dim_name_2use[ MAX_NC_NAME ];
 	nc_type	var_type;
 	int	n_atts, dim[MAX_VAR_DIMS];
-int parent_id;
-int id1, id2, id3;
 
 	*dimvar_gid	= fileid;
 	fileid2use 	= fileid;
@@ -1776,9 +1774,9 @@ int safe_ncvarid( int fileid, char *varname )
  */
 int safe_ncdimid( int fileid, char *dim_name1 )
 {
-	int	n_vars, err, i, n_dims, *dimids, include_parents;
+	int	err, i, n_dims, *dimids, include_parents;
 	char	dim_name2[MAX_NC_NAME];
-	int	n_gatts, rec_dim, debug;
+	int	debug;
 	size_t	dim_size;
 
 	debug = 0;
@@ -2101,26 +2099,23 @@ int netcdf_dimvar_bounds_id( int fileid, char *dim_name, int *nvertices )
 /*****************************************************************************************************
  * Returns a pointer to a static buffer with the group name; useful for debugging & info printouts
  */
-char *ncview_groupname( int gid ) 
+char *ncview_groupname( int gid )
 {
 	static char 	buffer[MAX_NC_NAME];
-	int	ierr;
 	size_t	tlen;
 
-	ierr = nc_inq_grpname_full( gid, &tlen, buffer );
+	nc_inq_grpname_full( gid, &tlen, buffer );
 	return( &(buffer[0]) );
 }
 
 /*****************************************************************************************************
  * Returns a pointer to a static buffer with the var name; useful for debugging & info printouts
  */
-char *ncview_varname( int gid, int varid ) 
+char *ncview_varname( int gid, int varid )
 {
 	static char 	buffer[MAX_NC_NAME];
-	int	ierr;
-	size_t	tlen;
 
-	ierr = nc_inq_varname( gid, varid, buffer );
+	nc_inq_varname( gid, varid, buffer );
 	return( &(buffer[0]) );
 }
 
@@ -2132,7 +2127,7 @@ void nc_print_group_structure( int fileid )
 {
 	int 	rootid, cursor, parent;
 	int	*gid, ig, ndims, nvars, natts, unlimdimid;
-	int	ierr, ng;
+	int	ng;
 	size_t	gnl;
 	char	*group_name;
 
@@ -2144,26 +2139,26 @@ void nc_print_group_structure( int fileid )
 	rootid = cursor;
 
 	printf( "nc_print_group_structure: fileid=%d rootid=%d\n", fileid, rootid );
-	ierr = nc_inq_grps( rootid, &ng, NULL );	/* first call to get num groups */
+	nc_inq_grps( rootid, &ng, NULL );	/* first call to get num groups */
 
 	if( ng == 0 ) {
 		printf("nc_print_group_structure: no groups in this file\n" );
 		return;
 		}
 
-	gid = (int *)malloc( sizeof(int) * ng );     
-	ierr = nc_inq_grps( rootid, &ng, gid );	
+	gid = (int *)malloc( sizeof(int) * ng );
+	nc_inq_grps( rootid, &ng, gid );
 	printf( "nc_print_group_structure: fileid=%d rootid=%d has %d groups:\n", fileid, rootid, ng );
 
 	for( ig=0; ig<ng; ig++ ) {
 
 		/* Get group name */
-		ierr = nc_inq_grpname_len( gid[ig], &gnl );
+		nc_inq_grpname_len( gid[ig], &gnl );
 		group_name = (char *)malloc( sizeof(char) * (gnl+2) );
-		ierr = nc_inq_grpname_full( gid[ig], &gnl, group_name );
+		nc_inq_grpname_full( gid[ig], &gnl, group_name );
 
 		/* find info about this group: number of dims, vars, atts */
-		ierr = nc_inq( gid[ig], &ndims, &nvars, &natts, &unlimdimid );
+		nc_inq( gid[ig], &ndims, &nvars, &natts, &unlimdimid );
 
 		printf( "   group %d: id=%d >%s<\n", 
 			ig, gid[ig], group_name );

@@ -512,9 +512,7 @@ typedef struct {
 	VarselStyle	varsel_style;	/* can be VarselStyle::List or VarselStyle::Menu */
 	ShrinkMethod	shrink_method;
 
-	std::string	ncview_base_dir,	/* apparently dead: never read as options.ncview_base_dir anywhere -- see modernization.md Phase 6 */
-			window_title,		/* apparently dead: written but never read anywhere -- see modernization.md Phase 6 */
-			calendar;	/* This OVERRIDES any 'calendar' attribute in the data file; empty means "not set" */
+	std::string	calendar;	/* This OVERRIDES any 'calendar' attribute in the data file; empty means "not set" */
 
 	BlowupType	blowup_type;	/* can be BlowupType::Replicate or BlowupType::Bilinear */
 
