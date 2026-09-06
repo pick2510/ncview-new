@@ -485,7 +485,7 @@ change_view( int delta, int interpretation )
 		if( options.beep_on_restart )
 			beep();
 		if( options.stop_on_restart ) {
-			do_pause( MOD_1 );
+			do_pause( Modifier::M1 );
 			return(0);
 			}
 		}
@@ -1238,7 +1238,7 @@ printf( "got an expose event\n" );
  * it to change.
  */
 	void
-view_change_cur_dim( char *dim_name, int modifier )
+view_change_cur_dim( char *dim_name, Modifier modifier )
 {
 	int	dimid, fileid, has_bounds;
 	nc_type	type;
@@ -1266,12 +1266,12 @@ view_change_cur_dim( char *dim_name, int modifier )
 	dim = *(view->variable->dim + dimid);
 
 	/* Modifier 1 is the standard action */
-	if( modifier == MOD_1 ) {
+	if( modifier == Modifier::M1 ) {
 		*(view->var_place+dimid) = *(view->var_place+dimid)+1L;
 		if( *(view->var_place+dimid) > *(view->variable->size+dimid)-1L )
 			*(view->var_place+dimid) = 0L;
 		}
-	else if( modifier == MOD_2 ) {
+	else if( modifier == Modifier::M2 ) {
 		/* Modifier 2 means "do it faster" */
 		size  = *(view->variable->size+dimid);
 		delta = (int)(0.1*(float)size);

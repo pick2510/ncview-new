@@ -265,7 +265,7 @@ data_to_pixels( View *v )
 	    (v->variable->user_min == 0) &&
 	    (! options.autoscale) ) {
 		in_set_cursor_normal();
-		in_button_pressed( BUTTON_PAUSE, MOD_1 );
+		in_button_pressed( BUTTON_PAUSE, Modifier::M1 );
 		if( options.min_max_method == MinMaxMethod::Exhaust ) {
 	    		snprintf( error_message, 1022, "min and max both 0 for variable %s (checked all data)\nSetting range to (-1,1)", 
 								v->variable->name );

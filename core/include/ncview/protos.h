@@ -175,26 +175,26 @@ unsigned char interp( int i, int range_i, unsigned char *mat, int n_entries );
  * in do_buttons.c
  */
 int 	which_button_pressed( void );
-void 	do_range 	  ( int modifier );
-void 	do_quit		  ( int modifier );
-void 	do_data_edit	  ( int modifier );
-void 	do_info		  ( int modifier );
-void 	do_options        ( int modifier );
-void 	do_dimset         ( int modifier );
-void	do_restart        ( int modifier );
-void	do_rewind         ( int modifier );
-void	do_backwards      ( int modifier );
-void	do_pause          ( int modifier );
-void	do_forward        ( int modifier );
-void	do_fastforward    ( int modifier );
-void	do_colormap_sel   ( int modifier );
-void	do_invert_physical( int modifier );
-void	do_invert_colormap( int modifier );
-void	do_set_minimum    ( int modifier );
-void	do_set_maximum    ( int modifier );
-void	do_blowup	  ( int modifier );
-void	do_transform	  ( int modifier );
-void	do_blowup_type	  ( int modifier );
+void 	do_range 	  ( Modifier modifier );
+void 	do_quit		  ( Modifier modifier );
+void 	do_data_edit	  ( Modifier modifier );
+void 	do_info		  ( Modifier modifier );
+void 	do_options        ( Modifier modifier );
+void 	do_dimset         ( Modifier modifier );
+void	do_restart        ( Modifier modifier );
+void	do_rewind         ( Modifier modifier );
+void	do_backwards      ( Modifier modifier );
+void	do_pause          ( Modifier modifier );
+void	do_forward        ( Modifier modifier );
+void	do_fastforward    ( Modifier modifier );
+void	do_colormap_sel   ( Modifier modifier );
+void	do_invert_physical( Modifier modifier );
+void	do_invert_colormap( Modifier modifier );
+void	do_set_minimum    ( Modifier modifier );
+void	do_set_maximum    ( Modifier modifier );
+void	do_blowup	  ( Modifier modifier );
+void	do_transform	  ( Modifier modifier );
+void	do_blowup_type	  ( Modifier modifier );
 
 /******************************************************************************
  * in view.c
@@ -203,7 +203,7 @@ int 	set_scan_variable    ( NCVar *var );
 void 	set_scan_view        ( size_t scan_place );
 int 	change_view          ( int delta, int interpretation );
 int	view_draw            ( int allow_saveframes_useage, int force_range_to_frame );
-void 	view_change_cur_dim  ( char *dim_name, int modifier );
+void 	view_change_cur_dim  ( char *dim_name, Modifier modifier );
 void	view_forward         ( void );
 void	view_backward        ( void );
 void	view_change_blowup   ( int delta, int redraw_flag, int view_var_is_valid );
@@ -279,5 +279,5 @@ Stringlist *get_persistent_state();
  */
 void	in_variable_selected	( char *var_name );
 void	in_colormap_selected	( char *name );
-void	in_button_pressed	( int button_id, int modifier );
+void	in_button_pressed	( int button_id, Modifier modifier );
 void	in_error		( char *message );

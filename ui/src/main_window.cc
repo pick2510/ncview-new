@@ -591,7 +591,7 @@ int MainWindow::rebuildButtonBar( int available_width )
 void MainWindow::buttonCallback( Fl_Widget *, void *data )
 {
 	int id = (int)(intptr_t)data;
-	in_button_pressed( id, MOD_1 );
+	in_button_pressed( id, Modifier::M1 );
 }
 
 void MainWindow::varChoiceCallback( Fl_Widget *w, void * )
@@ -774,14 +774,14 @@ void MainWindow::rebuildDimRow( DimRow &row )
 	// only when the scan dimensions change, a rare, low-cardinality
 	// event, so this is a small, bounded leak rather than a real one.
 	row.prev_btn->callback( &MainWindow::dimStepCallback,
-		new std::pair<std::string,int>( row.name, MOD_3 ) );
+		new std::pair<std::string,Modifier>( row.name, Modifier::M3 ) );
 	row.next_btn->callback( &MainWindow::dimStepCallback,
-		new std::pair<std::string,int>( row.name, MOD_1 ) );
+		new std::pair<std::string,Modifier>( row.name, Modifier::M1 ) );
 }
 
 void MainWindow::dimStepCallback( Fl_Widget *, void *data )
 {
-	auto *p = static_cast<std::pair<std::string,int>*>(data);
+	auto *p = static_cast<std::pair<std::string,Modifier>*>(data);
 	view_change_cur_dim( (char *)p->first.c_str(), p->second );
 }
 

@@ -21,9 +21,9 @@
 
 /*************************************************************************
  * Routines to handle a button being pressed.  My convention for the 
- * modifiers: MOD_1 means the standard action.  MOD_2 means an accelerated 
- * version of the standard aciton. MOD_3 means a backwards version of the 
- * standard action.  MOD_4 means an accelerated backwards version of the
+ * modifiers: Modifier::M1 means the standard action.  Modifier::M2 means an accelerated 
+ * version of the standard aciton. Modifier::M3 means a backwards version of the 
+ * standard action.  Modifier::M4 means an accelerated backwards version of the
  * standard action.
  *************************************************************************/
 
@@ -47,10 +47,10 @@ which_button_pressed( void )
 
 /*===========================================================================================*/
 	void
-do_range( int modifier )
+do_range( Modifier modifier )
 {
 	init_saveframes();
-	if( modifier == MOD_3 )
+	if( modifier == Modifier::M3 )
 		view_set_range_frame();
 	else
 		view_set_range();
@@ -58,14 +58,14 @@ do_range( int modifier )
 
 /*===========================================================================================*/
 	void
-do_dimset( int modifier )
+do_dimset( Modifier modifier )
 {
 	view_set_scan_dims();
 }
 
 /*===========================================================================================*/
 	void
-do_restart( int modifier )
+do_restart( Modifier modifier )
 {
 	cur_button = BUTTON_PAUSE;
 
@@ -79,7 +79,7 @@ do_restart( int modifier )
 
 /*===========================================================================================*/
 	void
-do_rewind( int modifier )
+do_rewind( Modifier modifier )
 {
 	unsigned long delay_millisec;
 	size_t	size;
@@ -92,7 +92,7 @@ do_rewind( int modifier )
  
 	in_timer_clear();
 
-	if( modifier == MOD_2 ) {
+	if( modifier == Modifier::M2 ) {
 		size = view_current_nt();
 		d_delta = (double)size / 1000.0;
 		if( d_delta < 10.0 )
@@ -100,31 +100,31 @@ do_rewind( int modifier )
 		else
 			i_delta = -d_delta;
 		change_view( i_delta, FRAMES );
-		in_timer_set( [](){ do_rewind(MOD_2); }, delay_millisec );
+		in_timer_set( [](){ do_rewind(Modifier::M2); }, delay_millisec );
 		}
 	else
 		{
 		change_view( -1, FRAMES );
-		in_timer_set( [](){ do_rewind(MOD_1); }, delay_millisec );
+		in_timer_set( [](){ do_rewind(Modifier::M1); }, delay_millisec );
 		}
 }
 
 /*===========================================================================================*/
 	void
-do_quit( int modifier )
+do_quit( Modifier modifier )
 {
 	quit_app();
 }
 
 /*===========================================================================================*/
 	void
-do_backwards( int modifier )
+do_backwards( Modifier modifier )
 {
 	size_t	size;
 
 	in_timer_clear();
 
-	if( modifier == MOD_2 ) {
+	if( modifier == Modifier::M2 ) {
 		size = view_current_nt();
 		if( size < 500 ) 
 			change_view( -10, PERCENT );
@@ -143,7 +143,7 @@ do_backwards( int modifier )
 
 /*===========================================================================================*/
 	void
-do_pause( int modifier )
+do_pause( Modifier modifier )
 {
 	cur_button = BUTTON_PAUSE;
 	in_timer_clear();
@@ -151,14 +151,14 @@ do_pause( int modifier )
 
 /*===========================================================================================*/
 	void
-do_forward( int modifier )
+do_forward( Modifier modifier )
 {
 	size_t	size;
 
 	cur_button = BUTTON_PAUSE;
 	in_timer_clear();
 
-	if( modifier == MOD_2 ) {
+	if( modifier == Modifier::M2 ) {
 		size = view_current_nt();
 		if( size < 500 ) 
 			change_view( 10, PERCENT );
@@ -175,7 +175,7 @@ do_forward( int modifier )
 
 /*===========================================================================================*/
 	void
-do_fastforward( int modifier )
+do_fastforward( Modifier modifier )
 {
 	unsigned long	delay_millisec;
 	size_t	size;
@@ -188,7 +188,7 @@ do_fastforward( int modifier )
 
 	delay_millisec = (long)(DELAY_DELTA * options.frame_delay) + DELAY_OFFSET;
 
-	if( modifier == MOD_2 ) {
+	if( modifier == Modifier::M2 ) {
 		size = view_current_nt();
 		d_delta = (double)size / 1000.0;
 		if( d_delta < 10.0 )
@@ -196,20 +196,20 @@ do_fastforward( int modifier )
 		else
 			i_delta = d_delta;
 		if( change_view( i_delta, FRAMES ) == 0 )
-			in_timer_set( [](){ do_fastforward(MOD_2); }, delay_millisec );
+			in_timer_set( [](){ do_fastforward(Modifier::M2); }, delay_millisec );
 		}
 	else
 		{
 		if( change_view( 1, FRAMES ) == 0 )
-			in_timer_set( [](){ do_fastforward(MOD_1); }, delay_millisec );
+			in_timer_set( [](){ do_fastforward(Modifier::M1); }, delay_millisec );
 		}
 }
 		
 /*===========================================================================================*/
 	void
-do_colormap_sel( int modifier )
+do_colormap_sel( Modifier modifier )
 {
-	if( modifier == MOD_3 )
+	if( modifier == Modifier::M3 )
 		in_install_prev_colormap( true );
 	else
 		in_install_next_colormap( true );
@@ -219,7 +219,7 @@ do_colormap_sel( int modifier )
 
 /*===========================================================================================*/
 	void
-do_invert_physical( int modifier )
+do_invert_physical( Modifier modifier )
 {
 	init_saveframes();
 	if( options.invert_physical )
@@ -232,7 +232,7 @@ do_invert_physical( int modifier )
 
 /*===========================================================================================*/
 	void
-do_data_edit( int modifier )
+do_data_edit( Modifier modifier )
 {
 /* do_overlay(); */
 	view_data_edit();
@@ -240,7 +240,7 @@ do_data_edit( int modifier )
 
 /*===========================================================================================*/
 	void
-do_invert_colormap( int modifier )
+do_invert_colormap( Modifier modifier )
 {
 	init_saveframes();
 	if( options.invert_colors )
@@ -253,26 +253,26 @@ do_invert_colormap( int modifier )
 
 /*===========================================================================================*/
 	void
-do_set_minimum( int modifier )
+do_set_minimum( Modifier modifier )
 {
 }
 
 /*===========================================================================================*/
 	void
-do_set_maximum( int modifier )
+do_set_maximum( Modifier modifier )
 {
 }
 
 /*===========================================================================================*/
 	void
-do_blowup( int modifier )
+do_blowup( Modifier modifier )
 {
 	int view_var_is_valid = true;
 
-	if( modifier == MOD_3 )
+	if( modifier == Modifier::M3 )
 		view_change_blowup( -1, true, view_var_is_valid );
 
-	else if( modifier == MOD_2 ) {
+	else if( modifier == Modifier::M2 ) {
 		/* Double the current blowup -- make image BIGGER */
 		if( options.blowup > 0 )
 			view_change_blowup( options.blowup, true, view_var_is_valid );
@@ -280,7 +280,7 @@ do_blowup( int modifier )
 			view_change_blowup( -(options.blowup)/2, true, view_var_is_valid );
 		}
 
-	else if( modifier == MOD_4 ) {
+	else if( modifier == Modifier::M4 ) {
 		/* Halve the current blowup -- make image SMALLER */
 		if( options.blowup > 0 ) 
 			view_change_blowup( -(options.blowup/2), true, view_var_is_valid );
@@ -295,16 +295,16 @@ do_blowup( int modifier )
 	 * the frames because now there might be enough room.
 	 */
 	init_saveframes();
-	if( modifier == MOD_3 )
+	if( modifier == Modifier::M3 )
 		options.save_frames = true;
 }
 
 /*===========================================================================================*/
 	void
-do_transform( int modifier )
+do_transform( Modifier modifier )
 {
 	init_saveframes();
-	if( modifier == MOD_3 )
+	if( modifier == Modifier::M3 )
 		view_change_transform( -1 );
 	else
 		view_change_transform( 1 );
@@ -312,7 +312,7 @@ do_transform( int modifier )
 
 /*===========================================================================================*/
 	void
-do_blowup_type( int modifier )
+do_blowup_type( Modifier modifier )
 {
 	init_saveframes();
 	if( options.blowup_type == BlowupType::Replicate )
@@ -324,14 +324,14 @@ do_blowup_type( int modifier )
 
 /*===========================================================================================*/
 	void
-do_info( int modifier )
+do_info( Modifier modifier )
 {
 	view_information();
 }
 
 /*===========================================================================================*/
 	void
-do_options( int modifier )
+do_options( Modifier modifier )
 {
 	set_options();
 }

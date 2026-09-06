@@ -69,9 +69,9 @@ void in_initialize( void )
 			in_variable_selected( v->name );
 	}
 	if( const char *d = getenv( "NCVIEW_TEST_DIALOG" ) ) {
-		if( std::strcmp( d, "range" ) == 0 ) do_range( MOD_1 );
-		else if( std::strcmp( d, "options" ) == 0 ) do_options( MOD_1 );
-		else if( std::strcmp( d, "dimset" ) == 0 ) do_dimset( MOD_1 );
+		if( std::strcmp( d, "range" ) == 0 ) do_range( Modifier::M1 );
+		else if( std::strcmp( d, "options" ) == 0 ) do_options( Modifier::M1 );
+		else if( std::strcmp( d, "dimset" ) == 0 ) do_dimset( Modifier::M1 );
 		else if( std::strcmp( d, "info" ) == 0 ) view_information();
 		else if( std::strcmp( d, "dataedit" ) == 0 ) view_data_edit();
 		else if( std::strcmp( d, "plot" ) == 0 ) plot_XY();
@@ -105,7 +105,7 @@ void in_initialize( void )
 		for( const auto &e : kButtons )
 			if( std::strcmp( b, e.name ) == 0 ) {
 				int id = e.id;
-				Fl::add_timeout( 0.0, [](void *data) { in_button_pressed( (int)(intptr_t)data, MOD_1 ); },
+				Fl::add_timeout( 0.0, [](void *data) { in_button_pressed( (int)(intptr_t)data, Modifier::M1 ); },
 					(void*)(intptr_t)id );
 				break;
 			}

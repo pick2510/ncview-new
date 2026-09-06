@@ -53,15 +53,15 @@ in_colormap_selected( char *name )
 /*****************************************************************************
  * Called when a button is pressed (by the UI's widget callbacks, or by
  * core itself -- e.g. util.cc pauses playback on an error by calling
- * in_button_pressed(BUTTON_PAUSE, MOD_1)).  Argument 'button_id' indicates
+ * in_button_pressed(BUTTON_PAUSE, Modifier::M1)).  Argument 'button_id' indicates
  * which button was pressed.  Argument modifier should ideally take on one
- * of 4 values: MOD_1, MOD_2, MOD_3, and MOD_4, used in a generalized sense
+ * of 4 values: Modifier::M1, Modifier::M2, Modifier::M3, and Modifier::M4, used in a generalized sense
  * to mean "normal action", "accelerated action", "backwards action", and
  * "accelerated backwards action". If these are not available, just always
- * use MOD_1.
+ * use Modifier::M1.
  */
 void
-in_button_pressed( int button_id, int modifier )
+in_button_pressed( int button_id, Modifier modifier )
 {
 	switch( button_id ) {
 		case BUTTON_RANGE:

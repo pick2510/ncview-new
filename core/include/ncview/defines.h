@@ -163,10 +163,7 @@ constexpr int MAX_DISPLAYED_STRING_LENGTH = 250;
 
 /*****************************************************************************/
 /* Button-press modification indicators */
-#define	MOD_1		1
-#define	MOD_2		2
-#define	MOD_3		3
-#define	MOD_4		4
+enum class Modifier { M1 = 1, M2 = 2, M3 = 3, M4 = 4 };
 
 /*****************************************************************************/
 /* Messages which a dialog popup can return */
