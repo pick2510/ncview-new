@@ -127,6 +127,9 @@ while read -r case_name extra_env; do
     if [ "$ae" != "0" ]; then
         echo "ui_smoke: FAIL $case_name (AE=$ae, differing pixels) -- actual: $shot, expected: $golden"
         FAILED=1
+    elif grep -q "got an expose event" "$WORKDIR/$case_name.log"; then
+        echo "ui_smoke: FAIL $case_name (stray debug output on stdout/stderr: 'got an expose event') -- log: $WORKDIR/$case_name.log"
+        FAILED=1
     else
         echo "ui_smoke: pass $case_name"
     fi

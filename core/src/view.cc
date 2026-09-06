@@ -1204,8 +1204,7 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 	void
 redraw_ccontour()
 {
-printf( "got an expose event\n" );
-	view_draw( true, false ); 
+	view_draw( true, false );
 }
 
 /************************************************************************
