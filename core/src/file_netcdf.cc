@@ -215,7 +215,7 @@ void netcdf_fi_list_vars_inner( Stringlist **ret_val, int gid, char *groupname )
 						printf( "netcdf_fi_list_vars_inner: YES, is a displayable var: >%s< ndims=%d sizes=", 
 							grp_var_name, n_var_dims );
 						for( kk=0; kk<n_var_dims; kk++ ) 
-							printf( "%ld ", size[kk] );
+							printf( "%zu ", size[kk] );
 						printf( "\n" );
 						}
 					stringlist_add_string( ret_val, grp_var_name );
@@ -420,7 +420,7 @@ size_t * netcdf_fi_var_size( int fileid, char *var_name )
 	for( i=0; i<n_dims; i++ ) {
 		err = nc_inq_dimlen( groupid, *(dim+i), &dim_size );
 		*(ret_val+i) = dim_size;
-		if( debug==1 ) printf( "dim=%d size=%ld\n", i, dim_size );
+		if( debug==1 ) printf( "dim=%d size=%zu\n", i, dim_size );
 		}
 
 	return( ret_val );
@@ -601,10 +601,10 @@ void netcdf_fi_get_data( int fileid, char *var_name, size_t *start_pos,
 
 	tot_size = 1L;
 	n_dims = netcdf_fi_n_dims( gid, var_name_ng );
-	if( debug==1 ) printf( "netcdf_fi_get_data: ndims=%ld\n", n_dims );
+	if( debug==1 ) printf( "netcdf_fi_get_data: ndims=%zu\n", n_dims );
 	for( i=0; i<n_dims; i++ ) {
 		tot_size *= *(count+i);
-		if( debug==1 ) printf( "start[%ld]=%ld count[%ld]=%ld\n", i, start_pos[i], i, count[i] );
+		if( debug==1 ) printf( "start[%zu]=%zu count[%zu]=%zu\n", i, start_pos[i], i, count[i] );
 		}
 
 
@@ -613,7 +613,7 @@ void netcdf_fi_get_data( int fileid, char *var_name, size_t *start_pos,
 				var_name );
 		fprintf( stderr, "Index, start, count:\n" );
 		for( i=0; i<(size_t)netcdf_fi_n_dims(fileid, var_name); i++ )
-			fprintf( stderr, "[%ld]: %ld %ld\n", i, *(start_pos+i), *(count+i) );
+			fprintf( stderr, "[%zu]: %zu %zu\n", i, *(start_pos+i), *(count+i) );
 		}
 
 	err = nc_get_vara_float( gid, varid, start_pos, count, data );
@@ -622,7 +622,7 @@ void netcdf_fi_get_data( int fileid, char *var_name, size_t *start_pos,
 		fprintf( stderr, "cdfid=%d   variable=%s\n", fileid, var_name );
 		fprintf( stderr, "start, count:\n" );
 		for( i=0; i<(size_t)netcdf_fi_n_dims(fileid, var_name); i++ )
-			fprintf( stderr, "[%ld]: %ld  %ld\n", 
+			fprintf( stderr, "[%zu]: %zu  %zu\n",
 				i, *(start_pos+i), *(count+i) );
 		fprintf( stderr, "%s\n", nc_strerror(err) );
 		exit( -1 );
@@ -1235,7 +1235,7 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 
 	debug = 0;
 
-	if( debug ) printf( "netcdf_dim_value: entering with dim_name=>%s< place=%ld\n", dim_name, place );
+	if( debug ) printf( "netcdf_dim_value: entering with dim_name=>%s< place=%zu\n", dim_name, place );
 
 	if( ! netcdf_has_dim_values( fileid, dim_name ) ) {
 		*ret_val_double = (double)virt_place;
@@ -1569,7 +1569,7 @@ int netcdf_get_att_util( int id, int varid, const char *var_name, const char *at
 
 		else if( len != (size_t)expected_len ) {
 			fprintf( stderr, "error in specification of \"%s\" attribute for\n", att_name);
-			fprintf( stderr, "variable %s: %ld values specified (should be %d)\n",
+			fprintf( stderr, "variable %s: %zu values specified (should be %d)\n",
 				var_name, len, expected_len );
 			return( false );
 			}

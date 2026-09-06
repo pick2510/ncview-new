@@ -129,7 +129,7 @@ char *fuckyou;
 	/* Strip time zone info from the date string */
 	char dataunits_str[ 1010 ];
 	if( strlen( dataunits_str_orig ) > 1000 ) { 
-		fprintf( stderr, "utCalendar2_cal.c: get_origin: error, dataunits_str is too long, must be < 1000 but is %ld\nHere is units string: %s\n",
+		fprintf( stderr, "utCalendar2_cal.c: get_origin: error, dataunits_str is too long, must be < 1000 but is %zu\nHere is units string: %s\n",
 			strlen( dataunits_str_orig ),
 		     	dataunits_str_orig );
 		exit( -1 );

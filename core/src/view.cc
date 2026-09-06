@@ -112,7 +112,7 @@ set_scan_variable( NCVar *var )
 		fprintf( stderr, "\n\n******************************************\nentering set_scan_variable with var=%s\n", var->name.c_str() );
 		fprintf( stderr, "var nims:%d\n", var->n_dims );
 		for( i=0; i<var->n_dims; i++ )
-			fprintf( stderr, "dim=%ld size=%ld\n", i, var->size[i] );
+			fprintf( stderr, "dim=%ld size=%zu\n", i, var->size[i] );
 		}
 
 	in_set_cursor_busy();
@@ -523,7 +523,7 @@ set_scan_view( size_t scan_place )
 	if( scan_place >= size ) {
 		fprintf( stderr, "ncview: set_scan_view: internal error; trying to " );
 		fprintf( stderr, "set to a place larger than exists\n" );
-		fprintf( stderr, "size: %ld   attempted place: %ld\n", size, scan_place+1 );
+		fprintf( stderr, "size: %zu   attempted place: %zu\n", size, scan_place+1 );
 		fprintf( stderr, "resetting to zero\n" );
 		scan_place = 0;
 		}
@@ -666,11 +666,11 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 
 	if( options.debug ) {
 		fprintf( stderr, "in view_draw:\n" );
-		fprintf( stderr, "	x_size, y_size:%ld %ld\n",
+		fprintf( stderr, "	x_size, y_size:%zu %zu\n",
 						x_size, y_size );
 		fprintf( stderr, "	scan_axis_id:%d\n",
 						view->scan_axis_id);
-		fprintf( stderr, "	scan_place:%ld\n",
+		fprintf( stderr, "	scan_place:%zu\n",
 						frameno );
 		}
 
@@ -855,7 +855,7 @@ view_check_new_data( int unused )
 		storage_size  = framestore.nx * framestore.ny * framestore.nt;
 
 		if( options.debug )
-			printf( "reallocating framestore to new nt=%ld\n", framestore.nt );
+			printf( "reallocating framestore to new nt=%zu\n", framestore.nt );
 
 		framestore.frame.resize( storage_size );
 		framestore.frame_valid.resize( framestore.nt );
@@ -1619,12 +1619,12 @@ init_saveframes()
 
 	if( options.debug ) {
 		fprintf( stderr, "initializing saveframes:\n" );
-		fprintf( stderr, "	n_scan_entries: %ld\n", n_scan_entries );
-		fprintf( stderr, "	n_extra_frames: %ld\n", n_extra_frames );
-		fprintf( stderr, "	frame size: %ld\n", 
+		fprintf( stderr, "	n_scan_entries: %zu\n", n_scan_entries );
+		fprintf( stderr, "	n_extra_frames: %zu\n", n_extra_frames );
+		fprintf( stderr, "	frame size: %zu\n",
 				view->variable->size[view->x_axis_id] *
 				view->variable->size[view->y_axis_id] );
-		fprintf( stderr, "	total storage size:%ld\n", storage_size );
+		fprintf( stderr, "	total storage size:%zu\n", storage_size );
 		}
 
 	/* Unlike alloc_view_storage()'s hard exit(-1) on allocation failure,
@@ -2629,7 +2629,7 @@ plot_XY()
 	for( i=0; i<view->variable->n_dims; i++ ) {
 		view->plot_XY_position[ view->plot_XY_nlines-1 ][i] = start[i];
 		if( options.debug )
-			fprintf( stderr, "Setting position for line %d, dim %d: %ld\n",
+			fprintf( stderr, "Setting position for line %d, dim %d: %zu\n",
 				view->plot_XY_nlines-1, i, start[i] );
 		}
 
@@ -2715,7 +2715,7 @@ plot_XY_sc( size_t *start, size_t *count )
 	if( options.debug ) {
 		fprintf( stderr, "plot_XY_sc: entering\n" );
 		for( i=0; i<view->variable->n_dims; i++ )
-			fprintf( stderr, "i=%ld start=%ld count=%ld\n",
+			fprintf( stderr, "i=%ld start=%zu count=%zu\n",
 				i, *(start+i), *(count+i) );
 		}
 

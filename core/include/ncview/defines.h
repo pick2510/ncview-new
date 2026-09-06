@@ -28,6 +28,13 @@
 #pragma once
 
 #ifdef HAVE_UDUNITS2
+/* MinGW's netcdf.h (included via ncview/includes.h, above us in every TU)
+ * already #defines MSC_EXTRA for its own DLL-export purposes; udunits2.h
+ * unconditionally #defines the same name for its own, unrelated Windows
+ * DLL-export handling, which errors under -Werror without this. */
+#ifdef MSC_EXTRA
+#undef MSC_EXTRA
+#endif
 #include <udunits2.h>
 #endif
 
@@ -265,7 +272,7 @@ typedef unsigned char ncv_pixel;/* If you change this, make sure to change
  * A specific set of data for netCDF-type files.  These won't necessarily
  * be applicable to different types of data file formats.
  */
-typedef struct {
+struct NetCDFOptions {
 	int	valid_range_set,
 		valid_min_set,
 		valid_max_set,
@@ -278,7 +285,7 @@ typedef struct {
 		scale_factor,
 		add_offset;
 
-} NetCDFOptions;
+};
 
 struct NCVar;	/* forward declaration -- NCDim_map_info::var_i_map is a non-owning back-pointer to
 		 * the NCVar it maps; NCVar itself is defined below since it owns FDBlist/NCDim/
@@ -312,7 +319,7 @@ struct FDBlist {
  * than because dimensions are so fundamental; actually, it's the variables
  * which are more important.
  */
-typedef struct {
+struct NCDim {
 	std::string	name, long_name, units;
 	int	units_change = 0;	/* if 1, then a virtully concatenated timelike dimension has different units in different input files */
 	float	min = 0, max = 0;
@@ -326,14 +333,14 @@ typedef struct {
 	TimeGranularity	tgran; 		/* time granularity; i.e., frequency of entries (daily, hourly, etc) */
 	int	global_id = 0;	/* Used internally, goes from 1..total number of dims we know about */
 	int	is_lat = 0, is_lon = 0; /* Just a guess if these are lat/lon. Used to put on coastlines automatically */
-} NCDim;
+};
 
 /*****************************************************************************/
 /* A dimension can be "mapped", by which it means that, for example, the lat
  * or lon coordinates are two dimensional, and a variable is supplied that
  * gives the lat and/or lon values as a function of X and Y.
  */
-typedef struct {
+struct NCDim_map_info {
 
 	NCVar	*var_i_map = nullptr;	/* the "var that I map"; non-owning back-pointer */
 	std::string	coord_att;		/* Contents of the "coordinates" attribute */
@@ -346,7 +353,7 @@ typedef struct {
 	std::vector<size_t> index_place_factor;	/* Array of size var_i_map->n_dims, is 0 or factor to mult loc by */
 	int	scalar_all_same = 0;	/* ==1 iff is a scalar coord var AND all vals are identical; ==0 otherwise */
 
-} NCDim_map_info;
+};
 
 /*****************************************************************************/
 /* Here it is: the variable structure.  Aspects of the variable which are
@@ -441,7 +448,7 @@ struct NCVar {
 /*****************************************************************************/
 /* Our current view--the view is the 2D field which is being color-contoured.
  */
-typedef struct {
+struct View {
 	NCVar	*variable;
 	std::vector<size_t>	var_place;	/* Where we currently are in that var's space, in that file */
 	std::vector<float>	data;		/* The actual 2-D data to colorcontour */
@@ -454,29 +461,29 @@ typedef struct {
 	int	plot_XY_axis,	/* Which axis to plot along in XY plots */
 		plot_XY_nlines;	/* # of XY lines for this variable on current plot */
 	size_t	plot_XY_position[MAX_LINES_PER_PLOT][10];
-} View;
+};
 
 /*****************************************************************************
  * Place to store the frames in, if we want in-core displaying.
  */
-typedef struct {
+struct FrameStore {
 	int	valid;		/* Is ANYTHING in the frame store valid? */
 	size_t	nt;		/* # of frames in the store.  Can be > than nt cuz we allocate some extra to handle file growth */
 	size_t	nx, ny;		/* # of X and Y entries per frame */
 	std::vector<ncv_pixel> frame;	/* Actual store of the frames */
 	std::vector<int> frame_valid;	/* Is this particular frame valid? */
-} FrameStore;
+};
 
 /*****************************************************************************/
 /* program options */
 
 /* Options for the overlay feature */
-typedef struct {
+struct OverlayOptions {
 	int	doit;
 	std::vector<int>	overlay;
-} OverlayOptions;
+};
 
-typedef struct {
+struct Options {
 	int	invert_physical,
 		invert_colors,
 		t_conv,
@@ -529,11 +536,11 @@ typedef struct {
 				/* SCALE IS APPLIED FIRST. So to conv C to F, use -scale 1.8 -offset 32 */
 
 	std::unique_ptr<OverlayOptions> overlay;
-} Options;
+};
 
 /***********************************************************************************************************/
 /* Postscript printer output options */
-typedef struct {
+struct PrintOptions {
 	float	page_width, page_height,		/* In inches */
 		page_x_margin, page_upper_y_margin,	/* In inches */
 		page_lower_y_margin, ppi;		/* Points per inch */
@@ -549,5 +556,5 @@ typedef struct {
 		include_axis_labels,
 		include_extra_info,
 		test_only;
-} PrintOptions;
+};
 

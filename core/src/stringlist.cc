@@ -368,7 +368,7 @@ stringlist_line_to_sl( char *line, int lineno, Stringlist **retval )
 	strncpy( t_string,   line+string0,   string1-string0+1 );
 	t_string[string1-string0+1] = '\0';
 	if( strlen(t_string) > STRINGLIST_MAX_LEN ) {
-		fprintf( stderr, "stringlist_line_to_sl: error, encountered a string that is too long. Max allowed: %d. Found: %ld. Line number: %d\n",
+		fprintf( stderr, "stringlist_line_to_sl: error, encountered a string that is too long. Max allowed: %d. Found: %zu. Line number: %d\n",
 			STRINGLIST_MAX_LEN, strlen(t_string), lineno );
 		return( -63 );
 		}
@@ -446,7 +446,7 @@ stringlist_line_to_sl( char *line, int lineno, Stringlist **retval )
 	else if( strcmp( t_aux_type, "STRING" ) == 0 ) {
 		std::string t_aux_val_ue = stringlist_unescape_string( t_aux_val );
 		if( t_aux_val_ue.size() > STRINGLIST_MAX_LEN ) {
-			fprintf( stderr, "stringlist_line_to_sl: error, encountered a string that is too long. Max allowed: %d. Found: %ld. Line number: %d\n",
+			fprintf( stderr, "stringlist_line_to_sl: error, encountered a string that is too long. Max allowed: %d. Found: %zu. Line number: %d\n",
 				STRINGLIST_MAX_LEN, t_aux_val_ue.size(), lineno );
 			return( -67 );
 			}

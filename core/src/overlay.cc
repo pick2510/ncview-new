@@ -596,7 +596,7 @@ overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size
 		else
 			cury = cury + oy;
 		if( (curx<0) || (cury<0) || (curx>=(long)nx) || (cury>=(long)ny)) {
-			fprintf( stderr, "Error, alg fails, cursor off array; cursor=(%ld,%ld)  nx=%ld  ny=%ld\n", curx, cury, nx, ny);
+			fprintf( stderr, "Error, alg fails, cursor off array; cursor=(%ld,%ld)  nx=%zu  ny=%zu\n", curx, cury, nx, ny);
 			exit(-1);
 			}
 		if( (n_wrapped_x > 2) || (n_wrapped_y > 2)) {
