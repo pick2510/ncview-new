@@ -181,16 +181,13 @@ void netcdf_fi_list_vars_inner( Stringlist **ret_val, int gid, char *groupname )
 		var_name = netcdf_varindex_to_name( gid, i );
 
 		/* Prepend group name */
-		grp_var_name = (char *)malloc( sizeof(char) * (strlen(var_name) + strlen(groupname) + 10) );
+		size_t	grp_var_name_size = sizeof(char) * (strlen(var_name) + strlen(groupname) + 10);
+		grp_var_name = (char *)malloc( grp_var_name_size );
 		grp_var_name[0] = '\0';
 		if( (strlen(groupname) == 0) || ((strlen(groupname) == 1) && (groupname[0] == '/' )))
-			strcpy( grp_var_name, var_name );
+			snprintf( grp_var_name, grp_var_name_size, "%s", var_name );
 		else
-			{
-			strcat( grp_var_name, groupname );
-			strcat( grp_var_name, "/" );
-			strcat( grp_var_name, var_name );
-			}
+			snprintf( grp_var_name, grp_var_name_size, "%s/%s", groupname, var_name );
 
 		if( options.debug ) printf( "netcdf_fi_list_vars_inner: checking to see if a displayable var: >%s<\n", 
 			grp_var_name );
@@ -491,13 +488,9 @@ char *netcdf_dim_id_to_name( int fileid, char *var_name, int dim_id )
 	/* return( dim_name ); */
 
 	if( (groupname == NULL) || (groupname[0] == '\0') ) 
-		strcpy( fq_dim_name, dim_name );
+		snprintf( fq_dim_name, MAX_NC_NAME, "%s", dim_name );
 	else
-		{
-		strcpy( fq_dim_name, groupname );
-		strcat( fq_dim_name, "/" );
-		strcat( fq_dim_name, dim_name );
-		}
+		snprintf( fq_dim_name, MAX_NC_NAME, "%s/%s", groupname, dim_name );
 
 	/*
 	printf( "VVVV %s %d netcdf_dim_id_to_name for dim >%s< here is full varname, varname_ng: >%s< >%s< FULLY QUAL DIM NAME: >%s<\n", 
@@ -1105,7 +1098,7 @@ int id1, id2, id3;
 
 	*dimvar_gid	= fileid;
 	fileid2use 	= fileid;
-	strcpy( dim_name_2use, dim_name );
+	snprintf( dim_name_2use, sizeof(dim_name_2use), "%s", dim_name );
 
 	/* If we enter with a fully qualified dim name, such as group_obs_fine/time,
 	 * make sure we proceed with the fileid corresponding to that group. Note that
@@ -1148,7 +1141,7 @@ int id1, id2, id3;
 		/* For the rest of the code, the dim name to use is the
 		 * UNqualifed dim name
 		 */
-		strcpy( dim_name_2use, dim_name_ng );
+		snprintf( dim_name_2use, sizeof(dim_name_2use), "%s", dim_name_ng );
 	 	}
 
 	err = nc_inq( fileid2use, &n_dims, &n_vars, &n_atts, &rec_dim );
