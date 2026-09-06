@@ -46,7 +46,19 @@ void set_options() {}
 int printer_options(PrintOptions*) { return 0; }
 void printer_options_init() {}
 int x_range(float, float, float, float, float*, float*, int*) { return 0; }
-void x_dataedit(char**, int) {}
+// Captured for test_view_data_edit.cc: view_data_edit() builds this array
+// and hands ownership to x_dataedit(), which upstream's real FLTK dialog
+// consumes and frees once the user closes it. The stub can't reproduce
+// that dialog, so it stashes the pointer/count here and the test frees it
+// after inspecting the content -- this is also what let ASan's
+// heap-buffer-overflow report (modernization.md's Phase 0d findings) point
+// straight at view_data_edit()'s allocation instead of some later dialog code.
+char **g_last_dataedit_lines = nullptr;
+int g_last_dataedit_nx = 0;
+void x_dataedit(char **text, int nx) {
+    g_last_dataedit_lines = text;
+    g_last_dataedit_nx = nx;
+}
 int x_seen_colormap_name(char*) { return 0; }
 void x_check_legal_colormap_loaded() {}
 void x_create_colorbar(float, float, int) {}

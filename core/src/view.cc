@@ -2478,7 +2478,8 @@ view_data_edit( void )
 	y_size = *(view->variable->size + view->y_axis_id);
 
 	n_entries  = x_size * y_size;
-	line_array = (char **)malloc( sizeof(char *)*n_entries );
+	/* +1 for the NULL terminator written after the loop below */
+	line_array = (char **)malloc( sizeof(char *)*(n_entries+1) );
 
 	index = 0L;
 	for( j=0; j<y_size; j++)
