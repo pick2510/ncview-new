@@ -255,8 +255,8 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		/* move to the center, then half the string's width */
 		set_font( outf, printopts.font_name.c_str(), printopts.header_font_size );
 		fprintf( outf, "%ld %ld moveto\n",
-				center_x,
-				top_of_image+printopts.font_size );
+				(long)center_x,
+				(long)(top_of_image+printopts.font_size) );
 		fprintf( outf, "(%s) stringwidth pop -0.5 mul 0 rmoveto\n", tstr );
 		fprintf( outf, "(%s) show\n", tstr );
 		}
@@ -271,7 +271,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			strncat( tstr, ")", sizeof(tstr) - strlen(tstr) - 1 );
 			}
 		fprintf( outf, "%ld %ld moveto\n",
-			center_x, bot_of_image-(long)(1.5*(float)printopts.font_size) );
+			(long)center_x, (long)(bot_of_image-(long)(1.5*(float)printopts.font_size)) );
 		fprintf( outf, "(%s) stringwidth pop -0.5 mul 0 rmoveto\n", tstr );
 		fprintf( outf, "(%s) show\n", tstr );
 
@@ -284,8 +284,8 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			strncat( tstr, ")", sizeof(tstr) - strlen(tstr) - 1 );
 			}
 		fprintf( outf, "%ld %ld moveto\n",
-			center_x - (long)((float)x_size*output_scale/2.0),
-			center_y );
+			(long)(center_x - (long)((float)x_size*output_scale/2.0)),
+			(long)center_y );
 		fprintf( outf, "gsave 90 rotate 0 %d rmoveto\n",
 				(int)((float)printopts.font_size*output_scale) );
 		fprintf( outf, "(%s) stringwidth pop -0.5 mul 0 rmoveto\n", tstr );
@@ -296,7 +296,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 	if( printopts.include_extra_info ) {
 		set_font( outf, printopts.font_name.c_str(), printopts.font_size );
 		fprintf( outf, "%ld %ld moveto\n", (long)(printopts.page_x_margin*printopts.ppi),
-			bot_of_image - 4*printopts.font_size );
+			(long)(bot_of_image - 4*printopts.font_size) );
 
 		/**** File title ***/
 		file_title = fi_title( view->variable->files.front().get()->id );
@@ -369,7 +369,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		if( (fi_recdim_id( view->variable->files.front().get()->id ) != view->x_axis_id ) &&
 		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->y_axis_id))
 			snprintf( tstr, 1499, "Frame %ld in ",
-				actual_place[view->scan_axis_id]+1 );
+				(long)(actual_place[view->scan_axis_id]+1) );
 		strncat( tstr, "File ", sizeof(tstr) - strlen(tstr) - 1 );
 		strncat( tstr, fdb->filename.c_str(), sizeof(tstr) - strlen(tstr) - 1 );
 		fprintf( outf, "gsave (%s) show grestore\n", tstr );
@@ -382,10 +382,10 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		/* Make the id font a bit smaller */
 		set_font( outf, printopts.font_name.c_str(), 
 				(int)((float)printopts.font_size*ID_FONT_SIZE_SCALE) );
-		fprintf( outf, "gsave %ld %ld translate 0 0 moveto\n", 
-			center_x + (long)((float)x_size*output_scale/2.0) 
-						+ printopts.font_size + printopts.leading,
-			bot_of_image );
+		fprintf( outf, "gsave %ld %ld translate 0 0 moveto\n",
+			(long)(center_x + (long)((float)x_size*output_scale/2.0)
+						+ printopts.font_size + printopts.leading),
+			(long)bot_of_image );
 		fprintf( outf, "90 rotate (%s) show grestore\n", tstr );
 		}
 
@@ -403,7 +403,8 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			}
 		fclose( f_dummy );
 		snprintf( tstr, 1499, "lpr \"%s\"\n", printopts.out_file_name.c_str() );
-		system( tstr );
+		if( system( tstr ) != 0 )
+			fprintf( stderr, "Warning: print command failed: %s", tstr );
 		unlink( printopts.out_file_name.c_str() );
 		}
 
@@ -444,9 +445,9 @@ do_outline( FILE *f, size_t x, size_t y )
 {
 	fprintf( f, "newpath\n" );
 	fprintf( f, "0 0 moveto\n" );
-	fprintf( f, "0 %ld lineto\n", -y );
-	fprintf( f, "%ld %ld lineto\n", x, -y );
-	fprintf( f, "%ld 0 lineto\n", x );
+	fprintf( f, "0 %ld lineto\n", -(long)y );
+	fprintf( f, "%ld %ld lineto\n", (long)x, -(long)y );
+	fprintf( f, "%ld 0 lineto\n", (long)x );
 	fprintf( f, "0 0 lineto\n" );
 	fprintf( f, "closepath stroke\n" );
 }
@@ -455,12 +456,12 @@ do_outline( FILE *f, size_t x, size_t y )
 print_header( FILE *f, float scale, size_t x, size_t y, size_t top_of_image )
 {
 	fprintf( f, "%%!\n" );
-	fprintf( f, "/picstr %ld string def\n", x*3 );
+	fprintf( f, "/picstr %ld string def\n", (long)(x*3) );
 	fprintf( f, "gsave\n" );
 
 	/* This sets the position of the output image on the page */
-	fprintf( f, "%ld %ld translate\n", 
-			(long)(printopts.page_x_margin*printopts.ppi), top_of_image );
+	fprintf( f, "%ld %ld translate\n",
+			(long)(printopts.page_x_margin*printopts.ppi), (long)top_of_image );
 
 	/* This sets the size of the image */
 	fprintf( f, "%f %f scale\n", scale, scale );
@@ -468,18 +469,18 @@ print_header( FILE *f, float scale, size_t x, size_t y, size_t top_of_image )
 	if( printopts.test_only ) {
 		fprintf( f, "newpath\n" );
 		fprintf( f, "0 0 moveto\n" );
-		fprintf( f, "0 %ld lineto\n", -y );
-		fprintf( f, "%ld %ld lineto\n", x, -y );
-		fprintf( f, "%ld 0 lineto\n", x );
+		fprintf( f, "0 %ld lineto\n", -(long)y );
+		fprintf( f, "%ld %ld lineto\n", (long)x, -(long)y );
+		fprintf( f, "%ld 0 lineto\n", (long)x );
 		fprintf( f, "0 0 lineto\n" );
-		fprintf( f, "%ld %ld lineto\n", x, -y );
-		fprintf( f, "0 %ld moveto\n", -y );
-		fprintf( f, "%ld 0 lineto\n", x );
+		fprintf( f, "%ld %ld lineto\n", (long)x, -(long)y );
+		fprintf( f, "0 %ld moveto\n", -(long)y );
+		fprintf( f, "%ld 0 lineto\n", (long)x );
 		fprintf( f, "closepath stroke\n" );
 		}
 	else
 		{
-		fprintf( f, "%ld %ld 8\n", x, y );
+		fprintf( f, "%ld %ld 8\n", (long)x, (long)y );
 		fprintf( f, "[1 0 0 -1 0 1]\n" );
 		fprintf( f, "{currentfile picstr readhexstring pop}\n" );
 		fprintf( f, "false 3\n" );
