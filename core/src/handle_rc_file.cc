@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <string.h>
 
+#include <memory>
+
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
@@ -63,6 +65,13 @@ write_state_to_file( Stringlist *state_to_save )
 		fprintf( stderr, "Error making header for ncview save state file\n" );
 		return( -1 );
 		}
+	/* header is now a fully local temporary, never handed to a caller --
+	 * own it here rather than with a final stringlist_delete_entire_list()
+	 * call at the bottom, since several validation/I-O checks below return
+	 * early and used to leak it (header's pointer value itself never
+	 * changes after this point: stringlist_cat() below only appends into
+	 * the vector it already owns, it doesn't reallocate it). */
+	std::unique_ptr<Stringlist> header_owner( header );
 
 	/* Alg: create a temporary file with the new state, then
 	 * mv that to the actual state file.
@@ -122,9 +131,6 @@ write_state_to_file( Stringlist *state_to_save )
 		}
 
 	fclose( outf );
-
-	/* Free storage associated with our header */
-	stringlist_delete_entire_list( header );
 
 	/* Now copy our temporary file over to its final name */
 	if( rename( tmp_fname, final_fname ) != 0 ) {

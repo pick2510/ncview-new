@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 
 #define my_isblank( a ) (isspace(a) || ((a) == '\t'))
 
@@ -274,6 +275,12 @@ stringlist_check_args( const char *new_string, const StringlistAux &aux )
 				fprintf( stderr, "stringlist_read_from_file: error reading header line from file!\n" );
 				return( err );
 				}
+			/* header_el is a local, one-line-only temporary -- own it here
+			 * so every return path below frees it, instead of only the
+			 * dispatch-to-v1 path a bare `delete` after the version check
+			 * would cover (the "not an int" branch right below used to
+			 * leak it). */
+			std::unique_ptr<Stringlist> header_owner( header_el );
 
 			if( !std::holds_alternative<int>((*header_el)[0].aux) ) {
 				fprintf( stderr, "stringlist_read_from_file: error reading save file version number from file\n" );
@@ -281,7 +288,6 @@ stringlist_check_args( const char *new_string, const StringlistAux &aux )
 				}
 
 			version_number = std::get<int>((*header_el)[0].aux);
-			delete header_el;
 			if( debug ) printf( "stringlist_read_from_file: save file version number %d\n", version_number );
 			if( version_number == 1 )
 				return( stringlist_read_from_file_v1( sl, fin, lineno, debug ));
