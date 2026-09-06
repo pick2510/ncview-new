@@ -198,6 +198,16 @@ Not a numbered phase. Removed the dead code identified by inspection during Phas
 
 No behavior change: full rebuild clean, `ctest` 100% (incl. the byte-identical Xvfb `ncview_ui_smoke` screenshot test), and an `-DNCVIEW_SANITIZE=address,undefined` pass clean. `core/WARNINGS.md` now lists only `-Wwrite-strings` (136), `-Wsign-compare` (71), `-Wstringop-truncation` (3), `-Wparentheses` (1), `-Wempty-body` (1), `-Wformat-truncation=` (1), and `-Wformat=` (1) — all explicitly out of scope for this pass (type/format mismatches, not dead code) and left for future follow-up work, same as Phase 7 left them.
 
+## Phase 8 — Local buffer RAII sweep
+
+Phases 5-7 eliminated every *owning* raw pointer reachable from a struct: `NCVar`/`FDBlist`/`NCDim`/`NCDim_map_info`, `View`/`FrameStore`/`Options`/`OverlayOptions`/`PrintOptions` are all `std::vector`/`std::string`/`std::unique_ptr` now, and the three raw pointers left in `defines.h` (`NCDim_map_info::var_i_map`, `View::variable`, `FDBlist::ut_unit_ptr`) are non-owning back-pointers, correctly documented as such. `Stringlist *` stays a manually-`new`/`delete`'d opaque handle type by design (Phase 3's decision — it's a public API shape used pervasively across `core`/`ui` as `Stringlist **` out-params, matching the original C contract), and the single global `View *view` stays intentionally leaked (Phase 6, matching upstream's own never-freed `malloc()`).
+
+What's left is smaller and lower-risk: ~74 `malloc`/54 `free` call sites, none of them struct-owned, spread across `file_netcdf.cc`, `view.cc`, `util.cc`, `calcalcs.cc`, `utCalendar2_cal.cc`, `overlay.cc`, `file.cc`, `do_print.cc`, `ncview.cc`. Each is a function-local scratch buffer — `start`/`count` index arrays for netCDF calls, temporary string buffers, dimension-index arrays — allocated and freed within a single function body. No double-free/leak risk from the ownership angle (nothing escapes the function), but still manual C-style buffer management that a local `std::vector<T>`/`std::string` would replace with no behavior change: same size, same lifetime, same contents, just no matching `malloc`/`free` pair to get wrong under future edits.
+
+Approach: mechanical, function-by-function, converting each local `malloc`/`free` pair to a stack-lifetime `std::vector`/`std::string` (or `std::array` where the size is a compile-time constant already, e.g. several `MAX_NC_DIMS`-sized scratch arrays). Where a buffer is passed to a C API expecting a raw pointer (netCDF, udunits2), pass `.data()`. Skip anything where the "buffer" is actually a fixed-size on-stack C array already (`char buf[256]`) — those aren't `malloc`/`free` sites and aren't broken. Same verification bar as every prior phase: full rebuild with `-Wall -Wextra`, `ctest` (including the byte-identical Xvfb `ncview_ui_smoke` screenshot test), and an `-DNCVIEW_SANITIZE=address,undefined` pass, all clean; behavior byte-identical.
+
+Not started yet.
+
 ## Follow-up commits (separate, after Phase 7)
 
 Strict parity means these are *found* during the work and fixed afterwards, each with its own test:
