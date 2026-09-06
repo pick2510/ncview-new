@@ -27,6 +27,8 @@
  *
  *****************************************************************************/
 
+#include <array>
+
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
@@ -181,7 +183,8 @@ void netcdf_fi_list_vars_inner( Stringlist **ret_val, int gid, char *groupname )
 
 		/* Prepend group name */
 		size_t	grp_var_name_size = sizeof(char) * (strlen(var_name) + strlen(groupname) + 10);
-		grp_var_name = (char *)malloc( grp_var_name_size );
+		std::vector<char> grp_var_name_buf( grp_var_name_size );
+		grp_var_name = grp_var_name_buf.data();
 		grp_var_name[0] = '\0';
 		if( (strlen(groupname) == 0) || ((strlen(groupname) == 1) && (groupname[0] == '/' )))
 			snprintf( grp_var_name, grp_var_name_size, "%s", var_name );
@@ -233,7 +236,7 @@ void netcdf_fi_list_vars_inner( Stringlist **ret_val, int gid, char *groupname )
 void netcdf_fi_list_vars_v4( Stringlist **retval, int fileid )
 {
 	char 	*groupname;
-	int	i, *grp_id, err, n_groups, full_path;
+	int	i, err, n_groups, full_path;
 
 
 	/* Get name of this group
@@ -247,20 +250,18 @@ void netcdf_fi_list_vars_v4( Stringlist **retval, int fileid )
 	 */
 	err = nc_inq_grps( fileid, &n_groups, NULL);
 	if( err != NC_NOERR ) {
-		fprintf( stderr, "netcdf_fi_list_vars: error on nc_inq_grps, cdfid=%d: %s\n", 
+		fprintf( stderr, "netcdf_fi_list_vars: error on nc_inq_grps, cdfid=%d: %s\n",
 			fileid, nc_strerror(err) );
 		exit( -1 );
 		}
 
 	/* Get group IDs
 	 */
-	grp_id = (int *)malloc( sizeof(int) * n_groups );
-	err = nc_inq_grps( fileid, &n_groups, grp_id );
+	std::vector<int> grp_id( n_groups );
+	err = nc_inq_grps( fileid, &n_groups, grp_id.data() );
 	for( i=0; i<n_groups; i++ ) {
 		netcdf_fi_list_vars_v4( retval, grp_id[i] );
 		}
-
-	free( grp_id );
 
 }
 
@@ -288,14 +289,13 @@ Stringlist *netcdf_fi_list_vars( int fileid )
 Stringlist *netcdf_scannable_dims( int fileid, char *var_name )
 {
 	int	var_id, n_dims, i, err, gid;
-	char	*dim_name;
 	size_t	dim_size;
 	Stringlist *dimlist = NULL;
 	int	n_atts, dim[MAX_VAR_DIMS];
 	nc_type	var_type;
 	char	var_name_ng[MAX_NC_NAME];
-
-	dim_name = (char *)malloc( MAX_NC_NAME ); /* defined in netcdf.h */
+	std::array<char, MAX_NC_NAME> dim_name_buf; /* defined in netcdf.h */
+	char	*dim_name = dim_name_buf.data();
 
 	err = nc_inq_varid_grp( fileid, var_name, &var_id, &gid );
 	if( err != NC_NOERR ) {
@@ -433,7 +433,7 @@ size_t * netcdf_fi_var_size( int fileid, char *var_name )
 std::string netcdf_dim_id_to_name( int fileid, std::string_view var_name, int dim_id )
 {
 	int	netcdf_dim_id, netcdf_var_id, gid;
-	int	n_dims, *dim, err, n_atts;
+	int	n_dims, err, n_atts;
 	char	dim_name[MAX_NC_NAME], var_name_ng[MAX_NC_NAME], groupname[MAX_NC_NAME], fq_dim_name[MAX_NC_NAME];
 	nc_type	var_type;
 	std::string var_name_s( var_name );
@@ -460,16 +460,16 @@ std::string netcdf_dim_id_to_name( int fileid, std::string_view var_name, int di
 
 
 	n_dims = fi_n_dims( gid, var_name_ng );
-	dim    = (int *)malloc( n_dims * sizeof( int ));
+	std::vector<int> dim( n_dims );
 	err    = nc_inq_var( gid, netcdf_var_id, var_name_ng, &var_type,
-				&n_dims, dim, &n_atts );
+				&n_dims, dim.data(), &n_atts );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "ncview: netcdf_dim_id_to_name: error on ");
 		fprintf( stderr, "nc_inq_var call.  Variable=%s\n", var_name_s.c_str() );
 		exit( -1 );
 		}
 
-	netcdf_dim_id = *(dim+dim_id);
+	netcdf_dim_id = dim[dim_id];
 	err      = nc_inq_dimname( gid, netcdf_dim_id, dim_name );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "ncview: netcdf_dim_id_to_name: error on ");
@@ -504,7 +504,7 @@ std::string netcdf_dim_id_to_name( int fileid, std::string_view var_name, int di
  */
 int netcdf_dim_name_to_id( int fileid, char *var_name, char *dim_name )
 {
-	int	netcdf_dim_id, netcdf_var_id, n_dims, *dim, err, i, n_atts, gid, debug;
+	int	netcdf_dim_id, netcdf_var_id, n_dims, err, i, n_atts, gid, debug;
 	nc_type	var_type;
 	char	var_name_ng[MAX_NC_NAME];
 
@@ -552,9 +552,9 @@ int netcdf_dim_name_to_id( int fileid, char *var_name, char *dim_name )
 		return( -1 );
 
 	n_dims = fi_n_dims( gid, var_name_ng );
-	dim    = (int *)malloc( n_dims * sizeof( int ));
+	std::vector<int> dim( n_dims );
 	err    = nc_inq_var( gid, netcdf_var_id, var_name_ng, &var_type,
-				&n_dims, dim, &n_atts );
+				&n_dims, dim.data(), &n_atts );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "ncview: netcdf_dim_name_to_id: error on ");
 		fprintf( stderr, "nc_inq_var call.  Variable %s, Dimension %s\n",
@@ -563,7 +563,7 @@ int netcdf_dim_name_to_id( int fileid, char *var_name, char *dim_name )
 		}
 
 	for( i=0; i<n_dims; i++ )
-		if( *(dim+i) == netcdf_dim_id )
+		if( dim[i] == netcdf_dim_id )
 			return( i );
 
 	return( -1 );
@@ -1493,10 +1493,9 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 	int	i, err;
 	size_t	len;
 	nc_type	type;
-	char	*char_att;
-	short	*short_att, short_1;
-	double	*double_att, double_1;
-	long	*long_att, long_1;
+	short	short_1;
+	double	double_1;
+	long	long_1;
 
 	if( netcdf_att_id( id, varid, att_name ) >= 0 ) {
 		err = nc_inq_att( id, varid, att_name, &type, &len );
@@ -1504,50 +1503,54 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 			return( false );
 		if( type != NC_FLOAT ) {
 			switch( type ) {
-				case NC_CHAR:	
-					char_att = (char *)malloc( len+1 );
-					err = nc_get_att_text( id, varid, att_name, char_att );
+				case NC_CHAR:
+					{
+					std::vector<char> char_att( len+1 );
+					err = nc_get_att_text( id, varid, att_name, char_att.data() );
 					if( err != NC_NOERR )
 						return( false );
-					sscanf( char_att, "%f", (float *)value );
-					free(char_att);
+					sscanf( char_att.data(), "%f", (float *)value );
+					}
 					break;
 
 				case NC_BYTE:
 				case NC_SHORT:
-					short_att = (short *)malloc( len*sizeof(short) );
-					err = nc_get_att_short( id, varid, att_name, short_att );
+					{
+					std::vector<short> short_att( len );
+					err = nc_get_att_short( id, varid, att_name, short_att.data() );
 					if( err != NC_NOERR )
 						return( false );
 					for( i=0; i<len; i++ ) {
-						short_1 = *(short_att+i);
+						short_1 = short_att[i];
 						*((float *)value + i) = (float)short_1;
 						}
-					free(short_att);
+					}
 					break;
 
 				case NC_DOUBLE:
-					double_att = (double *)malloc( len*sizeof(double));
-					err = nc_get_att_double( id, varid, att_name, double_att );
+					{
+					std::vector<double> double_att( len );
+					err = nc_get_att_double( id, varid, att_name, double_att.data() );
 					if( err != NC_NOERR )
 						return( false );
 					for( i=0; i<len; i++ ) {
-						double_1 = *(double_att+i);
+						double_1 = double_att[i];
 						*((float *)value + i) = (float)double_1;
 						}
-					free(double_att);
+					}
 					break;
 
 				case NC_LONG:
-					long_att = (long *)malloc( len*sizeof(long));
-					err = nc_get_att_long( id, varid, att_name, long_att );
+					{
+					std::vector<long> long_att( len );
+					err = nc_get_att_long( id, varid, att_name, long_att.data() );
 					if( err != NC_NOERR )
 						return( false );
 					for( i=0; i<len; i++ ) {
-						long_1 = *(long_att+i);
+						long_1 = long_att[i];
 						*((float *)value + i) = (float)long_1;
 						}
-					free(long_att);
+					}
 					break;
 				default:	
 					fprintf( stderr, "can't handle conversions from %s to FLOAT yet\n", nc_type_to_string( type ) );
@@ -1774,7 +1777,7 @@ int safe_ncvarid( int fileid, char *varname )
  */
 int safe_ncdimid( int fileid, char *dim_name1 )
 {
-	int	err, i, n_dims, *dimids, include_parents;
+	int	err, i, n_dims, include_parents;
 	char	dim_name2[MAX_NC_NAME];
 	int	debug;
 	size_t	dim_size;
@@ -1796,8 +1799,8 @@ int safe_ncdimid( int fileid, char *dim_name1 )
 		}
 	if( debug == 1 ) printf( "safe_ncdimid: n_dims=%d\n", n_dims );
 
-	dimids = (int *)malloc( sizeof(int) * n_dims );
-	err = nc_inq_dimids( fileid, &n_dims, dimids, include_parents );
+	std::vector<int> dimids( n_dims );
+	err = nc_inq_dimids( fileid, &n_dims, dimids.data(), include_parents );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "safe_ncdimid: error on call to nc_inq_dimids (2): %s\n", 
 			nc_strerror(err) );
@@ -2021,13 +2024,12 @@ void warn_about_char_dims()
  */
 int netcdf_dimvar_bounds_id( int fileid, char *dim_name, int *nvertices )
 {
-	int	reg_dimvar_id, bounds_dimvar_id, dimvar_ndims, err, name_length, debug, 
+	int	reg_dimvar_id, bounds_dimvar_id, dimvar_ndims, err, name_length, debug,
 		dimvar_gid;
 	char	*attname = "bounds";
-	char 	*bounds_dimvarname;
 	nc_type	type;
 	size_t	st_nvertices;
-	int dimids[MAX_NC_DIMS]; 
+	int dimids[MAX_NC_DIMS];
 
 	debug = 0;
 
@@ -2049,49 +2051,41 @@ int netcdf_dimvar_bounds_id( int fileid, char *dim_name, int *nvertices )
 	if( (err < 0) || (type != NC_CHAR))
 		return( -1 );
 
-	bounds_dimvarname = (char *)malloc( name_length+1 );
+	std::vector<char> bounds_dimvarname_buf( name_length+1 );
+	char *bounds_dimvarname = bounds_dimvarname_buf.data();
 	err = ncattget( dimvar_gid, reg_dimvar_id, attname, bounds_dimvarname );
-	if( err < 0 ) {
-		free( bounds_dimvarname );
+	if( err < 0 )
 		return( -1 );
-		}
 
 	if( *(bounds_dimvarname+name_length-1) != '\0' )
 		*(bounds_dimvarname + name_length) = '\0';
 
 	err = nc_inq_varid( dimvar_gid, bounds_dimvarname, &bounds_dimvar_id );
-	if( err != 0 ) {
-		free( bounds_dimvarname );
+	if( err != 0 )
 		return( -1 );
-		}
 
 	/* Currently only know how to handle 2-d bounds variables */
 	err = nc_inq_varndims( dimvar_gid, bounds_dimvar_id, &dimvar_ndims );
 	if( (err != NC_NOERR) || (dimvar_ndims != 2)) {
-		fprintf( stderr, "Currently can only handle bounds dims with ndims=2; bounds var %s has ndims=%d.  Ignoring!\n", 
+		fprintf( stderr, "Currently can only handle bounds dims with ndims=2; bounds var %s has ndims=%d.  Ignoring!\n",
 				bounds_dimvarname, dimvar_ndims );
-		free( bounds_dimvarname );
 		return( -1 );
 		}
 
 	/* Get the dim ids of the bounds var so we can get the length of the trailing
-	 * one, which is the number of vertices 
+	 * one, which is the number of vertices
 	 */
 	err = nc_inq_vardimid( dimvar_gid, bounds_dimvar_id, dimids );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "Error reading bounds info for boundary variable %s.  Ignoring!\n", bounds_dimvarname );
-		free( bounds_dimvarname );
 		return( -1 );
 		}
 	err = nc_inq_dimlen( dimvar_gid, dimids[1], &st_nvertices );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "Error reading nvertices info for boundary variable %s.  Ignoring!\n", bounds_dimvarname );
-		free( bounds_dimvarname );
 		return( -1 );
 		}
 	*nvertices = (int)st_nvertices;
-
-	free( bounds_dimvarname );
 
 	return( bounds_dimvar_id );
 }
@@ -2126,10 +2120,9 @@ char *ncview_varname( int gid, int varid )
 void nc_print_group_structure( int fileid )
 {
 	int 	rootid, cursor, parent;
-	int	*gid, ig, ndims, nvars, natts, unlimdimid;
+	int	ig, ndims, nvars, natts, unlimdimid;
 	int	ng;
 	size_t	gnl;
-	char	*group_name;
 
 	/* Get root */
 	cursor = fileid;
@@ -2146,15 +2139,16 @@ void nc_print_group_structure( int fileid )
 		return;
 		}
 
-	gid = (int *)malloc( sizeof(int) * ng );
-	nc_inq_grps( rootid, &ng, gid );
+	std::vector<int> gid( ng );
+	nc_inq_grps( rootid, &ng, gid.data() );
 	printf( "nc_print_group_structure: fileid=%d rootid=%d has %d groups:\n", fileid, rootid, ng );
 
 	for( ig=0; ig<ng; ig++ ) {
 
 		/* Get group name */
 		nc_inq_grpname_len( gid[ig], &gnl );
-		group_name = (char *)malloc( sizeof(char) * (gnl+2) );
+		std::vector<char> group_name_buf( gnl+2 );
+		char *group_name = group_name_buf.data();
 		nc_inq_grpname_full( gid[ig], &gnl, group_name );
 
 		/* find info about this group: number of dims, vars, atts */
@@ -2163,10 +2157,8 @@ void nc_print_group_structure( int fileid )
 		printf( "   group %d: id=%d >%s<\n", 
 			ig, gid[ig], group_name );
 
-		printf( "       ndims:%d nvars:%d natts:%d unlimdimid:%d\n", 
+		printf( "       ndims:%d nvars:%d natts:%d unlimdimid:%d\n",
 			ndims, nvars, natts, unlimdimid );
-
-		free( group_name );
 		}
 }
 

@@ -1506,11 +1506,8 @@ contract_data( float *small_data, View *v, float fill_value )
 		}
 
 	n = -options.blowup;
-	tmpv = (float *)malloc( n*n * sizeof(float) );
-	if( tmpv == NULL ) {
-		fprintf( stderr, "internal error, failed to allocate array for calculating reduced means\n" );
-		exit( -1 );
-		}
+	std::vector<float> tmpv_buf( n*n );
+	tmpv = tmpv_buf.data();
 
 	/* Get old and new sizes (new size is smaller in this routine) */
 	nx   = v->variable->size[v->x_axis_id];
@@ -1543,9 +1540,6 @@ contract_data( float *small_data, View *v, float fill_value )
 			exit( -1 );
 			}
 		}
-
-
-	free(tmpv);
 }
 
 /******************************************************************************
@@ -2097,14 +2091,14 @@ void fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCD
 	int
 strncmp_nocase( char *s1, char *s2, size_t n )
 {
-	char 	*s1_lc, *s2_lc;
 	int	i, retval;
 
 	if( (s1==NULL) || (s2==NULL))
 		return(-1);
 
-	s1_lc = (char *)malloc(strlen(s1)+1);
-	s2_lc = (char *)malloc(strlen(s2)+1);
+	std::vector<char> s1_lc_buf(strlen(s1)+1), s2_lc_buf(strlen(s2)+1);
+	char *s1_lc = s1_lc_buf.data();
+	char *s2_lc = s2_lc_buf.data();
 
 	for( i=0; i<strlen(s1); i++ )
 		s1_lc[i] = tolower(s1[i]);
@@ -2114,9 +2108,6 @@ strncmp_nocase( char *s1, char *s2, size_t n )
 	s2_lc[i] = '\0';
 
 	retval = strncmp( s1_lc, s2_lc, n );
-
-	free(s1_lc);
-	free(s2_lc);
 
 	return(retval);
 }
@@ -2129,12 +2120,12 @@ strncmp_nocase( char *s1, char *s2, size_t n )
 int determine_lat_lon( char *s_in, int *is_lat, int *is_lon )
 {
 	static  int have_given_warning = 0;
-	char	*s;
 	size_t	n, i;
 
 	/* Get lower case version of input name */
 	n = strlen(s_in);
-	s = (char *)malloc( sizeof(char) * (n+2));
+	std::vector<char> s_buf( n+2 );
+	char *s = s_buf.data();
 
 	for( i=0; i<n; i++ )
 		s[i] = tolower( s_in[i] );
@@ -2144,37 +2135,31 @@ int determine_lat_lon( char *s_in, int *is_lat, int *is_lon )
 
 	if( strncasecmp( "lat", s, 3 ) == 0 ) {
 		*is_lat = 1;
-		free( s );
 		return(0);
 		}
 
 	if( strncasecmp( "lon", s, 3 ) == 0 ) {
 		*is_lon = 1;
-		free( s );
 		return(0);
 		}
 
 	if( strstr( s, "lat" ) != NULL ) {
 		*is_lat = 1;
-		free( s );
 		return(0);
 		}
 
 	if( strstr( s, "lon" ) != NULL ) {
 		*is_lon = 1;
-		free( s );
 		return(0);
 		}
 
 	if( (s[0] == 'x') || (s[0] == 'X') ) {
 		*is_lon = 1;
-		free( s );
 		return(0);
 		}
 
 	if( (s[0] == 'y') || (s[0] == 'Y') ) {
 		*is_lat = 1;
-		free( s );
 		return(0);
 		}
 

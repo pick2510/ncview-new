@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <vector>
 
 #include "udunits2.h"
 #include "ncview/calcalcs.h"
@@ -744,7 +745,6 @@ static calcalcs_cal *getcal( const char *name )
 static int inferred_origin_year( const char *s ) 
 {
 	int		sl, i, loc_since_start, ifnbss, idash, nyd, retval;
-	char		*year_digits;
 
 	if( (s == NULL) || (strlen(s) < 6)) 	/* have to have at least room for since and a year */
 		return( -9999 );
@@ -783,12 +783,12 @@ static int inferred_origin_year( const char *s )
 
 	/* Make a copy of just the year digits */
 	nyd = idash - ifnbss;		/* number of digits in the year string */
-	year_digits = (char *)malloc( sizeof(char) * nyd );
-	strncpy( year_digits, s+ifnbss, nyd );
+	std::vector<char> year_digits( nyd+1 ); /* zero-initialized: NUL-terminates the copy below */
+	strncpy( year_digits.data(), s+ifnbss, nyd );
 
-/* printf( "YEAR DIGITS: >%s<\n", year_digits ); */
+/* printf( "YEAR DIGITS: >%s<\n", year_digits.data() ); */
 
-	if( sscanf( year_digits, "%d", &retval ) != 1 ) 
+	if( sscanf( year_digits.data(), "%d", &retval ) != 1 )
 		return( -9999 );
 
 	return( retval );
@@ -841,7 +841,8 @@ static void strip_timezone_info( const char *units_orig, char *out )
 
 	char *ptr;
 	size_t s_size = strlen( units_orig ) + 1;
-	char *s = (char *)malloc( s_size );
+	std::vector<char> s_buf( s_size );
+	char *s = s_buf.data();
 	snprintf( s, s_size, "%s", units_orig );
 
 	/* First time thru, figure out how many tokens there are. If less than
@@ -869,7 +870,5 @@ static void strip_timezone_info( const char *units_orig, char *out )
 		if( ptr != NULL )
 			strncat( out, " ", s_size - strlen(out) - 1 );
 		}
-
-	free( s );
 }
 

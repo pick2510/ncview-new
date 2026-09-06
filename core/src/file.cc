@@ -305,7 +305,6 @@ fi_dim_name_to_id( int fileid, char *var_name, char *dim_name )
 	void
 fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 {
-	size_t	*act_start_pos;
 	FDBlist	*file;
 
 	/* Check to see if we should loop over the timelike indices
@@ -314,13 +313,9 @@ fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 		fi_get_data_iterate( var, virt_start_pos, count, data );
 		return;
 		}
-		
-	act_start_pos = (size_t *)malloc(var->n_dims * sizeof(size_t));
-	if( act_start_pos == NULL ) {
-		fprintf( stderr, "error allocating space for act_start_pos\n" );
-		fprintf( stderr, "in routine fi_get_data\n" );
-		exit( -1 );
-		}
+
+	std::vector<size_t> act_start_pos_buf( var->n_dims );
+	size_t *act_start_pos = act_start_pos_buf.data();
 	virt_to_actual_place( var, virt_start_pos, act_start_pos, &file );
 
 	if( file_type == FILE_TYPE_NETCDF )
@@ -332,8 +327,6 @@ fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 			file_type );
 		exit( -1 );
 		}
-
-	free( act_start_pos );
 }
 
 /*****************************************************************************
@@ -343,16 +336,12 @@ fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 	void
 fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 {
-	size_t	it, *act_start_pos, start2[20], count2[20], prod_lower_dims;
+	size_t	it, start2[20], count2[20], prod_lower_dims;
 	FDBlist	*file;
 	int	i;
 
-	act_start_pos = (size_t *)malloc(var->n_dims * sizeof(size_t));
-	if( act_start_pos == NULL ) {
-		fprintf( stderr, "error allocating space for act_start_pos\n" );
-		fprintf( stderr, "in routine fi_get_data\n" );
-		exit( -1 );
-		}
+	std::vector<size_t> act_start_pos_buf( var->n_dims );
+	size_t *act_start_pos = act_start_pos_buf.data();
 
 	prod_lower_dims = 1L;
 	for( i=1; i<var->n_dims; i++ ) {
@@ -376,8 +365,6 @@ fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *da
 			exit( -1 );
 			}
 		}
-
-	free( act_start_pos );
 }
 
 /************************************************************************************
@@ -457,7 +444,7 @@ fi_dim_value( NCVar *var, int dim_id, size_t virt_place, double *return_val_doub
 	char *return_val_char, int *return_has_bounds, double *return_bounds_min, 
 	double *return_bounds_max, size_t *complete_ndim_virt_place )
 {
-	size_t	actual_place, *virt_start_pos, *act_start_pos;
+	size_t	actual_place;
 	FDBlist	*file;
 	int	i;
 	std::string	dim_name;
@@ -494,18 +481,10 @@ for( i=0; i<var->n_dims; i++ ) {
 		return( NC_DOUBLE );
 		}
 
-	act_start_pos  = (size_t *)malloc(var->n_dims * sizeof(size_t));
-	if( act_start_pos == NULL ) {
-		fprintf( stderr, "error allocating space for act_start_pos\n" );
-		fprintf( stderr, "in routine fi_dim_value\n" );
-		exit( -1 );
-		}
-	virt_start_pos = (size_t *)malloc(var->n_dims * sizeof(size_t));
-	if( virt_start_pos == NULL ) {
-		fprintf( stderr, "error allocating space for virt_start_pos\n" );
-		fprintf( stderr, "in routine fi_dim_value\n" );
-		exit( -1 );
-		}
+	std::vector<size_t> act_start_pos_buf( var->n_dims );
+	size_t *act_start_pos = act_start_pos_buf.data();
+	std::vector<size_t> virt_start_pos_buf( var->n_dims );
+	size_t *virt_start_pos = virt_start_pos_buf.data();
 
 	for( i=0; i<var->n_dims; i++ )
 		*(virt_start_pos+i) = 0L;
@@ -527,8 +506,6 @@ for( i=0; i<var->n_dims; i++ ) {
 			file_type );
 		exit( -1 );
 		}
-	free( act_start_pos );
-	free( virt_start_pos );
 
 #ifdef HAVE_UDUNITS2
 	/* Now we have to figure out if we need to change units on the

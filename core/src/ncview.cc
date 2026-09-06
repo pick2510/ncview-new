@@ -582,17 +582,18 @@ init_cmap_from_file( char *dir_name, char *file_name, int n_suffix )
 	unsigned char r[256], g[256], b[256];
 	size_t	slen;
 
-	if( options.debug ) 
+	if( options.debug )
 		printf( "    ... initting cmap >%s<\n", file_name );
 
 	/* Colormap name is the file name without the '.ncmap' or '.ncm' extension */
-	colormap_name = (char *)malloc( strlen(file_name)-(n_suffix-1) );
+	std::vector<char> colormap_name_buf( strlen(file_name)-(n_suffix-1) );
+	colormap_name = colormap_name_buf.data();
 	strncpy( colormap_name, file_name, strlen(file_name)-n_suffix );
 	*(colormap_name + strlen(file_name)-n_suffix) = '\0';
 
 	/* Make sure this colormap name isn't already known */
 	if( x_seen_colormap_name( colormap_name )) {
-		if( options.debug ) 
+		if( options.debug )
 			printf( "Already have a colormap named >%s<, not NOT inittig colormap from file >%s<\n",
 				colormap_name, file_name);
 		return;
@@ -600,12 +601,12 @@ init_cmap_from_file( char *dir_name, char *file_name, int n_suffix )
 
 	/* Read in the r, g, b values */
 	slen = strlen(file_name) + strlen(dir_name) + 5;  /* add space for intermediate slash and trailing NULL */
-	long_file_name = (char *)malloc( sizeof(char)*slen);  /* add space for intermediate slash and trailing NULL */
+	std::vector<char> long_file_name_buf( slen );  /* add space for intermediate slash and trailing NULL */
+	long_file_name = long_file_name_buf.data();
 	snprintf( long_file_name, slen, "%s/%s", dir_name, file_name );
 	if( (cmap_file = fopen( long_file_name, "r" )) == NULL ) {
 		fprintf( stderr, "ncview.c: init_cmap_from_file: error " );
 		fprintf( stderr, "opening file %s\n", long_file_name );
-		free( long_file_name );
 		return;
 		}
 	for( i=0; i<256; i++ ) {
@@ -650,8 +651,6 @@ init_cmap_from_file( char *dir_name, char *file_name, int n_suffix )
 		}
 
 	in_create_colormap( colormap_name, r, g, b );
-
-	free( long_file_name );
 }
 
 /***********************************************************************************************/

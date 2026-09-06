@@ -47,7 +47,7 @@ static int 	lockout_view_changes = false;
 /* Saved x/y values that are on the XY plot, used later for
  * dumping out.
  */
-static double *plot_XY_xvals = NULL, *plot_XY_yvals = NULL;
+static std::vector<double> plot_XY_xvals, plot_XY_yvals;
 
 /* Saved dimension for the XY plot of the relevant index,
  * so that we know how to format dumps of that dim's values. Note
@@ -102,7 +102,7 @@ static time_t new_frame_nframes[NFRAMES_RECORD];	/* NUMBER of new frames found a
 set_scan_variable( NCVar *var )
 {
 	View	*new_view, *old_view;
-	size_t	*start, *count, x_size, y_size, scaled_x_size, scaled_y_size;
+	size_t	x_size, y_size, scaled_x_size, scaled_y_size;
 	long	i;
 	int	changed_size, overlay2use;
 	float	range_x, range_y;
@@ -137,18 +137,16 @@ set_scan_variable( NCVar *var )
 			fprintf( stderr, "...axes ids: scan=%d y=%d x=%d\n", 
 				view->scan_axis_id, view->y_axis_id, view->x_axis_id );
 		if( var->effective_dimensionality == 1 ) {
-			start = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
-			count = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
+			std::vector<size_t> start( view->variable->n_dims );
+			std::vector<size_t> count( view->variable->n_dims );
 			for( i=0; i<view->variable->n_dims; i++ ) {
 				start[i] = view->var_place[i];
-				*(count+i) = 1L;
+				count[i] = 1L;
 				}
-			*(count+view->x_axis_id) = view->variable->size[view->x_axis_id];
-			if( options.debug ) 
+			count[view->x_axis_id] = view->variable->size[view->x_axis_id];
+			if( options.debug )
 				fprintf( stderr, "set_scan_variable (A): about to call plot_XY_sc\n" );
-			plot_XY_sc( start, count );
-			free( start );
-			free( count );
+			plot_XY_sc( start.data(), count.data() );
 			in_popdown_2d_window();
 			in_set_cursor_normal();
 			return(0);
@@ -197,18 +195,16 @@ set_scan_variable( NCVar *var )
 		determine_scan_axes( new_view, var, old_view );
 		if( var->effective_dimensionality == 1 ) {
 			view = new_view;
-			start = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
-			count = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
+			std::vector<size_t> start( view->variable->n_dims );
+			std::vector<size_t> count( view->variable->n_dims );
 			for( i=0; i<view->variable->n_dims; i++ ) {
 				start[i] = view->var_place[i];
-				*(count+i) = 1L;
+				count[i] = 1L;
 				}
-			*(count+view->x_axis_id) = view->variable->size[view->x_axis_id];
-			if( options.debug ) 
+			count[view->x_axis_id] = view->variable->size[view->x_axis_id];
+			if( options.debug )
 				fprintf( stderr, "set_scan_variable (B): about to call plot_XY_sc\n" );
-			plot_XY_sc( start, count );
-			free( start );
-			free( count );
+			plot_XY_sc( start.data(), count.data() );
 			in_popdown_2d_window();
 			in_set_cursor_normal();
 			return(0);
@@ -881,14 +877,9 @@ view_check_new_data( int unused )
 		for( i=0; i<view->variable->n_dims; i++ )
 			if( i != timelike_index ) 
 				n_other *= view->variable->size[i];
-		data = (float *)malloc( sizeof(float)*n_other );
-		if( data == NULL ) {
-			fprintf( stderr, "Error, failed to allocate data array in routine view_check_new_data (size=%ld bytes)\n",
-				sizeof(float)*n_other );
-			exit(-1);
-			}
+		std::vector<float> data_buf( n_other );
+		data = data_buf.data();
 		get_min_max_onestep( view->variable, n_other, nt_new, data, &min, &max, 0 );
-		free( data );
 		if( min != max ) {
 			view->variable->auto_set_no_range = 0;
 			if( (min < 0) && (max > 0)) {
@@ -1108,21 +1099,20 @@ initial_determine_scan_axes( View *view, NCVar *var )
 	static void
 fill_view_data( View *v )
 {
-	size_t	*count;
 	int	i;
 
 	if( v->data_status == ViewDataStatus::Valid )
 		return;
 
-	count = (size_t *)malloc( v->variable->n_dims * sizeof( size_t ));
+	std::vector<size_t> count( v->variable->n_dims );
 
 	/* By default, count of 1 for all uninteresting dimensions */
-	for( i=0; i<v->variable->n_dims; i++ ) 
-		*(count+i) = 1;
+	for( i=0; i<v->variable->n_dims; i++ )
+		count[i] = 1;
 
 	/* Do full count of the X and Y axes so we can display the whole 2D field */
-	*(count+v->x_axis_id) = v->variable->size[v->x_axis_id];
-	*(count+v->y_axis_id) = v->variable->size[v->y_axis_id];
+	count[v->x_axis_id] = v->variable->size[v->x_axis_id];
+	count[v->y_axis_id] = v->variable->size[v->y_axis_id];
 
 	if( options.debug || options.show_sel ) {
 		printf( "-var %s -start \\(", v->variable->name.c_str() );
@@ -1133,17 +1123,16 @@ fill_view_data( View *v )
 			}
 		printf( "\\) -count \\(" );
 		for( i=v->variable->n_dims-1; i >= 0; i-- ) {
-			printf( "%1ld", *(count+i) );
+			printf( "%1ld", count[i] );
 			if( i != 0 )
 				printf( "," );
 			}
 		printf( "\\) %s\n", v->variable->files.front()->filename.c_str() );
 		}
 
-	fi_get_data( v->variable, v->var_place.data(), count, v->data.data() );
+	fi_get_data( v->variable, v->var_place.data(), count.data(), v->data.data() );
 
 	v->data_status = ViewDataStatus::Valid;
-	free( count );
 }
 
 /********************************************************************************
@@ -2562,7 +2551,7 @@ view_data_edit_warn()
 plot_XY()
 {
 	int	X_axis, i, x_window, y_window;
-	size_t	*start, *count, data_x, data_y, x_size, y_size, n;
+	size_t	data_x, data_y, x_size, y_size, n;
 
 	// Upstream's Xt canvas widget never has this wired up to a live click
 	// until a variable is actually being displayed, so 'view' being NULL
@@ -2606,8 +2595,8 @@ plot_XY()
 	if( !options.invert_physical )
 		data_y = y_size - data_y - 1;
 
-	start = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
-	count = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
+	std::vector<size_t> start( view->variable->n_dims );
+	std::vector<size_t> count( view->variable->n_dims );
 
 	/* Compute start and count arrays for data to plot.  Note that
 	 * the ordering of the following lines is important.  We first
@@ -2618,10 +2607,10 @@ plot_XY()
         n = view->variable->size[X_axis];
 	for( i=0; i<view->variable->n_dims; i++ ) {
 		start[i] = view->var_place[i];
-		*(count+i) = 1L;
+		count[i] = 1L;
 		}
-	*(start + view->x_axis_id) = data_x;
-	*(start + view->y_axis_id) = data_y;
+	start[view->x_axis_id] = data_x;
+	start[view->y_axis_id] = data_y;
 
 	/* Handle the lines on the plot.
 	 */
@@ -2632,18 +2621,18 @@ plot_XY()
 	/* Save position so we can later replot if X axis changes
 	 */
 	for( i=0; i<view->variable->n_dims; i++ ) {
-		view->plot_XY_position[ view->plot_XY_nlines-1 ][i] = *(start+i);
-		if( options.debug ) 
+		view->plot_XY_position[ view->plot_XY_nlines-1 ][i] = start[i];
+		if( options.debug )
 			fprintf( stderr, "Setting position for line %d, dim %d: %ld\n",
-				view->plot_XY_nlines-1, i, *(start+i) );
+				view->plot_XY_nlines-1, i, start[i] );
 		}
 
-	*(start+X_axis) = 0L;
-	*(count+X_axis) = n;
+	start[X_axis] = 0L;
+	count[X_axis] = n;
 
-	if( options.debug ) 
+	if( options.debug )
 		fprintf( stderr, "plot_XY: about to call plot_XY_sc\n" );
-	plot_XY_sc( start, count );
+	plot_XY_sc( start.data(), count.data() );
 
 	if( options.debug )
 		fprintf( stderr, "plot_XY: exiting\n" );
@@ -2656,7 +2645,6 @@ plot_XY()
 view_set_XY_plot_axis( char *label )
 {
 	int		dim_to_plot, i, j;
-	size_t		*start, *count;
 	char		message[1024];
 
 	if( options.debug )
@@ -2680,25 +2668,23 @@ view_set_XY_plot_axis( char *label )
 
 	view->plot_XY_axis = dim_to_plot;
 
-	start = (size_t *)malloc( sizeof(size_t)*view->variable->n_dims );
-	count = (size_t *)malloc( sizeof(size_t)*view->variable->n_dims );
+	std::vector<size_t> start( view->variable->n_dims );
+	std::vector<size_t> count( view->variable->n_dims );
 
 	unlock_plot();
 
 	for( i=0; i<view->plot_XY_nlines; i++ ) {
 		/* Change start and count to reflect new axis selection */
 		for( j=0; j<view->variable->n_dims; j++ ) {
-			*(start+j) = view->plot_XY_position[i][j];
-			*(count+j) = 1L;
+			start[j] = view->plot_XY_position[i][j];
+			count[j] = 1L;
 			}
-		*(start+view->plot_XY_axis) = 0L;
-		*(count+view->plot_XY_axis) = view->variable->size[view->plot_XY_axis];
-		if( options.debug ) 
+		start[view->plot_XY_axis] = 0L;
+		count[view->plot_XY_axis] = view->variable->size[view->plot_XY_axis];
+		if( options.debug )
 			fprintf( stderr, "view_set_XY_plot_axis: about to call plot_XY_sc\n" );
-		plot_XY_sc( start, count );
+		plot_XY_sc( start.data(), count.data() );
 		}
-	free( start );
-	free( count );
 }
 
 /**************************************************************************************
@@ -2763,34 +2749,16 @@ plot_XY_sc( size_t *start, size_t *count )
 		
         n = view->variable->size[dim_to_plot];
 
-	if( plot_XY_xvals != NULL ) 
-		free( plot_XY_xvals );
-	if( options.debug ) 
+	if( options.debug )
 		fprintf( stderr, "about to malloc %ld floats (x vals)\n", n );
-	plot_XY_xvals = (double *)malloc(n*sizeof(double));
-	if( plot_XY_xvals == NULL ) {
-		fprintf( stderr, "malloc failed on allocation of X data for plot!\n" );
-		fprintf( stderr, "requested # bytes=%ld\n", n*sizeof(double) );
-		exit( -1 );
-		}
+	plot_XY_xvals.resize( n );
 
-	if( plot_XY_yvals != NULL )
-		free( plot_XY_yvals );
-	if( options.debug ) 
+	if( options.debug )
 		fprintf( stderr, "about to malloc %ld floats (y vals)\n", n );
-	plot_XY_yvals = (double *)malloc(n*sizeof(double));
-	if( plot_XY_yvals == NULL ) {
-		fprintf( stderr, "malloc failed on allocation of Y data for plot!\n" );
-		fprintf( stderr, "requested # bytes=%ld\n", n*sizeof(double) );
-		exit( -1 );
-		}
+	plot_XY_yvals.resize( n );
 
-	tmp_yvals = (float *)malloc(n*sizeof(float));
-	if( tmp_yvals == NULL ) {
-		fprintf( stderr, "malloc failed on allocation of tmp Y data for plot!\n" );
-		fprintf( stderr, "requested # bytes=%ld\n", n*sizeof(float) );
-		exit( -1 );
-		}
+	std::vector<float> tmp_yvals_buf( n );
+	tmp_yvals = tmp_yvals_buf.data();
 
 	in_set_cursor_busy();
 
@@ -2803,18 +2771,18 @@ plot_XY_sc( size_t *start, size_t *count )
 
 		type = fi_dim_value( view->variable, dim_to_plot, i_size, &temp_double, 
 				temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_place );
-		if( type == NC_DOUBLE ) 
-			*(plot_XY_xvals+i_size) = temp_double;
+		if( type == NC_DOUBLE )
+			plot_XY_xvals[i_size] = temp_double;
 		else
-			*(plot_XY_xvals+i_size) = (double)i_size;
+			plot_XY_xvals[i_size] = (double)i_size;
 		}
 	/* If there is a range of the axis of 0, commonly because
 	 * the dimvar has only fill values, then the plotting widget
 	 * crashes.  Hack to avoid this problem.
 	 */
-	if( *plot_XY_xvals == *(plot_XY_xvals+n-1) ) 
+	if( plot_XY_xvals[0] == plot_XY_xvals[n-1] )
 		for(i=0; i<n; i++ )
-			*(plot_XY_xvals+i) = (double)i;
+			plot_XY_xvals[i] = (double)i;
 
 	/* Get the y values (values to be plotted) */
 	fi_get_data( view->variable, start, count, tmp_yvals );
@@ -2824,12 +2792,12 @@ plot_XY_sc( size_t *start, size_t *count )
 	n_missing_eliminated = 0;
 	tol = fabs(view->variable->fill_value * 1.e-5);
 	for( i=0; i<n; i++ ) {
-		t_xval = *(plot_XY_xvals+i);
+		t_xval = plot_XY_xvals[i];
 		t_yval = *(tmp_yvals+i);
 		if( (fabs((double)(t_yval - view->variable->fill_value)) > tol) &&
 		    (t_yval < 9.e36)) {
-			*(plot_XY_xvals+j) = t_xval;
-			*(plot_XY_yvals+j) = (double)t_yval;
+			plot_XY_xvals[j] = t_xval;
+			plot_XY_yvals[j] = (double)t_yval;
 			j++;
 			}
 		else
@@ -2839,7 +2807,6 @@ plot_XY_sc( size_t *start, size_t *count )
 				misplace_index[n_missing_eliminated-1] = i;
 			}
 		}
-	free( tmp_yvals );
 	if( n != j ) {
 		printf( "Note: %ld missing values were eliminated along axis \"%s\"; index= ", 
 							n-j, dim_name );
@@ -2872,16 +2839,16 @@ plot_XY_sc( size_t *start, size_t *count )
 	y_min    = 1.e35;
 	y_max    = -1.e35;
 	for( i=1; i<n; i++ ) {
-		if( *(plot_XY_yvals+i) != *plot_XY_yvals ) 
+		if( plot_XY_yvals[i] != plot_XY_yvals[0] )
 			all_same = false;
-		if( *(plot_XY_yvals+i) < y_min ) 
-			y_min = *(plot_XY_yvals+i);
-		if( *(plot_XY_yvals+i) > y_max ) 
-			y_max = *(plot_XY_yvals+i);
+		if( plot_XY_yvals[i] < y_min )
+			y_min = plot_XY_yvals[i];
+		if( plot_XY_yvals[i] > y_max )
+			y_max = plot_XY_yvals[i];
 		}
 	if( all_same ) {
 		in_set_cursor_normal();
-		snprintf( message, 511, "All values are identical: %f\n", *plot_XY_yvals ); 
+		snprintf( message, 511, "All values are identical: %f\n", plot_XY_yvals[0] );
 		in_error( message );
 		return;
 		}
@@ -2965,8 +2932,8 @@ plot_XY_sc( size_t *start, size_t *count )
 		fprintf( stderr, "     ytitle=%s\n", y_axis_title );
 		fprintf( stderr, "     title =%s\n", title );
 		}
-	plot_index = in_popup_XY_graph( n, dim_to_plot, plot_XY_xvals, 
-			plot_XY_yvals, x_axis_title, y_axis_title, 
+	plot_index = in_popup_XY_graph( n, dim_to_plot, plot_XY_xvals.data(),
+			plot_XY_yvals.data(), x_axis_title, y_axis_title,
 			title, legend, dimlist );
 	
 	/* Save the X dimension for this plot, so that we can later format

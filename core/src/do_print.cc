@@ -21,6 +21,8 @@
 
 /*     define DEBUG */
 
+#include <array>
+
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
@@ -220,7 +222,6 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 	FDBlist	*fdb;
 	NCDim	*d;
 	int	i, type, has_bounds;
-	size_t	*actual_place;
 	time_t	sec_since_1970;
 	double	temp_double, bound_min, bound_max;
 	FILE	*f_dummy;
@@ -363,12 +364,12 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			
 		/*** Name of file ***/
 		tstr[0] = '\0';
-		actual_place = (size_t *)malloc( sizeof(size_t)*20 );
-		virt_to_actual_place( view->variable, view->var_place.data(), actual_place, &fdb );
+		std::array<size_t, 20> actual_place;
+		virt_to_actual_place( view->variable, view->var_place.data(), actual_place.data(), &fdb );
 		if( (fi_recdim_id( view->variable->files.front().get()->id ) != view->x_axis_id ) &&
-		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->y_axis_id)) 
-			snprintf( tstr, 1499, "Frame %ld in ", 
-				*(actual_place + view->scan_axis_id)+1 );
+		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->y_axis_id))
+			snprintf( tstr, 1499, "Frame %ld in ",
+				actual_place[view->scan_axis_id]+1 );
 		strncat( tstr, "File ", sizeof(tstr) - strlen(tstr) - 1 );
 		strncat( tstr, fdb->filename.c_str(), sizeof(tstr) - strlen(tstr) - 1 );
 		fprintf( outf, "gsave (%s) show grestore\n", tstr );

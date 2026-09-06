@@ -198,12 +198,11 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, std::vector<int> 
 	y_size = v->variable->size[v->y_axis_id];
 
 	/* Allocate space for 2d arrays that hold mapped X and Y coord vals */
-	dimval_x_2d = (float *)malloc( x_size*y_size*sizeof(float) );
-	dimval_y_2d = (float *)malloc( x_size*y_size*sizeof(float) );
+	std::vector<float> dimval_x_2d_buf( x_size*y_size );
+	std::vector<float> dimval_y_2d_buf( x_size*y_size );
+	dimval_x_2d = dimval_x_2d_buf.data();
+	dimval_y_2d = dimval_y_2d_buf.data();
 
-	if( (dimval_x_2d==NULL) || (dimval_y_2d==NULL) ) {
-		in_error( "Malloc of overlay (distance) field failed\n" );
-		}
 	for( ii=0; ii<v->variable->n_dims; ii++ )
 		cursor_place[ii] = v->var_place[ii];
 
@@ -243,8 +242,6 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, std::vector<int> 
 		overlay[jj*x_size + ii] = 1;
 		}
 
-	free(dimval_x_2d);
-	free(dimval_y_2d);
 	printf( "\n" );
 }
 
