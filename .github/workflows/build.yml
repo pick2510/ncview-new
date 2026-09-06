@@ -241,16 +241,21 @@ jobs:
   # A single portable binary for HPC clusters, whose sysadmin-controlled
   # module systems routinely can't offer a matching netCDF/HDF5, or any
   # netCDF/HDF5 at all -- see README.md's "Static linking" section and
-  # NCVIEW_STATIC_LINK in the top-level CMakeLists.txt. Built inside a
-  # ubuntu:18.04 container (glibc 2.27) rather than on the runner's own,
-  # much newer Ubuntu image: glibc is forward- but not backward-compatible
-  # (a binary linked against an old glibc runs fine on a newer one, never
-  # the reverse), so building old is what makes "runs anywhere" true --
-  # 2.27 predates even RHEL8's glibc (2.28), covering essentially every
-  # HPC login/compute node still in service. Confirmed against a real
-  # RHEL8-family image (quay.io/pypa/manylinux_2_28_x86_64, standing in for
-  # an actual cluster node) during development: `ldd` on that completely
-  # different distro resolved every dependency this binary carries.
+  # NCVIEW_STATIC_LINK in the top-level CMakeLists.txt. The actual compile
+  # happens inside a `docker run` of ubuntu:18.04 (glibc 2.27), invoked as a
+  # plain build tool from a normal, modern runner -- NOT via this job's own
+  # `container:`, because GitHub's own Actions runtime (the Node binary it
+  # execs inside a container to run actions/checkout etc.) now requires
+  # glibc >= 2.28, which ubuntu:18.04 doesn't have; `container: ubuntu:18.04`
+  # was tried first and failed at actions/checkout itself with exactly that
+  # version mismatch. Building old is what makes "runs anywhere" true: glibc
+  # is forward- but not backward-compatible (a binary linked against an old
+  # glibc runs fine on a newer one, never the reverse), and 2.27 predates
+  # even RHEL8's glibc (2.28), covering essentially every HPC login/compute
+  # node still in service. Confirmed against a real RHEL8-family image
+  # (quay.io/pypa/manylinux_2_28_x86_64, standing in for an actual cluster
+  # node) during development: `ldd` on that completely different distro
+  # resolved every dependency this binary carries.
   #
   # Everything netCDF needs (HDF5, zstd, bz2, szip/libaec, zlib) is linked
   # statically, alongside the C++ runtime -- so no netCDF/HDF5 install of
@@ -270,100 +275,92 @@ jobs:
   # binary itself -- app/ncview -- builds and links clean here.
   linux-static:
     runs-on: ubuntu-latest
-    container: ubuntu:18.04
     steps:
-      - name: Install build dependencies
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache static netCDF-C build
+        id: cache-netcdf-static
+        uses: actions/cache@v4
+        with:
+          path: netcdf-static-cache
+          key: netcdf-static-4.9.2-ubuntu1804-v1
+
+      - name: Create cache mount point
+        run: mkdir -p netcdf-static-cache
+
+      # Everything runs inside the container, invoked here rather than via
+      # this job's own `container:` key -- see the job comment above for
+      # why. Every dependency below except netCDF-C itself ships a static
+      # .a via its normal Ubuntu -dev package; netCDF-C's is .so-only, so
+      # it's built from source (cached above, across runs, keyed on
+      # version). ENABLE_BYTERANGE=OFF: this netCDF feature's HTTP virtual
+      # file driver needs a newer HDF5 than ubuntu:18.04 ships (references
+      # H5FD_FEAT_DEFAULT_VFD_COMPATIBLE, absent from HDF5 1.10.0) --
+      # unrelated to DAP/OPeNDAP support proper, which stays on.
+      # CMAKE_LIBRARY_PATH: Ubuntu's HDF5 packaging puts its libs under
+      # .../hdf5/serial/ (to support parallel/serial variants side by side
+      # via update-alternatives), which isn't on find_library()'s default
+      # search path. patchelf --print-needed (not ldd) for the static-link
+      # check: it lists only this binary's own direct NEEDED entries, not
+      # the full transitive tree ldd would show (which includes other
+      # programs' unrelated dependencies, e.g. libbz2 pulled in by
+      # libcurl/libssh -- not a sign anything here linked dynamically that
+      # shouldn't have). No ctest: tests/ uses <filesystem>, needing a
+      # newer libstdc++ than this container's stock GCC 7 ships.
+      - name: Build statically inside ubuntu:18.04 (glibc 2.27 HPC floor)
         run: |
+          docker run --rm \
+            -v "$PWD":/repo \
+            -v "$PWD/netcdf-static-cache":/opt/netcdf-static \
+            ubuntu:18.04 bash -ex -c '
           apt-get update -qq
           apt-get install -y -qq \
-            g++ make git curl ca-certificates \
+            g++ make curl ca-certificates \
             libhdf5-dev zlib1g-dev libbz2-dev libzstd-dev libaec-dev \
             libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev \
             libxrender-dev libxfixes-dev \
             libexpat1-dev libcurl4-openssl-dev libxml2-dev \
             flex bison texinfo patchelf pkg-config
 
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      # ubuntu:18.04's own cmake package is 3.10 -- this project needs 3.21+
-      # (see the top-level CMakeLists.txt's cmake_minimum_required).
-      - name: Install a modern CMake
-        run: |
           curl -fsSL https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz -o /tmp/cmake.tar.gz
           mkdir -p /opt/cmake
           tar -xzf /tmp/cmake.tar.gz -C /opt/cmake --strip-components=1
-          echo "/opt/cmake/bin" >> "$GITHUB_PATH"
+          export PATH=/opt/cmake/bin:$PATH
 
-      - name: Cache static netCDF-C build
-        id: cache-netcdf-static
-        uses: actions/cache@v4
-        with:
-          path: /opt/netcdf-static
-          key: netcdf-static-4.9.2-ubuntu1804-v1
+          if [ ! -f /opt/netcdf-static/lib/libnetcdf.a ]; then
+            curl -fsSL https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netcdf-c-4.9.2.tar.gz -o /tmp/netcdf-c.tar.gz
+            tar -xzf /tmp/netcdf-c.tar.gz -C /tmp
+            cmake -S /tmp/netcdf-c-4.9.2 -B /tmp/netcdf-c-4.9.2/build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=/opt/netcdf-static \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DENABLE_TESTS=OFF \
+              -DENABLE_EXAMPLES=OFF \
+              -DENABLE_DAP=ON \
+              -DENABLE_BYTERANGE=OFF \
+              -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+            cmake --build /tmp/netcdf-c-4.9.2/build -j"$(nproc)"
+            cmake --install /tmp/netcdf-c-4.9.2/build
+          fi
 
-      # Every dependency below (HDF5, zlib, bz2, zstd, libaec/szip) ships a
-      # static .a via its normal -dev package on Ubuntu -- netCDF-C itself
-      # is the one exception (Ubuntu's libnetcdf-dev is .so-only), so it's
-      # the one thing here built from source. ENABLE_BYTERANGE=OFF: this
-      # netCDF feature's HTTP virtual file driver needs a newer HDF5 than
-      # ubuntu:18.04 ships (references H5FD_FEAT_DEFAULT_VFD_COMPATIBLE,
-      # absent from HDF5 1.10.0) -- unrelated to DAP/OPeNDAP support
-      # proper, which stays on.
-      - name: Build netCDF-C statically
-        if: steps.cache-netcdf-static.outputs.cache-hit != 'true'
-        run: |
-          curl -fsSL https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netcdf-c-4.9.2.tar.gz -o /tmp/netcdf-c.tar.gz
-          tar -xzf /tmp/netcdf-c.tar.gz -C /tmp
-          cmake -S /tmp/netcdf-c-4.9.2 -B /tmp/netcdf-c-4.9.2/build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/opt/netcdf-static \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DENABLE_TESTS=OFF \
-            -DENABLE_EXAMPLES=OFF \
-            -DENABLE_DAP=ON \
-            -DENABLE_BYTERANGE=OFF \
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-          cmake --build /tmp/netcdf-c-4.9.2/build -j"$(nproc)"
-          cmake --install /tmp/netcdf-c-4.9.2/build
-
-      # CMAKE_LIBRARY_PATH: Ubuntu's HDF5 packaging puts its libs under
-      # .../hdf5/serial/ (to support parallel/serial variants side by side
-      # via update-alternatives), which isn't on find_library()'s default
-      # search path.
-      - name: Configure
-        run: |
-          HDF5_LIBDIR="$(dirname "$(find /usr/lib -name 'libhdf5.a' | head -1)")"
+          cd /repo
+          HDF5_LIBDIR="$(dirname "$(find /usr/lib -name '"'"'libhdf5.a'"'"' | head -1)")"
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_PREFIX_PATH=/opt/netcdf-static \
             -DCMAKE_LIBRARY_PATH="$HDF5_LIBDIR" \
             -DFLTK_BUILD_GL=OFF \
             -DNCVIEW_STATIC_LINK=ON
+          cmake --build build --target ncview -j"$(nproc)"
 
-      - name: Build
-        run: cmake --build build --target ncview -j"$(nproc)"
-
-      # patchelf --print-needed lists only this binary's own direct NEEDED
-      # entries, not the full transitive tree ldd would show (which
-      # includes other programs' unrelated dependencies, e.g. libbz2 or
-      # libz pulled in by libcurl/libssh -- not a sign anything here linked
-      # dynamically that shouldn't have).
-      - name: Verify the static libraries actually didn't link dynamically
-        run: |
           patchelf --print-needed build/app/ncview
           ! patchelf --print-needed build/app/ncview | grep -qiE "netcdf|hdf5|^libsz|libaec|zstd|Xinerama|Xcursor"
 
-      # Packaged by hand (not CPack's own `package` target) since that
-      # target depends on the `tests` target this job deliberately doesn't
-      # build (see the job comment above) -- .tar.gz so release.yml's
-      # existing `find ... -name '*.tar.gz'` glob picks this up alongside
-      # the other three platforms' CPack-built archives with no changes
-      # needed there.
-      - name: Package
-        run: |
-          tar -C build/app -czf ncview-0.1.0-Linux-static-x86_64.tar.gz ncview
+          tar -C build/app -czf /repo/ncview-0.1.0-Linux-static-x86_64.tar.gz ncview
+          chown "$(stat -c '"'"'%u:%g'"'"' /repo)" /repo/ncview-0.1.0-Linux-static-x86_64.tar.gz
+          '
 
       - uses: actions/upload-artifact@v4
         with:
