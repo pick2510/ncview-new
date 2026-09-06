@@ -420,7 +420,6 @@ initialize_misc()
 	void
 initialize_colormaps()
 {
-	int	n_colormaps = 0;
 	char	*ncview_base_dir;
 
 	/* ncview has a useful set of built-in colormaps.  The set of built-in
@@ -444,16 +443,16 @@ initialize_colormaps()
 
 	/* Get user-specified colormaps, if any */
 #ifdef NCVIEW_LIB_DIR
-	n_colormaps  = get_cmaps_from_dir( NCVIEW_LIB_DIR );
+	get_cmaps_from_dir( NCVIEW_LIB_DIR );
 #endif
 	ncview_base_dir = (char *)getenv( "NCVIEWBASE" );
 	if( ncview_base_dir == NULL )
 		ncview_base_dir = (char *)getenv( "HOME" );
 
 	if( ncview_base_dir != NULL )
-		n_colormaps += get_cmaps_from_dir( ncview_base_dir );
+		get_cmaps_from_dir( ncview_base_dir );
 
-	n_colormaps += get_cmaps_from_dir( "." );
+	get_cmaps_from_dir( "." );
 }
 
 /***********************************************************************************************/
@@ -588,7 +587,11 @@ init_cmap_from_file( const char *dir_name, const char *file_name, int n_suffix )
 	/* Colormap name is the file name without the '.ncmap' or '.ncm' extension */
 	std::vector<char> colormap_name_buf( strlen(file_name)-(n_suffix-1) );
 	colormap_name = colormap_name_buf.data();
-	strncpy( colormap_name, file_name, strlen(file_name)-n_suffix );
+	/* colormap_name_buf is sized to exactly fit this copy plus the NUL
+	 * written just below, so this can't truncate; memcpy (rather than
+	 * strncpy) avoids -Wstringop-truncation's "bound depends on the
+	 * length of the source" heuristic, which can't see that. */
+	memcpy( colormap_name, file_name, strlen(file_name)-n_suffix );
 	*(colormap_name + strlen(file_name)-n_suffix) = '\0';
 
 	/* Make sure this colormap name isn't already known */

@@ -456,13 +456,12 @@ overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size
 	float locx, float locy, float *xvals, float *yvals, size_t nx, size_t ny, size_t *idxx, size_t *idxy )
 {
 	float	dist[9], dx, dy, mindist, tdist[9] = {}, prev_d4;
-	long	i, j, nsteps, xx;
+	long	i, j, xx;
 	long	have_calc[9], index, minloc, ox, oy, isrc, jsrc, idx_src, idx_dest, debug;
 	long	curx, cury, i2use, j2use, i0, j0;
 	int	n_wrapped_x, n_wrapped_y;
-	
+
 	debug  = 0;
-	nsteps = 0L;
 	n_wrapped_x = 0;
 	n_wrapped_y = 0;
 
@@ -486,7 +485,6 @@ overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size
 
 	minloc = -1;
 	while( minloc != 4 ) {
-		nsteps++;
 		mindist = 1.e31;
 		for( j=-1; j<=1; j++ )
 		for( i=-1; i<=1; i++ ) {

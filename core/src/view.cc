@@ -531,7 +531,7 @@ set_scan_view( size_t scan_place )
 	dim = view->variable->dim[view->scan_axis_id].get();
 	dim_name = const_cast<char *>(dim->name.c_str());
 	view->var_place[view->scan_axis_id] = scan_place;
-	snprintf( view_place, 1023, "frame %1ld/%1ld ", scan_place+1, size );
+	snprintf( view_place, 1023, "frame %1zu/%1zu ", scan_place+1, size );
 
 	/* type is the data type of the dimension--can be float or character */
 	type = fi_dim_value( view->variable, view->scan_axis_id, scan_place, &new_dimval,
@@ -1119,13 +1119,13 @@ fill_view_data( View *v )
 	if( options.debug || options.show_sel ) {
 		printf( "-var %s -start \\(", v->variable->name.c_str() );
 		for( i=v->variable->n_dims-1; i >= 0; i-- ) {
-			printf( "%1ld", 1 + (v->var_place[i]) );
+			printf( "%1zu", 1 + (v->var_place[i]) );
 			if( i != 0 )
 				printf( "," );
 			}
 		printf( "\\) -count \\(" );
 		for( i=v->variable->n_dims-1; i >= 0; i-- ) {
-			printf( "%1ld", count[i] );
+			printf( "%1zu", count[i] );
 			if( i != 0 )
 				printf( "," );
 			}
@@ -2176,7 +2176,7 @@ view_report_position( int x, int y, unsigned int button_mask )
 	else
 		ydim_str = std::string( temp_string, strnlen( temp_string, 79 ) );
 
-	snprintf( current_value_label, 499, "Current: (i=%1ld, j=%1ld) %g (x=%s, y=%s)\n",
+	snprintf( current_value_label, 499, "Current: (i=%1zu, j=%1zu) %g (x=%s, y=%s)\n",
 				data_x, data_y, val, xdim_str.c_str(), ydim_str.c_str() );
 	in_set_label( Label::DataValue, current_value_label );
 }
@@ -2468,7 +2468,7 @@ view_change_dat( size_t index, float new_val )
 	if( !options.invert_physical )
 		y = y_size - y - 1;
 
-	printf( "changed (%3ld,%3ld) from %9f to %9f\n", x, y,
+	printf( "changed (%3zu,%3zu) from %9f to %9f\n", x, y,
 		view->data[x + (x_size)*y], new_val );
 
 	view->data[x + (x_size)*y] = new_val;
@@ -2722,13 +2722,13 @@ plot_XY_sc( size_t *start, size_t *count )
 	if( options.show_sel ) {
 		printf( "-var %s -start \\(", view->variable->name.c_str() );
 		for( i=view->variable->n_dims-1; i >= 0; i-- ) {
-			printf( "%1ld", 1 + (*(start+i)) );
+			printf( "%1zu", 1 + (*(start+i)) );
 			if( i != 0 )
 				printf( "," );
 			}
 		printf( "\\) -count \\(" );
 		for( i=view->variable->n_dims-1; i >= 0; i-- ) {
-			printf( "%1ld", *(count+i) );
+			printf( "%1zu", *(count+i) );
 			if( i != 0 )
 				printf( "," );
 			}
