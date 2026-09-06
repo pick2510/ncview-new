@@ -112,7 +112,7 @@ print_init( void )
 	void
 do_print( void )
 {
-	long	i, j;
+	size_t	i, j;
 	size_t	x_size, y_size, scaled_x_size, scaled_y_size, top_of_image, bot_of_image, 
 		center_x, center_y, left_of_image, right_of_image;
 	char	outfname[1024], tstr[1500];

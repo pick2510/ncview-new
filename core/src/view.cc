@@ -364,7 +364,7 @@ set_scan_variable( NCVar *var )
 set_scan_buttons( View *local_view )
 {
 	static int	set_state;
-	char		*label    = NULL;
+	const char	*label    = NULL;
 	char		scalar_coord_str[1024];
 
 	set_state = BUTTONS_ALL_ON;
@@ -575,9 +575,10 @@ set_scan_view( size_t scan_place )
 			}
 		}
 	else
-		; /* don't have to do anything, since string-type dimval
+		{ /* don't have to do anything, since string-type dimval
 		   * is already in variable "temp_string"
 		   */
+		}
 	in_set_label( Label::ScanPlace, view_place );
 	in_set_cur_dim_value( dim_name, temp_string );
 	view->data_status = ViewDataStatus::Invalid;
@@ -598,9 +599,9 @@ set_scan_view( size_t scan_place )
 	int
 view_draw( int allow_framestore_usage, int force_range_to_frame )
 {
-	long		i; 
+	size_t		i;
 	size_t		x_size, y_size, scan_size, scaled_x_size, scaled_y_size, framesize, frameno;
-	static int	last_x_size=0, last_y_size=0;
+	static size_t	last_x_size=0, last_y_size=0;
 	int		must_recalc_range;
 	float		min, max, dat;
 
@@ -700,7 +701,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	else
 		{
 		if( options.debug )
-			printf( "NOT reading data to contour, since data is valid (%d)\n", view->data_status );
+			printf( "NOT reading data to contour, since data is valid (%d)\n", static_cast<int>(view->data_status) );
 		}
 
 	if( options.debug )
@@ -752,7 +753,8 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 view_check_new_data( int unused )
 {
 	size_t 	file_var_size[MAX_NC_DIMS], *t, n_other;
-	int	i, has_grown, t_ncid, timelike_index;
+	size_t	i;
+	int	has_grown, t_ncid, timelike_index;
 	size_t	dt, nt_new, n_scan_entries, n_extra_frames, storage_size, old_nt;
 	char	message[1024], rate_units[50];
 	time_t	tt;
@@ -774,7 +776,7 @@ view_check_new_data( int unused )
 	/* Get size of the var in the last file */
 	t_ncid = netcdf_fi_initialize( const_cast<char *>(view->variable->files.back()->filename.c_str()) );
 	t = netcdf_fi_var_size( t_ncid, const_cast<char *>(view->variable->name.c_str()) );
-	for( i=0; i<view->variable->n_dims; i++ )
+	for( i=0; i<static_cast<size_t>(view->variable->n_dims); i++ )
 		file_var_size[i] = t[i];
 	free( t );
 	nc_close( t_ncid );
@@ -810,7 +812,7 @@ view_check_new_data( int unused )
 	else
 		{
 		nframes_tot = 0;
-		for( i=0; i<(n_new_frame_times-1); i++ )
+		for( i=0; i<static_cast<size_t>(n_new_frame_times-1); i++ )
 			nframes_tot += new_frame_nframes[i];
 		delta_time = new_frame_times[n_new_frame_times-1] - new_frame_times[0];
 		rate_per_sec = (float)(nframes_tot)/(float)(delta_time);
@@ -874,8 +876,8 @@ view_check_new_data( int unused )
 	 */
 	if( view->variable->auto_set_no_range ) {
 		n_other = 1L;
-		for( i=0; i<view->variable->n_dims; i++ )
-			if( i != timelike_index ) 
+		for( i=0; i<static_cast<size_t>(view->variable->n_dims); i++ )
+			if( i != static_cast<size_t>(timelike_index) )
 				n_other *= view->variable->size[i];
 		std::vector<float> data_buf( n_other );
 		data = data_buf.data();
@@ -1884,8 +1886,8 @@ calculate_blowup( View *view, NCVar *var, int val_to_set_to )
 	/* If the picture is too small, start out by blowing it up some */
 	x_size = var->size[view->x_axis_id];
 	y_size = var->size[view->y_axis_id];
-	while( (options.blowup*x_size < options.blowup_default_size) && 
-	       (options.blowup*y_size < options.blowup_default_size) ) {
+	while( (options.blowup*x_size < static_cast<size_t>(options.blowup_default_size)) &&
+	       (options.blowup*y_size < static_cast<size_t>(options.blowup_default_size)) ) {
 		view_change_blowup( 1, false, view_var_is_valid );
 		}
 
@@ -2089,7 +2091,7 @@ view_report_position( int x, int y, unsigned int button_mask )
 	float	val;
 	double	new_dimval, bound_min, bound_max;
 	char	current_value_label[500], temp_string[1024];
-	char	xdim_str[80], ydim_str[80];
+	std::string	xdim_str, ydim_str;
 	NCDim	*xdim, *ydim;
 	size_t	virt_cursor_pos[MAX_NC_DIMS];
 
@@ -2148,30 +2150,34 @@ view_report_position( int x, int y, unsigned int button_mask )
 		virt_cursor_pos[ view->y_axis_id ] = data_y;
 		}
 
-	type = fi_dim_value( view->variable, view->x_axis_id, data_x, &new_dimval, 
+	type = fi_dim_value( view->variable, view->x_axis_id, data_x, &new_dimval,
 			temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_pos );
 	if( type == NC_DOUBLE ) {
+		char	dim_str_buf[80];
 		if( (xdim != NULL) && xdim->timelike && options.t_conv )
-			fmt_time( xdim_str, 79, new_dimval, xdim, 1 );
+			fmt_time( dim_str_buf, 79, new_dimval, xdim, 1 );
 		else
-			snprintf( xdim_str, 79, "%.7lg", new_dimval );
+			snprintf( dim_str_buf, 79, "%.7lg", new_dimval );
+		xdim_str = dim_str_buf;
 		}
 	else
-		strncpy( xdim_str, temp_string, 80 );
+		xdim_str = std::string( temp_string, strnlen( temp_string, 79 ) );
 
-	type = fi_dim_value( view->variable, view->y_axis_id, data_y, &new_dimval, 
+	type = fi_dim_value( view->variable, view->y_axis_id, data_y, &new_dimval,
 			temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_pos );
 	if( type == NC_DOUBLE ) {
+		char	dim_str_buf[80];
 		if( (ydim != NULL) && ydim->timelike && options.t_conv )
-			fmt_time( ydim_str, 79, new_dimval, ydim, 1 );
+			fmt_time( dim_str_buf, 79, new_dimval, ydim, 1 );
 		else
-			snprintf( ydim_str, 79, "%.7lg", new_dimval );
+			snprintf( dim_str_buf, 79, "%.7lg", new_dimval );
+		ydim_str = dim_str_buf;
 		}
 	else
-		strncpy( ydim_str, temp_string, 80 );
+		ydim_str = std::string( temp_string, strnlen( temp_string, 79 ) );
 
-	snprintf( current_value_label, 499, "Current: (i=%1ld, j=%1ld) %g (x=%s, y=%s)\n", 
-				data_x, data_y, val, xdim_str, ydim_str );
+	snprintf( current_value_label, 499, "Current: (i=%1ld, j=%1ld) %g (x=%s, y=%s)\n",
+				data_x, data_y, val, xdim_str.c_str(), ydim_str.c_str() );
 	in_set_label( Label::DataValue, current_value_label );
 }
 
@@ -2243,12 +2249,12 @@ view_construct_scalar_coord_str( char *str, int slen )
 		/* Only add on this new string if there is room for it */
 		space_avail = (slen-2) - strlen(str);
 		if( space_avail <= 5 ) return;
-		if( strlen(tstr) < space_avail )
-			strncat( str, tstr, (size_t)slen - strlen(str) - 1 );
+		if( strlen(tstr) < static_cast<size_t>(space_avail) )
+			snprintf( str + strlen(str), (size_t)slen - strlen(str), "%s", tstr );
 		else
 			{
 			tstr[ space_avail ] = '\0';
-			strncat( str, tstr, (size_t)slen - strlen(str) - 1 );
+			snprintf( str + strlen(str), (size_t)slen - strlen(str), "%s", tstr );
 			return;
 			}
 		}
@@ -2414,7 +2420,8 @@ set_max_from_curdata()
 	void
 view_data_edit( void )
 {
-	int	i, j, j2;
+	size_t	i, j;
+	int	j2;
 	size_t	x_size, y_size;
 	char	**line_array;
 	size_t	index, n_entries;
@@ -2762,7 +2769,7 @@ plot_XY_sc( size_t *start, size_t *count )
 	in_set_cursor_busy();
 
 	/* Get the X values for the plot. */
-	for(i_size=0L; i_size<n; i_size++) {
+	for(i_size=0L; i_size<static_cast<size_t>(n); i_size++) {
 
 		for( i=0; i<view->variable->n_dims; i++ )
 			virt_cursor_place[i] = view->var_place[i];
