@@ -159,9 +159,9 @@ determine_overlay_base_dir( char *overlay_base_dir, int n )
 			fprintf( stderr, "Error, routine determine_overlay_base_dir, string NCVIEW_LIB_DIR too long! Max=%d\n", n );
 			exit(-1);
 			}
-		strcpy( overlay_base_dir, NCVIEW_LIB_DIR );
+		snprintf( overlay_base_dir, n, "%s", NCVIEW_LIB_DIR );
 #else
-		strcpy( overlay_base_dir, "." );
+		snprintf( overlay_base_dir, n, "%s", "." );
 #endif
 		}
 	else
@@ -170,7 +170,7 @@ determine_overlay_base_dir( char *overlay_base_dir, int n )
 			fprintf( stderr, "Error, routine determine_overlay_base_dir, length of dir is too long! Max=%d\n", n );
 			exit(-1);
 			}
-		strcpy( overlay_base_dir, dir );
+		snprintf( overlay_base_dir, n, "%s", dir );
 		}
 }
 
