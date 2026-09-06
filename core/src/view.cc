@@ -539,20 +539,20 @@ set_scan_view( size_t scan_place )
 	if( type == NC_DOUBLE ) {
 		if( dim->timelike && options.t_conv ) {
 			fmt_time( temp_string, 1024, new_dimval, dim, 1 );
-			strcat( view_place, temp_string );
+			strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
 			if( has_bounds ) {
 				snprintf( temp_string, 1023, " (%d bnds:", has_bounds );
-				strcat( view_place, temp_string );
+				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
 
 				fmt_time( temp_string, 1024, bound_min, dim, 0 );
-				strcat( view_place, temp_string );
+				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
 
-				strcat( view_place, " -> " );
+				strncat( view_place, " -> ", sizeof(view_place) - strlen(view_place) - 1 );
 
 				fmt_time( temp_string, 1024, bound_max, dim, 0 );
-				strcat( view_place, temp_string );
+				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
 
-				strcat( view_place, ")" );
+				strncat( view_place, ")", sizeof(view_place) - strlen(view_place) - 1 );
 				}
 			}
 		else
@@ -560,17 +560,17 @@ set_scan_view( size_t scan_place )
 			snprintf( temp_string, 1023, "%lg", new_dimval );
 			if( has_bounds ) {
 				snprintf( temp_string, 1023, " (%d bnds:", has_bounds );
-				strcat( view_place, temp_string );
+				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
 
 				snprintf( temp_string, 1023, "%lg", bound_min );
-				strcat( view_place, temp_string );
+				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
 
-				strcat( view_place, " -> " );
+				strncat( view_place, " -> ", sizeof(view_place) - strlen(view_place) - 1 );
 
 				snprintf( temp_string, 1023, "%lg", bound_max );
-				strcat( view_place, temp_string );
+				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
 
-				strcat( view_place, ")" );
+				strncat( view_place, ")", sizeof(view_place) - strlen(view_place) - 1 );
 				}
 			}
 		}
@@ -820,20 +820,20 @@ view_check_new_data( int unused )
 
 		if( rate_per_sec > 0.5 ) {
 			rate = rate_per_sec;
-			strcpy( rate_units, "/sec" );
+			snprintf( rate_units, sizeof(rate_units), "%s", "/sec" );
 			}
 		else if( rate_per_min > 0.5 ) {
 			rate = rate_per_min;
-			strcpy( rate_units, "/min" );
+			snprintf( rate_units, sizeof(rate_units), "%s", "/min" );
 			}
 		else if( rate_per_hour > 0.5 ) {
 			rate = rate_per_hour;
-			strcpy( rate_units, "/hour" );
+			snprintf( rate_units, sizeof(rate_units), "%s", "/hour" );
 			}
 		else
 			{
 			rate = rate_per_day;
-			strcpy( rate_units, "/day" );
+			snprintf( rate_units, sizeof(rate_units), "%s", "/day" );
 			}
 		snprintf( message, 1023, "New frame found %s (Rate=%.2f%s)", ctime(&tt), rate, rate_units);
 		for( i=0; i<strlen(message); i++ )
@@ -1334,7 +1334,7 @@ view_set_scan_dims( void )
 	cur_y_name = (*(v->dim+view->y_axis_id))->name;
 
 	dim_list = fi_scannable_dims( v->first_file->id, v->name );
-	strcpy( scan_dim, dim_list->string );
+	snprintf( scan_dim, sizeof(scan_dim), "%s", dim_list->string );
 
 	/* Pop up the dialog box which asks for the user's selection */
 	scan_dims_result = in_set_scan_dims( dim_list, cur_x_name,
@@ -2299,17 +2299,17 @@ view_construct_scalar_coord_str( char *str, int slen )
 			snprintf( tstr, 1020, "%s=%s %s", sdmi->coord_var_name, v1, funits );
 
 		if( isc != (nsc-1)) 
-			strcat( tstr, "; " );
+			strncat( tstr, "; ", sizeof(tstr) - strlen(tstr) - 1 );
 
 		/* Only add on this new string if there is room for it */
 		space_avail = (slen-2) - strlen(str);
 		if( space_avail <= 5 ) return;
 		if( strlen(tstr) < space_avail )
-			strcat( str, tstr );
+			strncat( str, tstr, (size_t)slen - strlen(str) - 1 );
 		else
 			{
 			tstr[ space_avail ] = '\0';
-			strcat( str, tstr );
+			strncat( str, tstr, (size_t)slen - strlen(str) - 1 );
 			return;
 			}
 		}
@@ -2553,7 +2553,7 @@ view_data_edit_dump( void )
 		fprintf( stderr, "Warning!  Data is NOT CHANGED!\n" );
 		}
 
-	strcpy( filename, "dump.data" );
+	snprintf( filename, sizeof(filename), "%s", "dump.data" );
 	
 	message = in_dialog( "Filename to dump data to:", filename, true );
 	if( message == Message::OK ) {
@@ -2905,12 +2905,12 @@ plot_XY_sc( size_t *start, size_t *count )
 		}
 
 	/* Get the X axis title */
-	strncpy( x_axis_title, (*(view->variable->dim + dim_to_plot))->name, 100 );
+	snprintf( x_axis_title, sizeof(x_axis_title), "%s", (*(view->variable->dim + dim_to_plot))->name );
 	units    = fi_dim_units( view->variable->first_file->id, dim_name );
 	if( units != NULL ) {
-		strcat( x_axis_title, " (" );
-		strcat( x_axis_title, units );
-		strcat( x_axis_title, ")" );
+		strncat( x_axis_title, " (", sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
+		strncat( x_axis_title, units, sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
+		strncat( x_axis_title, ")", sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
 		}
 
 	/* Another hack to fix the plotter widget...it barfs if all
@@ -2935,23 +2935,23 @@ plot_XY_sc( size_t *start, size_t *count )
 		}
 
 	/* Get the Y (which is the active variable) axis title */
-	strncpy( y_axis_title, view->variable->name, 100 );
+	snprintf( y_axis_title, sizeof(y_axis_title), "%s", view->variable->name );
 	units = fi_var_units( view->variable->first_file->id, view->variable->name );
 	if( units != NULL ) {
-		strcat( y_axis_title, " (" );
-		strcat( y_axis_title, units );
-		strcat( y_axis_title, ")" );
+		strncat( y_axis_title, " (", sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
+		strncat( y_axis_title, units, sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
+		strncat( y_axis_title, ")", sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
 		}
 
 	/* Get the overall plot title */
 	if( (long_name = fi_long_var_name( view->variable->first_file->id, 
 				view->variable->name )) != NULL )
-		strncpy( title, long_name, 200 );
+		snprintf( title, sizeof(title), "%s", long_name );
 	else
-		strncpy( title, view->variable->name, 200 );
+		snprintf( title, sizeof(title), "%s", view->variable->name );
 	if( (file_title = fi_title( view->variable->first_file->id )) != NULL ) {
-		strcat( title, " from " );
-		strcat( title, file_title );
+		strncat( title, " from ", sizeof(title) - strlen(title) - 1 );
+		strncat( title, file_title, sizeof(title) - strlen(title) - 1 );
 		}
 
 	/* Make the legend */
@@ -2962,27 +2962,27 @@ plot_XY_sc( size_t *start, size_t *count )
 		/* if( (i != dim_to_plot) && ((*(start+i) != 0) || (*(count+i) != 1))) { */
 		if( (i != dim_to_plot) && (*(view->variable->dim+i) != NULL)) {
 			if( have_done_one )
-				strcat( legend, ", " );
-			strncat( legend, (*(view->variable->dim + i))->name, 100 );
+				strncat( legend, ", ", sizeof(legend) - strlen(legend) - 1 );
+			strncat( legend, (*(view->variable->dim + i))->name, sizeof(legend) - strlen(legend) - 1 );
 			have_done_one = true;
 			}
-	strcat( legend, ") = (" );
+	strncat( legend, ") = (", sizeof(legend) - strlen(legend) - 1 );
 	have_done_one = false;
 	for( i=0; i<view->variable->n_dims; i++ ) 
 		if( (i != dim_to_plot) && (*(view->variable->dim+i) != NULL)) {
 			if( have_done_one )
-				strcat( legend, ", " );
+				strncat( legend, ", ", sizeof(legend) - strlen(legend) - 1 );
 			type = fi_dim_value( view->variable, i, *(start+i), &temp_double, temp_string,
 					&has_bounds, &bound_min, &bound_max, view->var_place );
 			if( type == NC_DOUBLE ) {
 				snprintf( temp2_string, 127, "%lg", temp_double );
-				strncat( legend, temp2_string, 100 );
+				strncat( legend, temp2_string, sizeof(legend) - strlen(legend) - 1 );
 				}
 			else
-				strncat( legend, temp_string, 100 );
+				strncat( legend, temp_string, sizeof(legend) - strlen(legend) - 1 );
 			have_done_one = true;
 			}
-	strcat( legend, ")" );
+	strncat( legend, ")", sizeof(legend) - strlen(legend) - 1 );
 
 	/* Get list of scannable dimensions, which are possible axes
 	 * that we could plot along.  This will be displayed in the
