@@ -75,7 +75,7 @@ static int date_lt( int year, int month, int day, int y2, int m2, int d2 );
 static int date_gt( int year, int month, int day, int y2, int m2, int d2 );
 static int set_xition_extra_info( calcalcs_cal *cal );
 static void ccs_dump_xition_dates( void );
-static void ccs_gxd_add_country( char *code, char *longname, int year, int month, int day );
+static void ccs_gxd_add_country( const char *code, const char *longname, int year, int month, int day );
 static void ccs_init_country_database( void );
 
 /* Some arbitrary number that is unlikely to be encounterd in a string of random digits */
@@ -738,7 +738,7 @@ int ccs_dayssince( calcalcs_cal *calendar_orig, int year_orig, int month_orig, i
 }
 
 /********************************************************************************************/
-static void ccs_gxd_add_country( char *code, char *longname, int year, int month, int day ) 
+static void ccs_gxd_add_country( const char *code, const char *longname, int year, int month, int day ) 
 {
 	if( ccs_n_country_codes >= CCS_MAX_N_COUNTRY_CODES ) {
 		fprintf( stderr, "Error, the calcalcs library is attempting to store more country codes than is possible; max is %d\n",

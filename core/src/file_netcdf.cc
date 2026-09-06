@@ -38,17 +38,17 @@ extern  Options options;
 void 	warn_about_char_dims();
 int 	safe_ncdimid( int fileid, char *dim_name1 );
 int 	netcdf_dimvar_id( int fileid, char *dim_name, int *dimvar_gid );
-int 	netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int expected_len, void *value );
+int 	netcdf_get_att_util( int id, int varid, const char *var_name, const char *att_name, int expected_len, void *value );
 int 	nc_inq_varid_grp( int ncid, char *varname, int *varid, int *groupid );
 char 	*ncview_groupname( int gid );
 char 	*ncview_varname( int gid, int varid );
 void 	nc_print_group_structure( int fileid );
 int 	nc_root_id_from_group_id( int gid );
 
-char *nc_type_to_string( nc_type type );
+const char *nc_type_to_string( nc_type type );
 
 /*******************************************************************************************/
-void safe_strcat( char *dest, size_t dest_len, char *src )
+void safe_strcat( char *dest, size_t dest_len, const char *src )
 {
 	size_t	nfree;
 
@@ -434,7 +434,7 @@ std::string netcdf_dim_id_to_name( int fileid, std::string_view var_name, int di
 {
 	int	netcdf_dim_id, netcdf_var_id, gid;
 	int	n_dims, err, n_atts;
-	char	dim_name[MAX_NC_NAME], var_name_ng[MAX_NC_NAME], groupname[MAX_NC_NAME], fq_dim_name[MAX_NC_NAME];
+	char	dim_name[MAX_NC_NAME], var_name_ng[MAX_NC_NAME], groupname[MAX_NC_NAME];
 	nc_type	var_type;
 	std::string var_name_s( var_name );
 
@@ -485,18 +485,23 @@ std::string netcdf_dim_id_to_name( int fileid, std::string_view var_name, int di
 	/* 2024-11-05: return fully qualified dim name, not short version */
 	/* return( dim_name ); */
 
+	std::string fq_dim_name;
 	if( groupname[0] == '\0' )
-		snprintf( fq_dim_name, MAX_NC_NAME, "%s", dim_name );
+		fq_dim_name = dim_name;
 	else
-		snprintf( fq_dim_name, MAX_NC_NAME, "%s/%s", groupname, dim_name );
+		fq_dim_name = std::string( groupname ) + "/" + dim_name;
+	/* Preserve the exact truncation semantics of the old
+	 * snprintf( fq_dim_name, MAX_NC_NAME, ... ) buffer this replaced. */
+	if( fq_dim_name.size() > MAX_NC_NAME - 1 )
+		fq_dim_name.resize( MAX_NC_NAME - 1 );
 
 	/*
 	printf( "VVVV %s %d netcdf_dim_id_to_name for dim >%s< here is full varname, varname_ng: >%s< >%s< FULLY QUAL DIM NAME: >%s<\n",
 		__FILE__, __LINE__,
-		dim_name, var_name_s.c_str(), var_name_ng, fq_dim_name );
+		dim_name, var_name_s.c_str(), var_name_ng, fq_dim_name.c_str() );
 	*/
 
-	return( std::string( fq_dim_name ));
+	return( fq_dim_name );
 }
 
 /*******************************************************************************************
@@ -607,7 +612,7 @@ void netcdf_fi_get_data( int fileid, char *var_name, size_t *start_pos,
 		fprintf( stderr, "About to call nc_get_vara_float on variable %s\n",
 				var_name );
 		fprintf( stderr, "Index, start, count:\n" );
-		for( i=0; i<netcdf_fi_n_dims(fileid, var_name); i++ )
+		for( i=0; i<(size_t)netcdf_fi_n_dims(fileid, var_name); i++ )
 			fprintf( stderr, "[%ld]: %ld %ld\n", i, *(start_pos+i), *(count+i) );
 		}
 
@@ -616,7 +621,7 @@ void netcdf_fi_get_data( int fileid, char *var_name, size_t *start_pos,
 		fprintf( stderr, "netcdf_fi_get_data: error on nc_get_vara_float call\n" );
 		fprintf( stderr, "cdfid=%d   variable=%s\n", fileid, var_name );
 		fprintf( stderr, "start, count:\n" );
-		for( i=0; i<netcdf_fi_n_dims(fileid, var_name); i++ )
+		for( i=0; i<(size_t)netcdf_fi_n_dims(fileid, var_name); i++ )
 			fprintf( stderr, "[%ld]: %ld  %ld\n", 
 				i, *(start_pos+i), *(count+i) );
 		fprintf( stderr, "%s\n", nc_strerror(err) );
@@ -899,7 +904,7 @@ char *netcdf_varindex_to_name( int cdfid, int index )
  * If it returns -1, no attribute of that name exists for the given
  * variable (which might be NC_GLOBAL).
  */
-int netcdf_att_id( int fileid, int varid, char *name )
+int netcdf_att_id( int fileid, int varid, const char *name )
 {
 	int	err, n_atts, i;
 	char	att_name[MAX_NC_NAME], var_name[MAX_NC_NAME];
@@ -1121,7 +1126,10 @@ int netcdf_dimvar_id( int fileid, char *dim_name, int *dimvar_gid )
 		/* If we were called with a group ID to begin with, try agian
 		 * with the root ID
 		 */
-		if( err = NC_ENOGRP ) 
+		/* Suspected == vs = typo, preserved verbatim -- see modernization.md's
+		 * "Follow-up commits" section. This always assigns NC_ENOGRP (truthy)
+		 * rather than comparing err to it, so the fallback below always runs. */
+		if( (err = NC_ENOGRP) )
 			err = nc_inq_grp_ncid( nc_root_id_from_group_id(fileid), groupname, &gid );
 
 		if( err != NC_NOERR ) {
@@ -1271,7 +1279,7 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 				i++;
 				}
 			while
-				((i < limit) &&
+				(((size_t)i < limit) &&
 					(*(ret_val_char+i-1) != '\0'));
 			if( *(ret_val_char+i-1) != '\0')
 				*(ret_val_char+i-1) = '\0';
@@ -1488,9 +1496,10 @@ void netcdf_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 
 /*******************************************************************************************/
 /* return true if found and set the value, and false otherwise */
-int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int expected_len, void *value )
+int netcdf_get_att_util( int id, int varid, const char *var_name, const char *att_name, int expected_len, void *value )
 {
-	int	i, err;
+	size_t	i;
+	int	err;
 	size_t	len;
 	nc_type	type;
 	short	short_1;
@@ -1558,7 +1567,7 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 			return( true );
 			}
 
-		else if( len != expected_len ) {
+		else if( len != (size_t)expected_len ) {
 			fprintf( stderr, "error in specification of \"%s\" attribute for\n", att_name);
 			fprintf( stderr, "variable %s: %ld values specified (should be %d)\n",
 				var_name, len, expected_len );
@@ -1828,7 +1837,7 @@ int safe_ncdimid( int fileid, char *dim_name1 )
 }	
 
 /*******************************************************************************************/
-char *nc_type_to_string( nc_type type )
+const char *nc_type_to_string( nc_type type )
 {
 	switch( type ) {
 		
@@ -1852,7 +1861,8 @@ char *nc_type_to_string( nc_type type )
 std::string netcdf_att_string( int fileid, std::string_view var_name )
 {
 	int	iatt, varid, size_to_use, n_dims,
-		i, dim[50], n_atts, err;
+		dim[50], n_atts, err;
+	size_t	i;
 	nc_type	datatype, type;
 	char	att_name[MAX_NC_NAME], dummy_var_name[MAX_NC_NAME];
 	char	line[2000];
@@ -1929,7 +1939,7 @@ std::string netcdf_att_string( int fileid, std::string_view var_name )
 		safe_strcat( ret_string.data(), retval_len, "\n" );
 		}
 
-	safe_strcat( ret_string.data(), retval_len, const_cast<char *>( netcdf_global_att_string( fileid ).c_str() ));
+	safe_strcat( ret_string.data(), retval_len, netcdf_global_att_string( fileid ).c_str() );
 	return( std::string( ret_string.data() ));
 }
 
@@ -2026,7 +2036,7 @@ int netcdf_dimvar_bounds_id( int fileid, char *dim_name, int *nvertices )
 {
 	int	reg_dimvar_id, bounds_dimvar_id, dimvar_ndims, err, name_length, debug,
 		dimvar_gid;
-	char	*attname = "bounds";
+	const char	*attname = "bounds";
 	nc_type	type;
 	size_t	st_nvertices;
 	int dimids[MAX_NC_DIMS];
