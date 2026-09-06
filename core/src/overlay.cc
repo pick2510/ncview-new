@@ -455,7 +455,7 @@ overlay_custom_n( void )
 overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size_t init_guess_idxy, 
 	float locx, float locy, float *xvals, float *yvals, size_t nx, size_t ny, size_t *idxx, size_t *idxy )
 {
-	float	dist[9], dx, dy, mindist, tdist[9], prev_d4;
+	float	dist[9], dx, dy, mindist, tdist[9] = {}, prev_d4;
 	long	i, j, nsteps, xx;
 	long	have_calc[9], index, minloc, ox, oy, isrc, jsrc, idx_src, idx_dest, debug;
 	long	curx, cury, i2use, j2use, i0, j0;
