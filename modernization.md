@@ -64,6 +64,10 @@ Every phase below commits there. `master` stays at `ac96a46` (v0.1.0) so the rel
 
 Two deliberate exceptions, because `ui/` switches on them and their *numeric values* are part of the seam: keep `BUTTON_*` (21 values) and `LABEL_*` (13) as-is for now; they move in Phase 7 together with their `ui/` call sites.
 
+**Update, done in stages:** 12 of the 13 named groups converted cleanly to `enum class` (Message, MinMaxMethod, BlowupType, ShrinkMethod, ViewDataStatus, Device, VarselStyle, TimeStandard, TimeGranularity, Modifier, Dimension, Transform — see the commit history for each). `Overlay` turned out to belong with the `BUTTON_*`/`LABEL_*` exception instead: `do_overlay()`'s own switch is a clean closed set, but `ui/`'s Options dialog (`main_window.cc`'s `setOptionsDialog`) treats overlay ids as plain array/loop indices — `overlay_names()`/`overlay_current()`/`overlay_custom_n()` return `int`, and the dialog does `for (int i = 0; i < n_overlays; i++)` against `overlay_btns[i]`/`names[i]`, matching by bare index rather than by named value. Forcing `enum class` there would mean casting at every one of those array-index sites for no real type-safety gain (unlike Transform, where the one arithmetic site is isolated in `view_change_transform()`). Left as `#define OVERLAY_*` for now; moves with `BUTTON_*`/`LABEL_*` in Phase 7 if that phase also addresses `ui/`'s array-of-names-by-index pattern, or gets its own follow-up otherwise.
+
+`TRUE`/`FALSE` → `bool` and the plain-limit `constexpr`s are also done (separate commits). Dead-code deletion (`Cmaplist`, `Server_Info`, etc.) is done.
+
 `PseudoColor` (`defines.h:41`) stays a plain constant — it's an X11 visual-class value core compares `options.display_type` against, and its comment already explains why.
 
 ## Phase 2 — RAII and bounded strings, mechanically
