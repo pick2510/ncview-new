@@ -198,8 +198,16 @@ parse_options( int argc, char *argv[] )
 				}
 
 			else if( strncmp( argv[i], "-cal", 4 ) == 0 ) {
-				options.calendar = (char *)malloc( strlen(argv[i+1] + 2));
-				strcpy( options.calendar, argv[i+1] );
+				/* Pre-existing bug, fixed here as a direct consequence of
+				 * this conversion: the size expression was
+				 * strlen(argv[i+1] + 2) -- strlen of the string starting 2
+				 * bytes in, not strlen(argv[i+1]) + 2 -- undersizing the
+				 * allocation for any calendar name longer than 2 characters
+				 * and heap-overflowing the strcpy() below on every real use
+				 * of -cal. Parenthesized correctly so the allocation
+				 * actually fits the string being copied. */
+				options.calendar = (char *)malloc( strlen(argv[i+1]) + 2 );
+				snprintf( options.calendar, strlen(argv[i+1]) + 2, "%s", argv[i+1] );
 				i++;
 				}
 
@@ -342,7 +350,7 @@ parse_options( int argc, char *argv[] )
 					    	fprintf( stderr, "Error, specified -maxsize width must be an integer between 30 and 100\n" );
 						exit(-1);
 						}
-					strcpy( bufr, argv[i]+n+1 );
+					snprintf( bufr, sizeof(bufr), "%s", argv[i]+n+1 );
 					if( (sscanf( bufr, "%d", &(options.maxsize_height) ) != 1 ) ||
 					    (options.maxsize_height < 30) ||
 					    (options.maxsize_height > 99999)) {
