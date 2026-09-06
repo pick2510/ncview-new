@@ -474,7 +474,7 @@ cache_scalar_coord_info( const std::vector<std::unique_ptr<NCVar>> &vars )
 		n_ts = v->size[0];	/* total number of timesteps across ALL files */
 		if( n_ts > 0 ) {
 			if( options.debug )
-				printf( "Constructing timestep_2_fdb array for var %s, which has %ld timesteps\n", v->name.c_str(), n_ts );
+				printf( "Constructing timestep_2_fdb array for var %s, which has %zu timesteps\n", v->name.c_str(), n_ts );
 			/* One FDBlist pointer for each timestep of the var */
 			v->timestep_2_fdb.resize( n_ts );
 
@@ -486,12 +486,12 @@ cache_scalar_coord_info( const std::vector<std::unique_ptr<NCVar>> &vars )
 				 */
 				n_ts_this_file = tfile->var_size[0];
 				if( options.debug )
-					printf( "%ld timesteps of var %s are in file %s\n", n_ts_this_file, v->name.c_str(), tfile->filename.c_str() );
+					printf( "%zu timesteps of var %s are in file %s\n", n_ts_this_file, v->name.c_str(), tfile->filename.c_str() );
 				for( ii=0; ii<n_ts_this_file; ii++ )
 					v->timestep_2_fdb[i_cursor++] = tfile;
 				}
 			if( i_cursor != n_ts ) {
-				fprintf( stderr, "Internal error: in routine cache_scalar_coord_info, got a total length of the unlimited dim in var %s to be %ld, but when setting pointers to the files, there seemd to be only %ld entries\n",
+				fprintf( stderr, "Internal error: in routine cache_scalar_coord_info, got a total length of the unlimited dim in var %s to be %zu, but when setting pointers to the files, there seemd to be only %zu entries\n",
 					v->name.c_str(), n_ts, i_cursor );
 				exit(-1);
 				}
@@ -821,7 +821,7 @@ virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **fil
 		fprintf( stderr, "to convert the following virtual place to\n" );
 		fprintf( stderr, "an actual place for variable %s:\n", var->name.c_str() );
 		for( i=0; i<n_dims; i++ )
-			fprintf( stderr, "[%1d]: %ld\n", i, *(virt_pl+i) );
+			fprintf( stderr, "[%1d]: %zu\n", i, *(virt_pl+i) );
 		exit( -1 );
 		}
 
@@ -1029,7 +1029,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		printf( "non-scalar Coord var %s has %d dims, here are their sizes: ",
 			coord_var_name, map_info->coord_var_ndims );
 		for( i=0; i<map_info->coord_var_ndims; i++ )
-			printf( "%ld ", map_info->coord_var_size[i] );
+			printf( "%zu ", map_info->coord_var_size[i] );
 		printf( "\n" );
 		}
 
@@ -1074,7 +1074,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		fprintf( stderr, "Warning: did not correctly match mapped dims specified in the coordinates attribute to dims in the variable\n" );
 		fprintf( stderr, "Problem encountered on variable \"%s\" which has shape (", v->name.c_str() );
 		for( i=0; i<v->n_dims; i++ ) {
-			fprintf( stderr, "%ld", v->size[i] );
+			fprintf( stderr, "%zu", v->size[i] );
 			if( i < (v->n_dims-1))
 				fprintf( stderr, "," );
 			}
@@ -1082,7 +1082,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		fprintf( stderr, "and has coordinates attribute \"%s\"\n", orig_coord_att );
 		fprintf( stderr, "The problem is that coordinate var \"%s\" has shape (", coord_var_name );
 		for( i=0; i<map_info->coord_var_ndims; i++ ) {
-			fprintf( stderr, "%ld", map_info->coord_var_size[i] );
+			fprintf( stderr, "%zu", map_info->coord_var_size[i] );
 			if( i < (map_info->coord_var_ndims-1))
 				fprintf( stderr, "," );
 			}
@@ -1198,7 +1198,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		printf( "%d ", map_info->matching_var_dims[i] );
 	printf( "Index place factor: " );
 	for( i=0; i<v->n_dims; i++ )
-		printf( "%ld ", map_info->index_place_factor[i] );
+		printf( "%zu ", map_info->index_place_factor[i] );
 	printf( "\n" );
 	*/
 }
@@ -1223,7 +1223,7 @@ fill_dim_structs( NCVar *v )
 	v->dim.resize( v->n_dims );
 	for( i=0; i<v->n_dims; i++ ) {
 		dim_name = fi_dim_id_to_name( fileid, v->name, i );
-		if( debug == 1 ) printf( "fill_dim_structs: dim %d has name %s and length %ld\n", i, dim_name.c_str(), v->size[i] );
+		if( debug == 1 ) printf( "fill_dim_structs: dim %d has name %s and length %zu\n", i, dim_name.c_str(), v->size[i] );
 		if( is_scannable( v, i ) ) {
 			v->dim[i] = std::make_unique<NCDim>();
 			d            	= v->dim[i].get();
@@ -1237,14 +1237,14 @@ fill_dim_structs( NCVar *v )
 			d->global_id 	= ++global_id;
 			handle_time_dim( fileid, v, i );
 			if( options.debug )
-				printf( "adding scannable dim to var %s: dimname: %s dimsize: %ld\n", v->name.c_str(), dim_name.c_str(), d->size );
+				printf( "adding scannable dim to var %s: dimname: %s dimsize: %zu\n", v->name.c_str(), dim_name.c_str(), d->size );
 			}
 		else
 			{
 			/* Indicate non-scannable dimensions by a null entry */
 			v->dim[i].reset();
 			if( options.debug )
-				printf( "adding non-scannable dim to var %s: dim name: %s size: %ld\n",
+				printf( "adding non-scannable dim to var %s: dim name: %s size: %zu\n",
 					v->name.c_str(), fi_dim_id_to_name( fileid, v->name, i).c_str(), v->size[i] );
 			}
 		}
@@ -1580,7 +1580,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 	
 	if( (nxb < blowup) || (nxb*nyb < blowup) ) {
 		fprintf( stderr, "ncview: data_to_pixels: too much magnification\n" );
-		fprintf( stderr, "nxb=%ld\n", nxb );
+		fprintf( stderr, "nxb=%zu\n", nxb );
 		exit( -1 );
 		}
 
