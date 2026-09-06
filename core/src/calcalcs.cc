@@ -1006,7 +1006,7 @@ int c_isleap_gregorian_y0( int year, int *leap )
  */
 int c_date2jday_gregorian( int year, int month, int day, int *jday )
 {
-	int	m, leap, *dpm2use, err;
+	int	m, leap = 0, *dpm2use, err;
 
 	if( (month < 1) || (month > 12) || (day < 1) || (day > 31)) {
 		snprintf( error_message, sizeof(error_message), "date %04d-%02d-%02d does not exist in the Gregorian calendar", 
@@ -1068,7 +1068,7 @@ int c_date2jday_gregorian( int year, int month, int day, int *jday )
  */
 int c_date2jday_gregorian_y0( int year, int month, int day, int *jday )
 {
-	int	m, leap, *dpm2use, err;
+	int	m, leap = 0, *dpm2use, err;
 
 	if( (month < 1) || (month > 12) || (day < 1) || (day > 31)) {
 		snprintf( error_message, sizeof(error_message), "date %04d-%02d-%02d does not exist in the Gregorian calendar", 
@@ -1116,7 +1116,7 @@ int c_date2jday_gregorian_y0( int year, int month, int day, int *jday )
  */
 int c_jday2date_gregorian( int jday, int *year, int *month, int *day )
 {
-	int	tjday, leap, *dpm2use, ierr, yp1;
+	int	tjday, leap = 0, *dpm2use, ierr, yp1;
 
 	/* Make first estimate for year. We subtract 4714 because Julian Day number
 	 * 0 occurs in year 4714 BC in the Gregorian calendar (recall that it occurs
@@ -1172,7 +1172,7 @@ int c_jday2date_gregorian( int jday, int *year, int *month, int *day )
  */
 int c_jday2date_gregorian_y0( int jday, int *year, int *month, int *day )
 {
-	int	tjday, leap, *dpm2use, ierr, yp1;
+	int	tjday, leap = 0, *dpm2use, ierr, yp1;
 
 	/* Make first estimate for year. We subtract 4714 because Julian Day number
 	 * 0 occurs in year 4714 BC in the Gregorian calendar (recall that it occurs
@@ -1227,7 +1227,7 @@ int c_jday2date_gregorian_y0( int jday, int *year, int *month, int *day )
  */
 int c_date2jday_julian( int year, int month, int day, int *jday )
 {
-	int	m, leap, *dpm2use, err;
+	int	m, leap = 0, *dpm2use, err;
 
 	if( (month < 1) || (month > 12) || (day < 1) || (day > 31)) {
 		snprintf( error_message, sizeof(error_message), "date %04d-%02d-%02d does not exist in the Julian calendar", 
@@ -1286,7 +1286,7 @@ int c_date2jday_julian( int year, int month, int day, int *jday )
  */
 int c_jday2date_julian( int jday, int *year, int *month, int *day )
 {
-	int	tjday, leap, *dpm2use, ierr, yp1;
+	int	tjday, leap = 0, *dpm2use, ierr, yp1;
 
 	/* Make first estimate for year. We subtract 4713 because Julian Day number
 	 * 0 occurs in year 4713 BC in the Julian calendar
@@ -1504,7 +1504,7 @@ int c_jday2date_noleap( int jday, int *year, int *month, int *day )
 /**********************************************************************************************/
 int c_dpm_gregorian( int year, int month, int *dpm )
 {
-	int	ierr, leap;
+	int	ierr, leap = 0;
 
 	if( (month<1) || (month>12)) {
 		snprintf( error_message, sizeof(error_message), "month %d does not exist in the Gregorian calendar", month );
@@ -1526,7 +1526,7 @@ int c_dpm_gregorian( int year, int month, int *dpm )
 /**********************************************************************************************/
 int c_dpm_gregorian_y0( int year, int month, int *dpm )
 {
-	int	ierr, leap;
+	int	ierr, leap = 0;
 
 	if( (month<1) || (month>12)) {
 		snprintf( error_message, sizeof(error_message), "month %d does not exist in the Gregorian calendar", month );
@@ -1547,7 +1547,7 @@ int c_dpm_gregorian_y0( int year, int month, int *dpm )
 /**********************************************************************************************/
 int c_dpm_julian( int year, int month, int *dpm )
 {
-	int	ierr, leap;
+	int	ierr, leap = 0;
 
 	if( (month<1) || (month>12)) {
 		snprintf( error_message, sizeof(error_message), "month %d does not exist in the Julian calendar", month );

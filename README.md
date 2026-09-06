@@ -65,8 +65,11 @@ packages, on other distros/Homebrew you may need a `-static` package.
 Deliberately left dynamic even with this on: curl and libxml2 (netCDF's
 optional OPeNDAP/remote-file dependency chain, unused for local files and
 pulling in OpenSSL/Kerberos/LDAP -- both unnecessary here and inadvisable to
-freeze via static linking) and the X11/Xft stack (stable, always-present
-OS-level ABI on any cluster reachable via `ssh -X`).
+freeze via static linking) and the core X11/Xft stack (stable, always-present
+OS-level ABI on any cluster reachable via `ssh -X`). Xinerama and Xcursor
+support (multi-monitor geometry, themed cursors) is disabled outright rather
+than linked either way -- testing showed those two, unlike the rest of the
+X11 stack, aren't reliably preinstalled.
 
 ```sh
 cmake -S . -B build-static -DCMAKE_BUILD_TYPE=RelWithDebInfo -DNCVIEW_STATIC_LINK=ON

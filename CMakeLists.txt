@@ -64,14 +64,24 @@ endif()
 # EGL, D-Bus, at-spi, LLVM...) purely to sit unused. Deliberately NOT static:
 # curl/xml2 (netCDF's optional, unused-for-local-files OPeNDAP/remote-access
 # dependency, pulling in OpenSSL/Kerberos/LDAP -- both unnecessary here and
-# inadvisable to freeze via static linking) and the X11/Xft stack (stable,
-# always-present OS-level ABI on any cluster reachable via `ssh -X`).
+# inadvisable to freeze via static linking) and the core X11/Xft stack
+# (stable, always-present OS-level ABI on any cluster reachable via
+# `ssh -X`). Xinerama and Xcursor are the exception within that stack: unlike
+# libX11/libXext/libXft etc., testing on a minimal RHEL8-family image (a
+# stand-in for a real HPC login/compute node) showed these two -- multi-
+# monitor geometry queries and themed-cursor loading, both FLTK features
+# ncview doesn't rely on for correctness -- are NOT reliably preinstalled.
+# Rather than fight static/dynamic link ordering for two optional features,
+# just turn them off for this build variant (matching the Wayland precedent
+# right below).
 option(NCVIEW_STATIC_LINK
     "Statically link netCDF/HDF5 and the C++ runtime, and disable FLTK's unused Wayland backend, for portability to systems (e.g. HPC clusters) without matching shared libraries"
     OFF)
 
 if(NCVIEW_STATIC_LINK)
     set(FLTK_BACKEND_WAYLAND OFF CACHE BOOL "" FORCE)
+    set(FLTK_USE_XINERAMA OFF CACHE BOOL "" FORCE)
+    set(FLTK_USE_XCURSOR OFF CACHE BOOL "" FORCE)
 endif()
 
 # --------------------------------------------------------------------------
@@ -111,6 +121,14 @@ if(NCVIEW_STATIC_LINK)
         endif()
         list(APPEND _ncview_static_netcdf_libs "${_ncview_static_${_lib}}")
     endforeach()
+    # libaec provides the szip *algorithm* libsz.a itself just re-exports
+    # (e.g. Debian/Ubuntu's libsz2/libaec split); not every static-szip
+    # build is split this way, so unlike the chain above this is opportunistic
+    # -- add it if present, don't require it.
+    find_library(_ncview_static_aec NAMES libaec.a HINTS ${_ncview_static_lib_hints})
+    if(_ncview_static_aec)
+        list(APPEND _ncview_static_netcdf_libs "${_ncview_static_aec}")
+    endif()
     list(POP_FRONT _ncview_static_netcdf_libs _ncview_static_netcdf_a)
     # netCDF's own exported target declares per-configuration locations
     # (IMPORTED_LOCATION_RELEASE, etc. -- see IMPORTED_CONFIGURATIONS) that
@@ -125,7 +143,12 @@ if(NCVIEW_STATIC_LINK)
         IMPORTED_LOCATION_RELWITHDEBINFO "${_ncview_static_netcdf_a}"
         IMPORTED_LOCATION_MINSIZEREL "${_ncview_static_netcdf_a}"
         IMPORTED_LOCATION_NOCONFIG "${_ncview_static_netcdf_a}"
-        INTERFACE_LINK_LIBRARIES "${_ncview_static_netcdf_libs};curl;xml2;m"
+        # Static libhdf5.a references pthread symbols (H5.o's use of
+        # pthread_once) that its dynamic .so counterpart resolves silently
+        # via its own DT_NEEDED entry; a static archive carries no such
+        # linkage information, so the final link needs -lpthread spelled
+        # out explicitly or it fails with "DSO missing from command line".
+        INTERFACE_LINK_LIBRARIES "${_ncview_static_netcdf_libs};curl;xml2;m;pthread"
     )
 endif()
 
