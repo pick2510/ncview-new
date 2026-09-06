@@ -783,8 +783,14 @@ static int inferred_origin_year( const char *s )
 
 	/* Make a copy of just the year digits */
 	nyd = idash - ifnbss;		/* number of digits in the year string */
+	/* idash starts at ifnbss+1 and is only ever incremented, so nyd >= 1
+	 * always; this clamp just gives the compiler's static range analysis
+	 * (which can't see that invariant through the loop above) a provable
+	 * non-negative bound, silencing a spurious -Wstringop-overflow= about
+	 * the bound possibly converting to SIZE_MAX. */
+	if( nyd < 0 ) nyd = 0;
 	std::vector<char> year_digits( nyd+1 ); /* zero-initialized: NUL-terminates the copy below */
-	strncpy( year_digits.data(), s+ifnbss, nyd );
+	strncpy( year_digits.data(), s+ifnbss, (size_t)nyd );
 
 /* printf( "YEAR DIGITS: >%s<\n", year_digits.data() ); */
 
