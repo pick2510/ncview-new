@@ -1027,7 +1027,7 @@ void MainWindow::setOptionsDialog()
 	overlay_label.align( FL_ALIGN_LEFT | FL_ALIGN_INSIDE );
 	overlay_label.labelfont( FL_HELVETICA_BOLD );
 
-	char **names = overlay_names();
+	const char **names = overlay_names();
 	int current_overlay = overlay_current();
 	int custom_idx = overlay_custom_n();
 	std::vector<Fl_Round_Button *> overlay_btns;

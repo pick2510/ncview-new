@@ -34,7 +34,7 @@
 /* Number and order of these must match the defines given in ncview.defines.h!
  * They are used as the labels for the radio buttons
  */
-char *my_overlay_names[] = { "None",  
+const char *my_overlay_names[] = { "None",
                         "0.8 degree coastlines",
 		        "0.08 degree coastlines",
 			"USA states",
@@ -148,7 +148,7 @@ overlay_init()
  * NOTE: overlay_base_dir must already be allocated to length 'n'
  */
 	void
-determine_overlay_base_dir( char *overlay_base_dir, int n )
+determine_overlay_base_dir( char *overlay_base_dir, size_t n )
 {
 	char	*dir;
 
@@ -156,7 +156,7 @@ determine_overlay_base_dir( char *overlay_base_dir, int n )
 	if( dir == NULL ) {
 #ifdef NCVIEW_LIB_DIR
 		if( strlen(NCVIEW_LIB_DIR) >= n ) {
-			fprintf( stderr, "Error, routine determine_overlay_base_dir, string NCVIEW_LIB_DIR too long! Max=%d\n", n );
+			fprintf( stderr, "Error, routine determine_overlay_base_dir, string NCVIEW_LIB_DIR too long! Max=%zu\n", n );
 			exit(-1);
 			}
 		snprintf( overlay_base_dir, n, "%s", NCVIEW_LIB_DIR );
@@ -167,7 +167,7 @@ determine_overlay_base_dir( char *overlay_base_dir, int n )
 	else
 		{
 		if( strlen(dir) >= n ) {
-			fprintf( stderr, "Error, routine determine_overlay_base_dir, length of dir is too long! Max=%d\n", n );
+			fprintf( stderr, "Error, routine determine_overlay_base_dir, length of dir is too long! Max=%zu\n", n );
 			exit(-1);
 			}
 		snprintf( overlay_base_dir, n, "%s", dir );
@@ -203,7 +203,7 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, std::vector<int> 
 	dimval_x_2d = dimval_x_2d_buf.data();
 	dimval_y_2d = dimval_y_2d_buf.data();
 
-	for( ii=0; ii<v->variable->n_dims; ii++ )
+	for( ii=0; ii<(size_t)v->variable->n_dims; ii++ )
 		cursor_place[ii] = v->var_place[ii];
 
 	/* Step 1. Get temporary arrays that hold full 2-D X and Y values */
@@ -232,7 +232,7 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, std::vector<int> 
 	/* Step 2. For each point specified in the overlay file, get the CLOSEST
 	 * point in the 2-D X and Y arrays.
 	 */
-	for( kk=0; kk<nvals; kk+=2 ) {
+	for( kk=0; kk<(size_t)nvals; kk+=2 ) {
 		x = data[kk];
 		y = data[kk+1];
 
@@ -276,7 +276,7 @@ gen_overlay_internal( View *v, float *data, long nvals )
 		}
 	else
 		{
-		for( ii=0; ii<nvals; ii+=2 ) {
+		for( ii=0; ii<(size_t)nvals; ii+=2 ) {
 			x = data[ii];
 			y = data[ii+1];
 
@@ -301,7 +301,8 @@ gen_overlay_internal( View *v, float *data, long nvals )
 gen_overlay( View *v, char *overlay_fname )
 {
 	FILE	*f;
-	char	err_mess[1024], line[80], *id_string="NCVIEW-OVERLAY";
+	char	err_mess[1024], line[80];
+	const char *id_string="NCVIEW-OVERLAY";
 	float	x, y, version;
 	long	i, j;
 	size_t	x_size, y_size;
@@ -323,7 +324,7 @@ gen_overlay( View *v, char *overlay_fname )
 		in_error( err_mess );
 		return {};
 		}
-	for( i=0; i<strlen(id_string); i++ )
+	for( i=0; (size_t)i<strlen(id_string); i++ )
 		if( line[i] != id_string[i] ) {
 			snprintf( err_mess, 1024, "Error trying to read overlay file named \"%s\"\nFile does not start with \"%s version-num\"\n",
 				overlay_fname, id_string );
@@ -410,7 +411,7 @@ gen_xform( float value, int n, float *dimvals )
 }
 
 /****************************************************************************************/
-	char **
+	const char **
 overlay_names( void )
 {
 	return( my_overlay_names );
@@ -493,14 +494,14 @@ overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size
 			if( ! have_calc[index] ) {
 				if( (curx == 0) && (i == -1))
 					i2use = nx-1;
-				else if( (curx == nx-1) && (i == 1))
+				else if( (curx == (long)nx-1) && (i == 1))
 					i2use = 0;
 				else
 					i2use = curx + i;
 
 				if( (cury == 0) && (j == -1))
 					j2use = ny-1;
-				else if( (cury == ny-1) && (j == 1))
+				else if( (cury == (long)ny-1) && (j == 1))
 					j2use = 0;
 				else
 					j2use = cury + j;
@@ -577,7 +578,7 @@ overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size
 			n_wrapped_x++;
 			curx = nx-1;
 			}
-		else if( (curx == nx-1) && (ox == 1)) {
+		else if( (curx == (long)nx-1) && (ox == 1)) {
 			n_wrapped_x++;
 			curx = 0;
 			}
@@ -588,13 +589,13 @@ overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size
 			n_wrapped_y++;
 			cury = ny-1;
 			}
-		else if( (cury == ny-1) && (oy == 1)) {
+		else if( (cury == (long)ny-1) && (oy == 1)) {
 			cury = 0;
 			n_wrapped_y++;
 			}
 		else
 			cury = cury + oy;
-		if( (curx<0) || (cury<0) || (curx>=nx) || (cury>=ny)) {
+		if( (curx<0) || (cury<0) || (curx>=(long)nx) || (cury>=(long)ny)) {
 			fprintf( stderr, "Error, alg fails, cursor off array; cursor=(%ld,%ld)  nx=%ld  ny=%ld\n", curx, cury, nx, ny);
 			exit(-1);
 			}

@@ -57,7 +57,7 @@ Stringlist *parse_options           ( int argc,  char *argv[] );
 void 	initialize_file_interface   ( Stringlist *input_files );
 void	initialize_display_interface( void );
 void	initialize_colormaps	    ( void );
-void	init_cmap_from_file	    ( char *dir_name, char *file_name, int n_suffix );
+void	init_cmap_from_file	    ( const char *dir_name, const char *file_name, int n_suffix );
 void	process_user_input          ( void );
 void	quit_app		    ( void );
 void	create_default_colormap     ( void );
@@ -237,10 +237,10 @@ long 	view_current_nt      ( void );
  * in overlay.c
  */
 void 	do_overlay		( int n, char *custom_filename, int suppress_screen_changes );
-char 	**overlay_names		( void );
+const char 	**overlay_names		( void );
 int 	overlay_current		( void );
 int 	overlay_n_overlays	( void );
-void 	determine_overlay_base_dir( char *overlay_base_dir, int n );
+void 	determine_overlay_base_dir( char *overlay_base_dir, size_t n );
 int 	overlay_custom_n	( void );
 void	overlay_init		( void );
 

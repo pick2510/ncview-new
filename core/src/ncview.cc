@@ -71,9 +71,9 @@ FrameStore framestore;
 Stringlist *read_in_state;
 
 static void init_cmaps_from_data();
-static void init_cmap_from_data( char *colormap_name, int *data );
-static int get_cmaps_from_dir( char *dir_name );
-static int ncview_cmap_suffix( char *s, int *n_suffix );
+static void init_cmap_from_data( const char *colormap_name, int *data );
+static int get_cmaps_from_dir( const char *dir_name );
+static int ncview_cmap_suffix( const char *s, int *n_suffix );
 static int any_var_in_group( const std::vector<std::unique_ptr<NCVar>> &vars );
 
 /***********************************************************************************************/
@@ -461,7 +461,7 @@ initialize_colormaps()
  * If a 0 is returned, then n_suffix is also set to the suffix length, including the period.
  */
 	int
-ncview_cmap_suffix( char *s, int *n_suffix )
+ncview_cmap_suffix( const char *s, int *n_suffix )
 {
 	int		nc;
 
@@ -490,7 +490,7 @@ ncview_cmap_suffix( char *s, int *n_suffix )
 
 /***********************************************************************************************/
 	int
-get_cmaps_from_dir( char *dir_name )
+get_cmaps_from_dir( const char *dir_name )
 {
 	DIR		*ncdir = NULL;
 	struct dirent	*dir_entry;
@@ -554,7 +554,7 @@ init_cmaps_from_data()
 
 /***********************************************************************************************/
 	void
-init_cmap_from_data( char *colormap_name, int *data )
+init_cmap_from_data( const char *colormap_name, int *data )
 {
 	int	i;
 	unsigned char r[256], g[256], b[256];
@@ -573,7 +573,7 @@ init_cmap_from_data( char *colormap_name, int *data )
 
 /***********************************************************************************************/
 	void
-init_cmap_from_file( char *dir_name, char *file_name, int n_suffix )
+init_cmap_from_file( const char *dir_name, const char *file_name, int n_suffix )
 {
 	char 	*colormap_name;
 	FILE	*cmap_file;
