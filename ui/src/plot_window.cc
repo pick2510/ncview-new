@@ -5,9 +5,11 @@
  */
 #include "ncview_ui/plot_window.h"
 
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 
 #include <FL/Fl.H>
 #include <FL/Fl_Float_Input.H>
@@ -265,7 +267,7 @@ const Fl_Color kLineColors[MAX_LINES_PER_PLOT] = { FL_RED, FL_BLACK, FL_BLUE, FL
 // A window's slot index doubles as the "plot_index" handed back through
 // in_popup_XY_graph(), which core stashes per-plot state under (view.cc's
 // plot_XY_dim[]), so it must stay stable for the window's lifetime.
-PlotWindow *g_plot_windows[MAX_PLOT_XY] = {};
+std::array<std::unique_ptr<PlotWindow>, MAX_PLOT_XY> g_plot_windows;
 int g_last_popup_x = 18, g_last_popup_y = 18;
 
 int lockedPlotIndex()
@@ -359,11 +361,14 @@ void PlotWindow::setLocked( bool locked )
 void PlotWindow::closeCallback( Fl_Widget *, void *data )
 {
 	auto *pw = static_cast<PlotWindow*>( data );
+	// Reclaim ownership from the slot table before tearing down the FLTK
+	// window, but don't let pw actually go away until after -- matches the
+	// pre-RAII code's own delete-last ordering.
+	std::unique_ptr<PlotWindow> owner;
 	if( pw->index_ >= 0 && pw->index_ < MAX_PLOT_XY )
-		g_plot_windows[pw->index_] = nullptr;
+		owner = std::move( g_plot_windows[pw->index_] );
 	pw->win_->hide();
 	Fl::delete_widget( pw->win_ );
-	delete pw;
 }
 
 void PlotWindow::printCallback( Fl_Widget *, void *data )
@@ -492,7 +497,7 @@ int popupXYGraph( size_t n, int dimindex, double *xvals, double *yvals,
 	PlotWindow *pw = PlotWindow::create( n, dimindex, xvals, yvals, x_axis_title, y_axis_title,
 			title, legend, scannable_dims, g_last_popup_x, g_last_popup_y );
 	pw->setIndex( index );
-	g_plot_windows[index] = pw;
+	g_plot_windows[index].reset( pw );
 	g_last_popup_x += 10;
 	g_last_popup_y += 10;
 	return index;

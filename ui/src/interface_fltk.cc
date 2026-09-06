@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <vector>
 
 #include <FL/Fl.H>
@@ -133,30 +134,34 @@ namespace {
 // fastforward, or the new-data-check timer), so a single slot is enough to
 // let in_timer_clear() actually free a cancelled callback's closure instead
 // of leaking it.
-std::function<void()> *g_pending_timer = nullptr;
+std::unique_ptr<std::function<void()>> g_pending_timer;
 
 void timerTrampoline( void *data )
 {
 	auto *fn = static_cast<std::function<void()>*>( data );
-	if( g_pending_timer == fn ) g_pending_timer = nullptr;
+	// Reclaim ownership before invoking, matching the pre-RAII code's
+	// "unconditional delete" defensive fallback for the (never actually
+	// exercised) case where fn isn't the current pending slot: any stale fn
+	// would already have had its FLTK timeout cancelled by in_timer_clear(),
+	// so this branch never runs in practice, but it must still free fn.
+	std::unique_ptr<std::function<void()>> owner;
+	if( g_pending_timer.get() == fn ) owner = std::move( g_pending_timer );
+	else owner.reset( fn );
 	(*fn)();
-	delete fn;
 }
 } // namespace
 
 void in_timer_clear( void )
 {
 	Fl::remove_timeout( timerTrampoline );
-	delete g_pending_timer;
-	g_pending_timer = nullptr;
+	g_pending_timer.reset();
 }
 
 void in_timer_set( std::function<void()> callback, unsigned long delay_millisec )
 {
 	in_timer_clear();
-	auto *fn = new std::function<void()>( std::move( callback ) );
-	g_pending_timer = fn;
-	Fl::add_timeout( delay_millisec / 1000.0, timerTrampoline, fn );
+	g_pending_timer = std::make_unique<std::function<void()>>( std::move( callback ) );
+	Fl::add_timeout( delay_millisec / 1000.0, timerTrampoline, g_pending_timer.get() );
 }
 
 /* ---- labels / sensitivity / dim buttons -------------------------------- */
