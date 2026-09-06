@@ -152,7 +152,7 @@ new_fdblist( FDBlist **el )
 	(*el)->ut_unit_ptr  = NULL;
 #endif
 
-	strcpy( (*el)->filename, "UNINITIALIZED" );
+	snprintf( (*el)->filename, MAX_FILE_NAME_LEN, "%s", "UNINITIALIZED" );
 
 	new_netcdf( &new_netcdf_options );
 	(*el)->aux_data = new_netcdf_options;
@@ -432,7 +432,7 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 			MAX_FILE_NAME_LEN, filename );
 		exit(-1);
 		}
-	strcpy( new_fdb->filename, filename );
+	snprintf( new_fdb->filename, MAX_FILE_NAME_LEN, "%s", filename );
 
 	/* fill out auxiliary (data-file format dependent) information
 	 * for the new fdb.
@@ -447,7 +447,7 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 	if( var == NULL ) {	/* NO -- make a new NCVar structure */
 		new_variable( &new_var );
 		new_var->name       = (char *)malloc( strlen(var_name)+1 );
-		strcpy( new_var->name, var_name );
+		snprintf( new_var->name, strlen(var_name)+1, "%s", var_name );
 		n_dims              = fi_n_dims( file_id, var_name );
 		new_var->n_dims     = n_dims;
 		if( options.debug )
@@ -952,10 +952,7 @@ handle_dim_mapping( NCVar *v )
 	if( coord_att == NULL )
 		return;
 
-	if( strlen(coord_att) > 1020 )
-		strncpy( orig_coord_att, coord_att, 1020 );
-	else
-		strcpy( orig_coord_att, coord_att );
+	snprintf( orig_coord_att, sizeof(orig_coord_att), "%s", coord_att );
 	if( options.debug ) printf( "var %s HAS a coordinates attribute: >%s<\n", v->name, coord_att );
 
 	/* Check for blank-delimited strings in the coordinates attribute
@@ -1042,7 +1039,7 @@ handle_dim_mapping_scalar( NCVar *v, char *coord_var_name, char *coord_att )
 	 */
 	tmi->var_i_map = v;
 	tmi->coord_var_name = (char *)malloc( sizeof(char) * (strlen(coord_var_name) + 1));
-	strcpy( tmi->coord_var_name, coord_var_name );
+	snprintf( tmi->coord_var_name, strlen(coord_var_name) + 1, "%s", coord_var_name );
 	tmi->coord_var_units = fi_var_units( v->first_file->id, coord_var_name );
 	tmi->scalar_all_same = 0;
 
@@ -1087,7 +1084,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		fprintf( stderr, "Error, failed to allocate space to copy the coordinate attribute\n" );
 		exit(-1);
 		}
-	strcpy( map_info->coord_att, coord_att );
+	snprintf( map_info->coord_att, sizeof(char)*(strlen(coord_att)+2), "%s", coord_att );
 
 	/* This is the "variable that I map" */
 	map_info->var_i_map = v;
@@ -1100,7 +1097,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		fprintf( stderr, "Error, failed to allocate space to copy the coordinate variable name\n" );
 		exit(-1);
 		}
-	strcpy( map_info->coord_var_name, coord_var_name );
+	snprintf( map_info->coord_var_name, strlen(coord_var_name) + 2, "%s", coord_var_name );
 
 	if( options.debug ) printf( "Coord var named >%s< is a NON-SCALAR coord used to map a dimension of var %s\n", 
 			coord_var_name, v->name );
@@ -2377,13 +2374,13 @@ int unpack_groupname( char *varname, int ig, char *groupname )
 	if( nslash == 0 ) {
 		if (ig == -2 ) {
 			/* Asked for varname only */
-			strcpy( groupname, varname );
+			snprintf( groupname, MAX_NC_NAME, "%s", varname );
 			return(0);
 			}
 		else
 			{
 			/* If no slashes in the var name, must live in root group */
-			strcpy( groupname, "/" );
+			snprintf( groupname, MAX_NC_NAME, "%s", "/" );
 			return( 0 );
 			}
 		}
@@ -2394,16 +2391,16 @@ int unpack_groupname( char *varname, int ig, char *groupname )
 		exit(-1);
 		}
 
-	strcpy( ts, varname );
+	snprintf( ts, sizeof(ts), "%s", varname );
 
 	if( ig == -2 ) {
-		strcpy( groupname, ts+idx_slash[nslash-1]+1 );
+		snprintf( groupname, MAX_NC_NAME, "%s", ts+idx_slash[nslash-1]+1 );
 		return( 0 );
 		}
 
 	if( ig == -1 ) {
 		ts[ idx_slash[nslash-1] ] = '\0';
-		strcpy( groupname, ts );
+		snprintf( groupname, MAX_NC_NAME, "%s", ts );
 		return( 0 );
 		}
 
@@ -2414,7 +2411,7 @@ int unpack_groupname( char *varname, int ig, char *groupname )
 	i1 = idx_slash[ig];
 	ts[i1] = '\0';
 
-	strcpy( groupname, ts+i0 );
+	snprintf( groupname, MAX_NC_NAME, "%s", ts+i0 );
 
 	return( 0 );
 }
@@ -2439,13 +2436,13 @@ void varname_no_groups( char *varname, char *varname_sans_groups, char *groupnam
 		}
 
 	if( nslash == 0 ) {
-		strcpy( varname_sans_groups, varname );
+		snprintf( varname_sans_groups, MAX_NC_NAME, "%s", varname );
 		if( groupname != NULL )
 			groupname[0] = '\0';
 		return;
 		}
 
-	strcpy( varname_sans_groups, varname+idx_slash[nslash-1]+1 );
+	snprintf( varname_sans_groups, MAX_NC_NAME, "%s", varname+idx_slash[nslash-1]+1 );
 	if( groupname != NULL ) {
 		strncpy( groupname, varname, idx_slash[nslash-1] );
 		groupname[ idx_slash[nslash-1] ] = '\0';
