@@ -77,17 +77,17 @@ void 	fi_get_data      ( NCVar *var, size_t *start_pos, size_t *count, void *dat
 void 	fi_close         ( int fileid );
 void	determine_file_type( Stringlist *input_files );
 Stringlist *fi_scannable_dims( int fileid, char *var_name );
-char 	*fi_title        ( int fileid );
-char 	*fi_long_var_name( int fileid, char *var_name );
-char 	*fi_var_units    ( int fileid, char *var_name );
-char 	*fi_dim_units    ( int fileid, char *var_name );
-char 	*fi_dim_calendar ( int fileid, char *dim_name );
+std::string fi_title        ( int fileid );
+std::string fi_long_var_name( int fileid, std::string_view var_name );
+std::string fi_var_units    ( int fileid, std::string_view var_name );
+std::string fi_dim_units    ( int fileid, std::string_view dim_name );
+std::string fi_dim_calendar ( int fileid, std::string_view dim_name );
 int 	fi_has_dim_values( int fileid, char *dim_name );
-char 	*fi_dim_longname ( int fileid, char *dim_name );
+std::string fi_dim_longname ( int fileid, std::string_view dim_name );
 nc_type fi_dim_value     ( NCVar *v, int dim_id, size_t place, double *ret_val_double, char *ret_val_char,
 				int *return_has_bounds, double *return_bounds_min, double *return_bounds_max,
 				size_t *complete_ndim_virt_place );
-char 	*fi_dim_id_to_name( int fileid, char *var_name, int dim_id );
+std::string fi_dim_id_to_name( int fileid, std::string_view var_name, int dim_id );
 int 	fi_dim_name_to_id( int fileid, char *var_name, char *dim_name );
 size_t 	fi_n_dim_entries ( int fileid, char *dim_name );
 void 	fi_fill_aux_data ( int id, char *var_name, FDBlist *fdb );
@@ -97,8 +97,8 @@ int 	fi_recdim_id     ( int fileid );
 /******************************************************************************
  * in file_netcdf.c, netcdf specific routines
  */
-char *  netcdf_att_string       ( int fileid, char *var_name );
-char *  netcdf_global_att_string( int fileid );
+std::string netcdf_att_string       ( int fileid, std::string_view var_name );
+std::string netcdf_global_att_string( int fileid );
 int 	netcdf_fi_confirm	( char *name );
 int 	netcdf_fi_writable	( char *name );
 int 	netcdf_fi_initialize	( char *name );
@@ -111,16 +111,16 @@ void	netcdf_fi_close		( int fileid );
 int 	netcdf_n_dims 		( int cdfid, char *varname );
 char	*netcdf_varindex_to_name( int cdfid, int index );
 Stringlist *netcdf_scannable_dims( int fileid, char *var_name );
-char 	*netcdf_title           ( int fileid );
-char 	*netcdf_long_var_name   ( int fileid, char *var_name );
-char 	*netcdf_get_char_att( int fileid, char *var_name, char *att_name );
-char 	*netcdf_var_units       ( int fileid, char *var_name );
-char 	*netcdf_dim_units       ( int fileid, char *var_name );
+std::string netcdf_title           ( int fileid );
+std::string netcdf_long_var_name   ( int fileid, std::string_view var_name );
+std::string netcdf_get_char_att( int fileid, std::string_view var_name, std::string_view att_name );
+std::string netcdf_var_units       ( int fileid, std::string_view var_name );
+std::string netcdf_dim_units       ( int fileid, std::string_view dim_name );
 int 	netcdf_has_dim_values   ( int fileid, char *dim_name );
-char 	*netcdf_dim_longname 	( int fileid, char *dim_name );
+std::string netcdf_dim_longname 	( int fileid, std::string_view dim_name );
 nc_type	netcdf_dim_value     	( int fileid, char *dim_name, size_t place, double *ret_val_double, char *ret_val_char,
 				  size_t virt_place, int *has_bounds, double *return_bounds_min, double *return_bounds_max  );
-char 	*netcdf_dim_id_to_name  ( int fileid, char *var_name, int dim_id );
+std::string netcdf_dim_id_to_name  ( int fileid, std::string_view var_name, int dim_id );
 int 	netcdf_dim_name_to_id   ( int fileid, char *var_name, char *dim_name );
 size_t 	netcdf_n_dim_entries    ( int fileid, char *dim_name );
 void 	netcdf_fill_aux_data    ( int id, char *var_name, FDBlist *fdb );
@@ -130,7 +130,7 @@ int	netcdf_max_option_set	( NCVar *var, float *ret_max );
 void 	netcdf_fill_value	( int file_id, char *var_name, float *v, NetCDFOptions *opts );
 int 	netcdf_fi_recdim_id     ( int fileid );
 int 	netcdf_dimvar_bounds_id ( int fileid, char *dim_name, int *nvertices );
-char 	*netcdf_dim_calendar( int fileid, char *dim_name );
+std::string netcdf_dim_calendar( int fileid, std::string_view dim_name );
 int 	safe_ncvarid( int fileid, char *varname );
 
 /******************************************************************************
@@ -149,7 +149,7 @@ void	clip_i		   ( int   *val, int   min, int   max );
 void 	fill_dim_structs   ( NCVar *v );
 void 	expand_data	   ( float *big_data, View *v, size_t array_size );
 void 	check_ranges       ( NCVar *var );
-char 	*limit_string	   ( char *s );
+std::string limit_string   ( std::string_view s );
 int 	*gen_overlay       ( View *v, char *overlay_fname );
 void 	fmt_time	   ( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity );
 int	n_vars_in_list	   ( NCVar *v );

@@ -213,10 +213,10 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			size_t center_x, size_t center_y, 
 			size_t top_of_image, size_t bot_of_image )
 {
-	char 	*units, *x_dim_name, *x_dim_longname,
-		*y_dim_name, *y_dim_longname, *x_units, *y_units,
-		tstr[1500], tstr2[1000], *main_long_name, *main_units,
-		*dim_name, *dim_longname;
+	char 	*x_dim_name, *y_dim_name,
+		tstr[1500], tstr2[1000], *dim_name;
+	std::string units, x_dim_longname, y_dim_longname, x_units, y_units,
+		main_long_name, main_units, dim_longname, file_title;
 	FDBlist	*fdb;
 	NCDim	*d;
 	int	i, type, has_bounds, istat;
@@ -236,24 +236,24 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 	y_dim_longname = fi_dim_longname( view->variable->first_file->id, y_dim_name );
 	y_units        = fi_dim_units( view->variable->first_file->id, y_dim_name );
 
-	main_long_name = fi_long_var_name( view->variable->first_file->id, 
+	main_long_name = fi_long_var_name( view->variable->first_file->id,
 			view->variable->name );
-	if( main_long_name == NULL )
+	if( main_long_name.empty() )
 		main_long_name = view->variable->name;
 	main_units     = fi_var_units( view->variable->first_file->id, view->variable->name );
 
 	/***** Main variable name and units ******/
 	if( printopts.include_title ) {
-		snprintf( tstr, 1499, "%s", main_long_name );
-		if( main_units != NULL ) {
+		snprintf( tstr, 1499, "%s", main_long_name.c_str() );
+		if( !main_units.empty() ) {
 			strncat( tstr, " (", sizeof(tstr) - strlen(tstr) - 1 );
-			strncat( tstr, main_units, sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, main_units.c_str(), sizeof(tstr) - strlen(tstr) - 1 );
 			strncat( tstr, ")", sizeof(tstr) - strlen(tstr) - 1 );
 			}
 
 		/* move to the center, then half the string's width */
 		set_font( outf, printopts.font_name, printopts.header_font_size );
-		fprintf( outf, "%ld %ld moveto\n", 
+		fprintf( outf, "%ld %ld moveto\n",
 				center_x,
 				top_of_image+printopts.font_size );
 		fprintf( outf, "(%s) stringwidth pop -0.5 mul 0 rmoveto\n", tstr );
@@ -263,29 +263,29 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 	/***** X axis title *****/
 	if( printopts.include_axis_labels ) {
 		set_font( outf, printopts.font_name, printopts.font_size );
-		snprintf( tstr, sizeof(tstr), "%s", x_dim_longname );
-		if( x_units != NULL ) {
+		snprintf( tstr, sizeof(tstr), "%s", x_dim_longname.c_str() );
+		if( !x_units.empty() ) {
 			strncat( tstr, " (", sizeof(tstr) - strlen(tstr) - 1 );
-			strncat( tstr, x_units, sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, x_units.c_str(), sizeof(tstr) - strlen(tstr) - 1 );
 			strncat( tstr, ")", sizeof(tstr) - strlen(tstr) - 1 );
 			}
-		fprintf( outf, "%ld %ld moveto\n", 
+		fprintf( outf, "%ld %ld moveto\n",
 			center_x, bot_of_image-(long)(1.5*(float)printopts.font_size) );
 		fprintf( outf, "(%s) stringwidth pop -0.5 mul 0 rmoveto\n", tstr );
 		fprintf( outf, "(%s) show\n", tstr );
 
 		/***** Y axis title *****/
 		set_font( outf, printopts.font_name, printopts.font_size );
-		snprintf( tstr, sizeof(tstr), "%s", y_dim_longname );
-		if( y_units != NULL ) {
+		snprintf( tstr, sizeof(tstr), "%s", y_dim_longname.c_str() );
+		if( !y_units.empty() ) {
 			strncat( tstr, " (", sizeof(tstr) - strlen(tstr) - 1 );
-			strncat( tstr, y_units, sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, y_units.c_str(), sizeof(tstr) - strlen(tstr) - 1 );
 			strncat( tstr, ")", sizeof(tstr) - strlen(tstr) - 1 );
 			}
-		fprintf( outf, "%ld %ld moveto\n", 
+		fprintf( outf, "%ld %ld moveto\n",
 			center_x - (long)((float)x_size*output_scale/2.0),
 			center_y );
-		fprintf( outf, "gsave 90 rotate 0 %d rmoveto\n", 
+		fprintf( outf, "gsave 90 rotate 0 %d rmoveto\n",
 				(int)((float)printopts.font_size*output_scale) );
 		fprintf( outf, "(%s) stringwidth pop -0.5 mul 0 rmoveto\n", tstr );
 		fprintf( outf, "(%s) show grestore\n", tstr );
@@ -298,48 +298,49 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			bot_of_image - 4*printopts.font_size );
 
 		/**** File title ***/
-		if( fi_title( view->variable->first_file->id ) != NULL ) {
-			fprintf( outf, "gsave (%s) show grestore\n", 
-				fi_title( view->variable->first_file->id ) );
-			fprintf( outf, "0 %d rmoveto\n", 
+		file_title = fi_title( view->variable->first_file->id );
+		if( !file_title.empty() ) {
+			fprintf( outf, "gsave (%s) show grestore\n",
+				file_title.c_str() );
+			fprintf( outf, "0 %d rmoveto\n",
 				-(printopts.leading+printopts.font_size) );
 			}
 
 		/*** Range of data ***/
-		snprintf( tstr, 1499, "Range of %s: %g to %g %s", main_long_name, 
-			view->variable->user_min, view->variable->user_max, main_units );
+		snprintf( tstr, 1499, "Range of %s: %g to %g %s", main_long_name.c_str(),
+			view->variable->user_min, view->variable->user_max, main_units.c_str() );
 		fprintf( outf, "gsave (%s) show grestore\n", tstr );
 		fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
 
 		/*** Range of X axis ***/
 		d = *(view->variable->dim + view->x_axis_id);
-		if( x_units == NULL )
-			snprintf( tstr, 1499, "Range of %s: %g to %g", 
-				x_dim_longname, d->min, d->max);
+		if( x_units.empty() )
+			snprintf( tstr, 1499, "Range of %s: %g to %g",
+				x_dim_longname.c_str(), d->min, d->max);
 		else
-			snprintf( tstr, 1499, "Range of %s: %g to %g %s", 
-				x_dim_longname, d->min, d->max, x_units );
+			snprintf( tstr, 1499, "Range of %s: %g to %g %s",
+				x_dim_longname.c_str(), d->min, d->max, x_units.c_str() );
 		fprintf( outf, "gsave (%s) show grestore\n", tstr );
 		fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
 
 		/*** Range of Y axis ***/
 		d = *(view->variable->dim + view->y_axis_id);
-		if( options.invert_physical ) 
-			snprintf( tstr, 1499, "Range of %s: %g to %g", 
-				y_dim_longname, d->max, d->min );
+		if( options.invert_physical )
+			snprintf( tstr, 1499, "Range of %s: %g to %g",
+				y_dim_longname.c_str(), d->max, d->min );
 		else
-			snprintf( tstr, 1499, "Range of %s: %g to %g", 
-				y_dim_longname, d->min, d->max );
-		if( y_units != NULL ) {
+			snprintf( tstr, 1499, "Range of %s: %g to %g",
+				y_dim_longname.c_str(), d->min, d->max );
+		if( !y_units.empty() ) {
 			strncat( tstr, " ", sizeof(tstr) - strlen(tstr) - 1 );
-			strncat( tstr, y_units, sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, y_units.c_str(), sizeof(tstr) - strlen(tstr) - 1 );
 			}
 		fprintf( outf, "gsave (%s) show grestore\n", tstr );
 		fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
 
 		/*** Values of other dimensions ***/
 		for(i=0; i<view->variable->n_dims; i++)
-			if( (i != view->x_axis_id) && 
+			if( (i != view->x_axis_id) &&
 			    (i != view->y_axis_id) &&
 			    (*(view->variable->dim+i) != NULL)) {
 				dim_name     = (*(view->variable->dim + i))->name;
@@ -348,13 +349,13 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 				type         = fi_dim_value( view->variable, i, *(view->var_place+i),
 							&temp_double, tstr2, &has_bounds, &bound_min, &bound_max, view->var_place );
 				if( type == NC_DOUBLE )
-					snprintf( tstr, 1499, "Current %s: %lg", dim_longname, temp_double );
+					snprintf( tstr, 1499, "Current %s: %lg", dim_longname.c_str(), temp_double );
 				else
-					snprintf( tstr, 1499, "Current %s: %s", dim_longname,
+					snprintf( tstr, 1499, "Current %s: %s", dim_longname.c_str(),
 						tstr2 );
-				if( units != NULL ) {
+				if( !units.empty() ) {
 					strncat( tstr, " ", sizeof(tstr) - strlen(tstr) - 1 );
-					strncat( tstr, units, sizeof(tstr) - strlen(tstr) - 1 );
+					strncat( tstr, units.c_str(), sizeof(tstr) - strlen(tstr) - 1 );
 					}
 				fprintf( outf, "gsave (%s) show grestore\n", tstr );
 				fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );

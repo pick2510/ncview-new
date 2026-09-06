@@ -128,7 +128,7 @@ fi_list_vars( int fileid )
 /************************************************************************************
  * Return the "title" of the file, if applicable.  Otherwise, return NULL.
  */
-	char *
+	std::string
 fi_title( int fileid )
 {
 	if( file_type != FILE_TYPE_NETCDF )
@@ -141,10 +141,10 @@ fi_title( int fileid )
 }
 
 /************************************************************************************
- * Return the 'long name' of a variable, if appropriate.  Otherwise, return NULL.
+ * Return the 'long name' of a variable, if appropriate.  Otherwise, return empty.
  */
-	char *
-fi_long_var_name( int fileid, char *var_name )
+	std::string
+fi_long_var_name( int fileid, std::string_view var_name )
 {
 	if( file_type != FILE_TYPE_NETCDF )
 		{
@@ -156,10 +156,10 @@ fi_long_var_name( int fileid, char *var_name )
 }
 
 /************************************************************************************
- * Return the 'units' of a variable, if appropriate.  Otherwise, return NULL.
+ * Return the 'units' of a variable, if appropriate.  Otherwise, return empty.
  */
-	char *
-fi_var_units( int fileid, char *var_name )
+	std::string
+fi_var_units( int fileid, std::string_view var_name )
 {
 	if( file_type != FILE_TYPE_NETCDF )
 		{
@@ -171,14 +171,14 @@ fi_var_units( int fileid, char *var_name )
 }
 
 /************************************************************************************
- * Return the 'calendar' attribution of a dimension, if appropriate.  Otherwise, return NULL.
+ * Return the 'calendar' attribution of a dimension, if appropriate.  Otherwise, return empty.
  */
-	char *
-fi_dim_calendar( int fileid, char *dim_name )
+	std::string
+fi_dim_calendar( int fileid, std::string_view dim_name )
 {
 	/* Command line specified calendar OVERRIDES info in the file */
 	if( options.calendar != NULL )
-		return( options.calendar );
+		return( std::string( options.calendar ));
 
 	if( file_type != FILE_TYPE_NETCDF )
 		{
@@ -190,10 +190,10 @@ fi_dim_calendar( int fileid, char *dim_name )
 }
 
 /************************************************************************************
- * Return the 'units' of a dimension, if appropriate.  Otherwise, return NULL.
+ * Return the 'units' of a dimension, if appropriate.  Otherwise, return empty.
  */
-	char *
-fi_dim_units( int fileid, char *dim_name )
+	std::string
+fi_dim_units( int fileid, std::string_view dim_name )
 {
 	if( file_type != FILE_TYPE_NETCDF )
 		{
@@ -261,8 +261,8 @@ fi_var_size( int fileid, char *var_name )
  * return the name of the dimension.  'Id' here means the index into
  * the size_array of the owning variable.
  */
-	char *
-fi_dim_id_to_name( int fileid, char *var_name, int dim_id )
+	std::string
+fi_dim_id_to_name( int fileid, std::string_view var_name, int dim_id )
 {
 	if( file_type != FILE_TYPE_NETCDF )
 		{
@@ -400,8 +400,8 @@ fi_close( int fileid )
 /*************************************************************************************
  * Does this dimension have a longname?  If so, return it.  Otherwise, NULL.
  */
-	char *
-fi_dim_longname( int fileid, char *dim_name )
+	std::string
+fi_dim_longname( int fileid, std::string_view dim_name )
 {
 	if( file_type != FILE_TYPE_NETCDF )
 		{

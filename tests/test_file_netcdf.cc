@@ -150,18 +150,17 @@ TEST_CASE("file_netcdf: dim name/id lookups round-trip") {
     int lat_id = netcdf_dim_name_to_id(f.fileid, (char *)"temp", (char *)"lat");
     CHECK(lat_id == 1); // second dim of temp(time,lat,lon)
 
-    char *name = netcdf_dim_id_to_name(f.fileid, (char *)"temp", lat_id);
-    REQUIRE(name != nullptr);
-    CHECK(std::strcmp(name, "lat") == 0);
+    std::string name = netcdf_dim_id_to_name(f.fileid, (char *)"temp", lat_id);
+    CHECK(name == "lat");
 
     CHECK(netcdf_dim_name_to_id(f.fileid, (char *)"temp", (char *)"not_a_dim") == -1);
 }
 
 TEST_CASE("file_netcdf: var and dim units come back as written") {
     SampleFile f;
-    CHECK(std::strcmp(netcdf_var_units(f.fileid, (char *)"temp"), "K") == 0);
-    CHECK(std::strcmp(netcdf_dim_units(f.fileid, (char *)"lat"), "degrees_north") == 0);
-    CHECK(std::strcmp(netcdf_long_var_name(f.fileid, (char *)"temp"), "temperature") == 0);
+    CHECK(netcdf_var_units(f.fileid, (char *)"temp") == "K");
+    CHECK(netcdf_dim_units(f.fileid, (char *)"lat") == "degrees_north");
+    CHECK(netcdf_long_var_name(f.fileid, (char *)"temp") == "temperature");
 }
 
 TEST_CASE("file_netcdf: dim value reads back real coordinate data") {

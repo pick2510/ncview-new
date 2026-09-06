@@ -945,9 +945,15 @@ handle_dim_mapping( NCVar *v )
 		(v->dim_map_info)[i] = (NCDim_map_info *)NULL;
 
 	/* See if this var has a "coordinates" attribute */
-	coord_att = netcdf_get_char_att( ncid, v->name, "coordinates" );
-	if( coord_att == NULL )
+	/* coord_att is strtok()'d in place below and its address (with tokens
+	 * already split out) is threaded on into handle_dim_mapping_scalar()/
+	 * _2d() -- both still take a raw char*, so bridge with strdup() the
+	 * same way the old malloc'd netcdf_get_char_att() return did (still
+	 * never freed either way, matching prior behavior). */
+	std::string coord_att_s = netcdf_get_char_att( ncid, v->name, "coordinates" );
+	if( coord_att_s.empty() )
 		return;
+	coord_att = strdup( coord_att_s.c_str() );
 
 	snprintf( orig_coord_att, sizeof(orig_coord_att), "%s", coord_att );
 	if( options.debug ) printf( "var %s HAS a coordinates attribute: >%s<\n", v->name, coord_att );
@@ -1037,7 +1043,13 @@ handle_dim_mapping_scalar( NCVar *v, char *coord_var_name, char *coord_att )
 	tmi->var_i_map = v;
 	tmi->coord_var_name = (char *)malloc( sizeof(char) * (strlen(coord_var_name) + 1));
 	snprintf( tmi->coord_var_name, strlen(coord_var_name) + 1, "%s", coord_var_name );
-	tmi->coord_var_units = fi_var_units( v->first_file->id, coord_var_name );
+	/* tmi->coord_var_units (still a raw char*, Phase 5 converts
+	 * NCDim_map_info) is printed with a bare "%s" with no NULL guard in
+	 * view.cc, so an absent-units NULL must stay NULL here rather than
+	 * become a strdup'd "" -- that would silently change the rendered
+	 * "(null)" text to nothing. */
+	std::string coord_var_units_s = fi_var_units( v->first_file->id, coord_var_name );
+	tmi->coord_var_units = coord_var_units_s.empty() ? NULL : strdup( coord_var_units_s.c_str() );
 	tmi->scalar_all_same = 0;
 
 	/* Add this new scalar dim to the array */
@@ -1209,7 +1221,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 				idx_lon_dim = i;
 				if( options.debug )
 					printf( "In variable \"%s\", dimension \"%s\" is mapped by LONGITUDE-like %d-dimensional variable \"%s\"\n",
-					v->name, netcdf_dim_id_to_name( v->first_file->id, v->name, i), 
+					v->name, netcdf_dim_id_to_name( v->first_file->id, v->name, i).c_str(),
 					map_info->coord_var_ndims, map_info->coord_var_name );
 				break;
 				}
@@ -1230,7 +1242,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 				v->dim_map_info[i] = map_info;
 				if( options.debug )
 					printf( "In variable \"%s\", dimension \"%s\" is mapped by LATITUDE-like dimension %d-dimensional variable \"%s\"\n",
-					v->name, netcdf_dim_id_to_name( v->first_file->id, v->name, i),
+					v->name, netcdf_dim_id_to_name( v->first_file->id, v->name, i).c_str(),
 					map_info->coord_var_ndims, map_info->coord_var_name );
 				break;
 				}
@@ -1300,7 +1312,7 @@ fill_dim_structs( NCVar *v )
 {
 	int	i, fileid, debug;
 	NCDim	*d;
-	char	*dim_name, *tmp_units;
+	std::string dim_name, tmp_units;
 	static  int global_id = 0;
 	FDBlist	*cursor;
 
@@ -1311,47 +1323,83 @@ fill_dim_structs( NCVar *v )
 	fileid = v->first_file->id;
 	v->dim = (NCDim **)malloc( v->n_dims*sizeof( NCDim *));
 	for( i=0; i<v->n_dims; i++ ) {
+		/* Explicit up-front NULL, matching handle_dim_mapping()'s same
+		 * pattern for its array just above -- redundant with the
+		 * if/else below (which unconditionally sets this slot either
+		 * way), but the extra local std::string scopes this phase
+		 * added just below made GCC's flow analysis lose track of
+		 * that and report a new spurious -Wmaybe-uninitialized on
+		 * *(v->dim) further down. */
+		*(v->dim + i) = NULL;
 		dim_name = fi_dim_id_to_name( fileid, v->name, i );
-		if( debug == 1 ) printf( "fill_dim_structs: dim %d has name %s and length %ld\n", i, dim_name, v->size[i] );
+		if( debug == 1 ) printf( "fill_dim_structs: dim %d has name %s and length %ld\n", i, dim_name.c_str(), v->size[i] );
 		if( is_scannable( v, i ) ) {
 			*(v->dim + i)	= (NCDim *)malloc( sizeof( NCDim ));
 			d            	= *(v->dim+i);
-			d->name      	= dim_name;
-			d->long_name 	= fi_dim_longname( fileid, dim_name );
+			/* d->name/long_name/units/calendar are still raw char*
+			 * (Phase 5 converts NCDim); bridge with strdup() the
+			 * same way the rest of this phase does. fi_dim_longname()
+			 * never returns empty (it falls back to echoing dim_name),
+			 * so a plain strdup() is fine there, but fi_dim_units()/
+			 * fi_dim_calendar() can return empty for "no such
+			 * attribute" and some downstream call sites (e.g.
+			 * util.cc's own coord_var_units handling, udu.cc) test
+			 * d->units/d->calendar against NULL specifically -- an
+			 * empty result must stay NULL, not become a strdup'd "".
+			 */
+			d->name      	= strdup( dim_name.c_str() );
+			d->long_name 	= strdup( fi_dim_longname( fileid, dim_name ).c_str() );
 			d->have_calc_minmax = 0;
-			d->units     	= fi_dim_units   ( fileid, dim_name );
+			{
+			std::string units_s = fi_dim_units( fileid, dim_name );
+			d->units = units_s.empty() ? NULL : strdup( units_s.c_str() );
+			}
 			d->units_change = 0;
 			d->size      	= *(v->size+i);
-			d->calendar  	= fi_dim_calendar( fileid, dim_name );
+			{
+			std::string calendar_s = fi_dim_calendar( fileid, dim_name );
+			d->calendar = calendar_s.empty() ? NULL : strdup( calendar_s.c_str() );
+			}
 			d->global_id 	= ++global_id;
 			handle_time_dim( fileid, v, i );
-			if( options.debug ) 
-				printf( "adding scannable dim to var %s: dimname: %s dimsize: %ld\n", v->name, dim_name, d->size );
+			if( options.debug )
+				printf( "adding scannable dim to var %s: dimname: %s dimsize: %ld\n", v->name, dim_name.c_str(), d->size );
 			}
 		else
 			{
 			/* Indicate non-scannable dimensions by a NULL */
 			*(v->dim + i) = NULL;
-			if( options.debug ) 
-				printf( "adding non-scannable dim to var %s: dim name: %s size: %ld\n", 
-					v->name, fi_dim_id_to_name( fileid, v->name, i), *(v->size+i) );
+			if( options.debug )
+				printf( "adding non-scannable dim to var %s: dim name: %s size: %ld\n",
+					v->name, fi_dim_id_to_name( fileid, v->name, i).c_str(), *(v->size+i) );
 			}
 		}
 
-	/* If this variable lives in more than one file, it might have 
+	/* If this variable lives in more than one file, it might have
 	 * different time units in each one.  Check for this.
 	 */
+	/* *(v->dim) (i.e. v->dim[0]) is unconditionally written by every
+	 * iteration of the loop above (the explicit NULL at its top, then
+	 * overwritten either way by the if/is_scannable branch) -- but GCC's
+	 * flow analysis loses track of that once the loop body contains the
+	 * local std::string scopes this phase added above, and reports a
+	 * spurious -Wmaybe-uninitialized here that did not fire before this
+	 * change. Narrowly suppressed rather than restructured further,
+	 * since v->dim[0] really is always initialized by this point. */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 	if( v->is_virtual && (*(v->dim) != NULL) && (v->first_file->next != NULL) ) {
+#pragma GCC diagnostic pop
 		/* The timelike dimension MUST be the first one! */
 		d = *(v->dim+0);
 		if( d->timelike ) {
 			/* Go through each file and see if it has the same units
-			 * as the first file, which is stored in d->units 
+			 * as the first file, which is stored in d->units
 			 */
 			cursor = v->first_file->next;
 			while( cursor != NULL ) {
 				tmp_units = fi_dim_units( cursor->id, d->name );
-				if( strcmp( d->units, tmp_units ) != 0 ) {
+				if( strcmp( d->units, tmp_units.c_str() ) != 0 ) {
 					printf( "** Warning: different time units found in different files.  Trying to compensate...\n" );
 					d->units_change = 1;
 					}
@@ -2043,20 +2091,27 @@ set_blowup_type( BlowupType new_type )
  * If we allowed strings of arbitrary length, some of the widgets
  * would crash when trying to display them.
  */
-	char *
-limit_string( char *s )
+	/* Was: char *limit_string(char *s), trimming trailing spaces and
+	 * truncating by writing '\0' bytes into the CALLER's own buffer and
+	 * returning that same pointer. Every call site (all in view.cc)
+	 * only ever uses the return value inline in a snprintf(), never
+	 * re-reads the original buffer afterward expecting it pre-trimmed --
+	 * so this is now a pure function computing into a fresh std::string,
+	 * with no more side effect on the caller's storage. */
+	std::string
+limit_string( std::string_view s )
 {
-	int	i;
+	std::string ret( s );
 
-	i = strlen(s)-1;
-	while( *(s+i) == ' ' )
+	int	i = (int)ret.size() - 1;
+	while( i >= 0 && ret[i] == ' ' )
 		i--;
-	*(s+i+1) = '\0';
+	ret.resize( i+1 );
 
-	if( strlen(s) > MAX_DISPLAYED_STRING_LENGTH )
-		*(s+MAX_DISPLAYED_STRING_LENGTH) = '\0';
+	if( ret.size() > MAX_DISPLAYED_STRING_LENGTH )
+		ret.resize( MAX_DISPLAYED_STRING_LENGTH );
 
-	return( s );
+	return( ret );
 }
 
 /******************************************************************************

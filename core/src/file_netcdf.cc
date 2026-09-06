@@ -431,31 +431,32 @@ size_t * netcdf_fi_var_size( int fileid, char *var_name )
  * for the given variable, which has N dims, return the fully qualified name of the 
  * "dim_id"'th dim (dim_id is an index from 0 to 1-NDIMS(var_name))
  */
-char *netcdf_dim_id_to_name( int fileid, char *var_name, int dim_id )
+std::string netcdf_dim_id_to_name( int fileid, std::string_view var_name, int dim_id )
 {
 	int	netcdf_dim_id, netcdf_var_id, gid;
 	int	n_dims, *dim, err, n_atts;
-	char	*dim_name, var_name_ng[MAX_NC_NAME], groupname[MAX_NC_NAME], *fq_dim_name;
+	char	dim_name[MAX_NC_NAME], var_name_ng[MAX_NC_NAME], groupname[MAX_NC_NAME], fq_dim_name[MAX_NC_NAME];
 	nc_type	var_type;
+	std::string var_name_s( var_name );
 
 	/* see notes under "netcdf_dim_name_to_id".  "dim_id" is NOT
 	 * the netCDF dimension ID, it is the entry into the size array
 	 * for the passed variable.
 	 */
-	err = nc_inq_varid_grp( fileid, var_name, &netcdf_var_id, &gid );
+	err = nc_inq_varid_grp( fileid, var_name_s.data(), &netcdf_var_id, &gid );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "Error in netcdf_dim_id_to_name: could not find var named \"%s\" in file!\n",
-			var_name );
+			var_name_s.c_str() );
 		exit(-1);
 		}
 
 	/* At this point fully qualified var name "var_name" lives in group "gid" with varid "netcdf_var_id" */
 
-	varname_no_groups( var_name, var_name_ng, groupname );
+	varname_no_groups( var_name_s.data(), var_name_ng, groupname );
 	/*
-	printf( "VVVV %s %d netcdf_dim_id_to_name for dim var_name: >%s< var_name_ng: >%s< groupname: >%s<\n", 
-		__FILE__, __LINE__, 
-		var_name, var_name_ng, groupname );
+	printf( "VVVV %s %d netcdf_dim_id_to_name for dim var_name: >%s< var_name_ng: >%s< groupname: >%s<\n",
+		__FILE__, __LINE__,
+		var_name_s.c_str(), var_name_ng, groupname );
 	*/
 
 
@@ -465,40 +466,38 @@ char *netcdf_dim_id_to_name( int fileid, char *var_name, int dim_id )
 				&n_dims, dim, &n_atts );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "ncview: netcdf_dim_id_to_name: error on ");
-		fprintf( stderr, "nc_inq_var call.  Variable=%s\n", var_name );
+		fprintf( stderr, "nc_inq_var call.  Variable=%s\n", var_name_s.c_str() );
 		exit( -1 );
 		}
 
 	netcdf_dim_id = *(dim+dim_id);
-	dim_name    = (char *)malloc( MAX_NC_NAME ); /* defined in netcdf.h */
-	fq_dim_name = (char *)malloc( MAX_NC_NAME ); /* defined in netcdf.h */
 	err      = nc_inq_dimname( gid, netcdf_dim_id, dim_name );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "ncview: netcdf_dim_id_to_name: error on ");
-		fprintf( stderr, "nc_inq_dimname call.  Variable=%s\n", var_name );
+		fprintf( stderr, "nc_inq_dimname call.  Variable=%s\n", var_name_s.c_str() );
 		exit( -1 );
 		}
 	/*
-	printf( "VVVV %s %d netcdf_dim_id_to_name for netcdf_dim_id=%d here is dim_name:>%s<\n", 
-		__FILE__, __LINE__, 
+	printf( "VVVV %s %d netcdf_dim_id_to_name for netcdf_dim_id=%d here is dim_name:>%s<\n",
+		__FILE__, __LINE__,
 		netcdf_dim_id, dim_name );
 	*/
 
 	/* 2024-11-05: return fully qualified dim name, not short version */
 	/* return( dim_name ); */
 
-	if( (groupname == NULL) || (groupname[0] == '\0') ) 
+	if( (groupname == NULL) || (groupname[0] == '\0') )
 		snprintf( fq_dim_name, MAX_NC_NAME, "%s", dim_name );
 	else
 		snprintf( fq_dim_name, MAX_NC_NAME, "%s/%s", groupname, dim_name );
 
 	/*
-	printf( "VVVV %s %d netcdf_dim_id_to_name for dim >%s< here is full varname, varname_ng: >%s< >%s< FULLY QUAL DIM NAME: >%s<\n", 
-		__FILE__, __LINE__, 
-		dim_name, var_name, var_name_ng, fq_dim_name );
+	printf( "VVVV %s %d netcdf_dim_id_to_name for dim >%s< here is full varname, varname_ng: >%s< >%s< FULLY QUAL DIM NAME: >%s<\n",
+		__FILE__, __LINE__,
+		dim_name, var_name_s.c_str(), var_name_ng, fq_dim_name );
 	*/
 
-	return( fq_dim_name );
+	return( std::string( fq_dim_name ));
 }
 
 /*******************************************************************************************
@@ -939,49 +938,49 @@ int netcdf_att_id( int fileid, int varid, char *name )
 }
 
 /*******************************************************************************************/
-char * netcdf_title( int fileid )
+std::string netcdf_title( int fileid )
 {
-	int	err, attid, max_title_len;
-	char	*ret_val;
+	int	err, attid;
 	nc_type	type;
 	size_t	title_len;
 
 	attid = netcdf_att_id( fileid, NC_GLOBAL, "title" );
 	if( attid < 0 )
-		return( NULL );
+		return( std::string() );
 
 	err = nc_inq_att( fileid, NC_GLOBAL, "title", &type, &title_len );
 	if( type != NC_CHAR ) {
 		fprintf( stderr, "ncview: netcdf_title: internal error in the " );
 		fprintf( stderr, "format of the netCDF input file; title\n" );
 		fprintf( stderr, "not in character format!  Setting title to NULL.\n" );
-		return( NULL );
+		return( std::string() );
 		}
 	if( err != NC_NOERR )
-		return( NULL );
+		return( std::string() );
 
-	ret_val = (char *)malloc( title_len+1 );
-	err     = nc_get_att_text( fileid, NC_GLOBAL, "title", ret_val );
+	/* title_len+1 to leave room for the guaranteed-NUL byte the malloc'd
+	 * buffer used to have past the raw attribute bytes nc_get_att_text
+	 * writes; std::string's own implicit trailing NUL plays that role. */
+	std::string ret_val( title_len, '\0' );
+	err = nc_get_att_text( fileid, NC_GLOBAL, "title", ret_val.data() );
 	if( err != NC_NOERR )
-		return( NULL );
-
-	if( *(ret_val+title_len-1) != '\0' )
-		*(ret_val + title_len) = '\0';
+		return( std::string() );
 
 	/* Get rid of trailing spaces / blanks. This is necessary if
 	 * title is too long, which seems to give X a core dump
 	 */
-	for( int kk=title_len-1; kk>0; kk-- ) {
+	for( int kk=(int)title_len-1; kk>0; kk-- ) {
 		if( ret_val[kk] == ' ' )
 			ret_val[kk] = '\0';
 		else
 			break;
 		}
+	ret_val.resize( strlen( ret_val.c_str() ));
 
 	/* Protection from X windows crash if title is too long */
-	max_title_len = 100;
-	if( strlen( ret_val ) > max_title_len )
-		ret_val[ max_title_len-1 ] = '\0';
+	int max_title_len = 100;
+	if( (int)ret_val.size() > max_title_len )
+		ret_val.resize( max_title_len-1 );
 
 	return( ret_val );
 }
@@ -998,80 +997,80 @@ char * netcdf_title( int fileid )
  * On input, var_name might be of the form "group0/group1/varname"
  *
  */
-char *netcdf_get_char_att( int fileid, char *var_name, char *att_name )
+std::string netcdf_get_char_att( int fileid, std::string_view var_name, std::string_view att_name )
 {
 	int	varid, err, gid;
 	size_t	name_length;
 	nc_type	type;
-	char	*ret_val, var_name_ng[MAX_NC_NAME];
+	char	var_name_ng[MAX_NC_NAME];
+	std::string var_name_s( var_name ), att_name_s( att_name );
 
-	err = nc_inq_varid_grp( fileid, var_name, &varid, &gid );
+	err = nc_inq_varid_grp( fileid, var_name_s.data(), &varid, &gid );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "Error in netcdf_get_char_att: could not find var named \"%s\" in file!\n",
-			var_name );
+			var_name_s.c_str() );
 		exit(-1);
 		}
 
-	varname_no_groups( var_name, var_name_ng, NULL );
+	varname_no_groups( var_name_s.data(), var_name_ng, NULL );
 
-	if( netcdf_att_id( gid, varid, att_name ) < 0 )
-		return( NULL );
+	if( netcdf_att_id( gid, varid, att_name_s.data() ) < 0 )
+		return( std::string() );
 
-	err = nc_inq_att( gid, varid, att_name, &type, &name_length );
+	err = nc_inq_att( gid, varid, att_name_s.data(), &type, &name_length );
 	if( (err != NC_NOERR) || (type != NC_CHAR))
-		return( NULL );
+		return( std::string() );
 
-	ret_val = (char *)malloc( name_length+1 );
+	/* Special case: attribute exists but is zero-length -- indistinguishable
+	 * from "not found" to every caller of this function, same as before. */
+	if( name_length == 0 )
+		return( std::string() );
 
-	if( name_length == 0 ) {
-		ret_val[0] = '\0';
-		return( ret_val );
-		}
-
-	err = nc_get_att_text( gid, varid, att_name, ret_val );
+	std::string ret_val( name_length, '\0' );
+	err = nc_get_att_text( gid, varid, att_name_s.data(), ret_val.data() );
 	if( err != NC_NOERR )
-		return( NULL );
+		return( std::string() );
 
-	if( *(ret_val+name_length-1) != '\0' )
-		*(ret_val + name_length) = '\0';
-
+	ret_val.resize( strlen( ret_val.c_str() ));
 	return( ret_val );
 }
 
 /*******************************************************************************************/
-char *netcdf_long_var_name( int fileid, char *var_name )
+std::string netcdf_long_var_name( int fileid, std::string_view var_name )
 {
 	return( netcdf_get_char_att( fileid, var_name, "long_name" ));
 }
 
 /*******************************************************************************************/
-char *netcdf_var_units( int fileid, char *var_name )
+std::string netcdf_var_units( int fileid, std::string_view var_name )
 {
 	return( netcdf_get_char_att( fileid, var_name, "units" ));
 }
 
 /*******************************************************************************************/
-char *netcdf_dim_calendar( int fileid, char *dim_name )
+std::string netcdf_dim_calendar( int fileid, std::string_view dim_name )
 {
 	int	dimvar_id, dimvar_gid;
+	std::string dim_name_s( dim_name );
 
-	dimvar_id = netcdf_dimvar_id( fileid, dim_name, &dimvar_gid );
+	dimvar_id = netcdf_dimvar_id( fileid, dim_name_s.data(), &dimvar_gid );
 
 	if( dimvar_id < 0 )
-		return( NULL );
+		return( std::string() );
 
 	return( netcdf_get_char_att( dimvar_gid, dim_name, "calendar" ));
 }
 
 /*******************************************************************************************/
-char *netcdf_dim_units( int fileid, char *dim_name )
+std::string netcdf_dim_units( int fileid, std::string_view dim_name )
 {
 	int	dimvar_id, dimvar_gid;
+	std::string dim_name_s( dim_name );
 
-	dimvar_id = netcdf_dimvar_id( fileid, dim_name, &dimvar_gid );
+	dimvar_id = netcdf_dimvar_id( fileid, dim_name_s.data(), &dimvar_gid );
 
 	if( dimvar_id < 0 )
-		return( NULL );
+		return( std::string() );
 
 	return( netcdf_var_units( dimvar_gid, dim_name ));
 }
@@ -1167,33 +1166,30 @@ int id1, id2, id3;
 }
 
 /*******************************************************************************************/
-char *netcdf_dim_longname( int fileid, char *dim_name )
+std::string netcdf_dim_longname( int fileid, std::string_view dim_name )
 {
 	int	dimvar_id, err, dimvar_gid;
 	size_t	len;
 	nc_type	att_type;
-	char	*dim_longname;
+	std::string dim_name_s( dim_name );
 
-	dimvar_id = netcdf_dimvar_id( fileid, dim_name, &dimvar_gid );
+	dimvar_id = netcdf_dimvar_id( fileid, dim_name_s.data(), &dimvar_gid );
 	if( dimvar_id < 0 )
-		return( dim_name );
+		return( dim_name_s );
 
 	if( netcdf_att_id( dimvar_gid, dimvar_id, "long_name" ) < 0 )
-		return( dim_name );
+		return( dim_name_s );
 
 	err = nc_inq_att( dimvar_gid, dimvar_id, "long_name", &att_type, &len );
 	if( (err != NC_NOERR) || (att_type != NC_CHAR))
-		return( dim_name );
+		return( dim_name_s );
 
-	dim_longname = (char *)malloc( len+1 );
-	err = nc_get_att_text( dimvar_gid, dimvar_id, "long_name", dim_longname );
+	std::string dim_longname( len, '\0' );
+	err = nc_get_att_text( dimvar_gid, dimvar_id, "long_name", dim_longname.data() );
 	if( err < 0 )
-		return( dim_name );
-	else	
-		{
-		*(dim_longname + len) = '\0';
+		return( dim_name_s );
+	else
 		return( dim_longname );
-		}
 }
 
 /*******************************************************************************************/
@@ -1410,8 +1406,14 @@ void netcdf_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 			fdb->recdim_units = NULL;
 		else
 			{
-			/* Get the units for the dimvar. Note: can be NULL */
-			fdb->recdim_units = netcdf_var_units( gid, unlimdim_name );
+			/* Get the units for the dimvar. Note: can be NULL --
+			 * fdb->recdim_units is still a raw char* (Phase 5
+			 * converts FDBlist), and callers elsewhere test it
+			 * against NULL specifically, not just emptiness, so
+			 * an empty netcdf_var_units() result must become
+			 * NULL here rather than a strdup'd "". */
+			std::string recdim_units_s = netcdf_var_units( gid, unlimdim_name );
+			fdb->recdim_units = recdim_units_s.empty() ? NULL : strdup( recdim_units_s.c_str() );
 			}
 		}
 
@@ -1859,23 +1861,29 @@ char *nc_type_to_string( nc_type type )
 }
 
 /*******************************************************************************************/
-char *netcdf_att_string( int fileid, char *var_name ) 
+std::string netcdf_att_string( int fileid, std::string_view var_name )
 {
-	int	iatt, varid, size_to_use, n_dims, 
+	int	iatt, varid, size_to_use, n_dims,
 		i, dim[50], n_atts, err;
 	nc_type	datatype, type;
 	char	att_name[MAX_NC_NAME], dummy_var_name[MAX_NC_NAME];
-	char	*data, *ret_string, line[2000];
+	char	line[2000];
 	size_t	len, retval_len=10000;
+	std::string var_name_s( var_name );
 
-	ret_string    = (char *)malloc(retval_len);
-	snprintf( ret_string, retval_len, "Attributes for variable %s:\n------------------------------\n", var_name );
+	/* retval_len caps the total length exactly as the old malloc'd buffer
+	 * did (via safe_strcat's truncate-in-place behavior below) -- a
+	 * std::vector<char> here, not an unbounded std::string, preserves
+	 * that byte-for-byte, including truncation of pathologically
+	 * attribute-heavy files. */
+	std::vector<char> ret_string( retval_len );
+	snprintf( ret_string.data(), retval_len, "Attributes for variable %s:\n------------------------------\n", var_name_s.c_str() );
 	ret_string[retval_len-1] = '\0';
 
-	err = nc_inq_varid( fileid, var_name, &varid );
+	err = nc_inq_varid( fileid, var_name_s.data(), &varid );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "Error in netcdf_att_string: could not find var named \"%s\" in file!\n",
-			var_name );
+			var_name_s.c_str() );
 		exit(-1);
 		}
 
@@ -1910,40 +1918,40 @@ char *netcdf_att_string( int fileid, char *var_name )
 				fprintf( stderr, "Error, unhandled netcdf data type: %d\n", datatype );
 				exit(-1);
 			}
-	
-		data = (char *)malloc(size_to_use*len);
-			
-		ncattget( fileid, varid, att_name, data );
 
-		safe_strcat( ret_string, retval_len, att_name );
-		safe_strcat( ret_string, retval_len, ": "     );
+		std::vector<char> data( size_to_use*len );
+
+		ncattget( fileid, varid, att_name, data.data() );
+
+		safe_strcat( ret_string.data(), retval_len, att_name );
+		safe_strcat( ret_string.data(), retval_len, ": "     );
 
 		for(i=0; i<len; i++) {
 			switch( datatype ) {
-				case NC_BYTE:   snprintf( line, 1999, "%d ",  *((char   *)data+i) ); break;
-				case NC_CHAR:   snprintf( line, 1999, "%c",   *((char   *)data+i) ); break;
-				case NC_SHORT:  snprintf( line, 1999, "%d ",  *((short  *)data+i) ); break;
-				case NC_LONG:   snprintf( line, 1999, "%ld ", (long)(*((nclong *)data+i)) ); break;
-				case NC_FLOAT:  snprintf( line, 1999, "%f ",  *((float  *)data+i) ); break;
-				case NC_DOUBLE: snprintf( line, 1999, "%lf ", *((double *)data+i) ); break;
+				case NC_BYTE:   snprintf( line, 1999, "%d ",  *((char   *)data.data()+i) ); break;
+				case NC_CHAR:   snprintf( line, 1999, "%c",   *((char   *)data.data()+i) ); break;
+				case NC_SHORT:  snprintf( line, 1999, "%d ",  *((short  *)data.data()+i) ); break;
+				case NC_LONG:   snprintf( line, 1999, "%ld ", (long)(*((nclong *)data.data()+i)) ); break;
+				case NC_FLOAT:  snprintf( line, 1999, "%f ",  *((float  *)data.data()+i) ); break;
+				case NC_DOUBLE: snprintf( line, 1999, "%lf ", *((double *)data.data()+i) ); break;
 				case NC_NAT:    snprintf( line, 1999, "(NC_NAT) ");                  break;
 				}
-			safe_strcat( ret_string, retval_len, line );
+			safe_strcat( ret_string.data(), retval_len, line );
 			}
-		safe_strcat( ret_string, retval_len, "\n" );
+		safe_strcat( ret_string.data(), retval_len, "\n" );
 		}
 
-	safe_strcat( ret_string, retval_len, netcdf_global_att_string( fileid ));
-	return( ret_string );
+	safe_strcat( ret_string.data(), retval_len, const_cast<char *>( netcdf_global_att_string( fileid ).c_str() ));
+	return( std::string( ret_string.data() ));
 }
 
 /*******************************************************************************************/
-char *netcdf_global_att_string( int fileid )
+std::string netcdf_global_att_string( int fileid )
 {
 	int	iatt, len, size_to_use, i, n_atts, err;
 	nc_type	datatype;
 	char	att_name[MAX_NC_NAME];
-	char	*data, *ret_string, line[2000];
+	char	line[2000];
 	size_t	retval_len=10000;
 
 	err = nc_inq_natts( fileid, &n_atts );
@@ -1951,15 +1959,14 @@ char *netcdf_global_att_string( int fileid )
 		fprintf( stderr, "netcdf_gobal_att_string: failed on nc_inq_natts call!\n" );
 		exit(-1);
 		}
-	
-	if( n_atts == 0 ) {
-		ret_string    = (char *)malloc(2);
-		ret_string[0] = '\0';
-		return( ret_string );
-		}
 
-	ret_string    = (char *)malloc(sizeof(char) * retval_len);
-	snprintf( ret_string, retval_len-1, "\nGlobal attributes:\n--------------------------\n" );
+	if( n_atts == 0 )
+		return( std::string() );
+
+	/* retval_len caps the total length exactly as the old malloc'd buffer
+	 * did (via safe_strcat's truncate-in-place behavior below). */
+	std::vector<char> ret_string( retval_len );
+	snprintf( ret_string.data(), retval_len-1, "\nGlobal attributes:\n--------------------------\n" );
 	ret_string[retval_len-1] = '\0';
 
 	for( iatt=0; iatt<n_atts; iatt++ ) {
@@ -1979,30 +1986,30 @@ char *netcdf_global_att_string( int fileid )
 				fprintf( stderr, "Error, unhandled netcdf data type: %d\n", datatype );
 				exit(-1);
 			}
-	
-		data = (char *)malloc(size_to_use*len);
-			
-		ncattget( fileid, NC_GLOBAL, att_name, data );
 
-		safe_strcat( ret_string, retval_len, att_name);
-		safe_strcat( ret_string, retval_len, ": "    );
+		std::vector<char> data( size_to_use*len );
+
+		ncattget( fileid, NC_GLOBAL, att_name, data.data() );
+
+		safe_strcat( ret_string.data(), retval_len, att_name);
+		safe_strcat( ret_string.data(), retval_len, ": "    );
 
 		for(i=0; i<len; i++) {
 			switch( datatype ) {
-				case NC_BYTE:   snprintf( line, 1999, "%d ",  *((char   *)data+i) ); break;
-				case NC_CHAR:   snprintf( line, 1999, "%c",   *((char   *)data+i) ); break;
-				case NC_SHORT:  snprintf( line, 1999, "%d ",  *((short  *)data+i) ); break;
-				case NC_LONG:   snprintf( line, 1999, "%ld ", (long)(*((nclong *)data+i)) ); break;
-				case NC_FLOAT:  snprintf( line, 1999, "%f ",  *((float  *)data+i) ); break;
-				case NC_DOUBLE: snprintf( line, 1999, "%lf ", *((double *)data+i) ); break;
+				case NC_BYTE:   snprintf( line, 1999, "%d ",  *((char   *)data.data()+i) ); break;
+				case NC_CHAR:   snprintf( line, 1999, "%c",   *((char   *)data.data()+i) ); break;
+				case NC_SHORT:  snprintf( line, 1999, "%d ",  *((short  *)data.data()+i) ); break;
+				case NC_LONG:   snprintf( line, 1999, "%ld ", (long)(*((nclong *)data.data()+i)) ); break;
+				case NC_FLOAT:  snprintf( line, 1999, "%f ",  *((float  *)data.data()+i) ); break;
+				case NC_DOUBLE: snprintf( line, 1999, "%lf ", *((double *)data.data()+i) ); break;
 				case NC_NAT:    snprintf( line, 1999, "(NC_NAT) "); break;
 				}
-			safe_strcat( ret_string, retval_len, line );
+			safe_strcat( ret_string.data(), retval_len, line );
 			}
-		safe_strcat( ret_string, retval_len, "\n" );
+		safe_strcat( ret_string.data(), retval_len, "\n" );
 		}
 
-	return( ret_string );
+	return( std::string( ret_string.data() ));
 }
 
 /*******************************************************************************************/

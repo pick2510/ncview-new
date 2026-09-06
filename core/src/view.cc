@@ -1492,10 +1492,10 @@ alloc_view_storage( View *view )
 		fprintf( stderr, "x axis name:%s  y axis name:%s\n",
 			fi_dim_id_to_name( view->variable->first_file->id,
 					   view->variable->name,
-					   view->x_axis_id ),
+					   view->x_axis_id ).c_str(),
 			fi_dim_id_to_name( view->variable->first_file->id,
 					   view->variable->name,
-					   view->y_axis_id ) );
+					   view->y_axis_id ).c_str() );
 		exit( -1 );
 		}
 	view->pixels = (ncv_pixel *)malloc( scaled_x_size*scaled_y_size*sizeof(ncv_pixel) );
@@ -1510,10 +1510,10 @@ alloc_view_storage( View *view )
 		fprintf( stderr, "x axis name:%s  y axis name:%s\n",
 			fi_dim_id_to_name( view->variable->first_file->id,
 					   view->variable->name,
-					   view->x_axis_id ),
+					   view->x_axis_id ).c_str(),
 			fi_dim_id_to_name( view->variable->first_file->id,
 					   view->variable->name,
-					   view->y_axis_id ) );
+					   view->y_axis_id ).c_str() );
 		exit( -1 );
 		}
 }
@@ -1561,27 +1561,27 @@ view_set_range( void )
 	static void
 set_range_labels( float min, float max )
 {
-	char	*units, *var_long_name;
+	std::string units, var_long_name;
 	char	temp_label[4096], extra_label[4096];
 
-	units = fi_var_units( view->variable->first_file->id, 
+	units = fi_var_units( view->variable->first_file->id,
 				view->variable->name );
-	var_long_name = fi_long_var_name( view->variable->first_file->id, 
+	var_long_name = fi_long_var_name( view->variable->first_file->id,
 					view->variable->name );
-	if( units == NULL ) {
-		snprintf( temp_label, 4095, "displayed range: %g to %g (%g to %g shown)", 
-			view->variable->global_min, 
+	if( units.empty() ) {
+		snprintf( temp_label, 4095, "displayed range: %g to %g (%g to %g shown)",
+			view->variable->global_min,
 			view->variable->global_max,
 			view->variable->user_min,
 			view->variable->user_max );
-		if( var_long_name != NULL )
-			snprintf( extra_label, 4095, "%s (%g to %g)", 
-					limit_string(var_long_name),
+		if( !var_long_name.empty() )
+			snprintf( extra_label, 4095, "%s (%g to %g)",
+					limit_string(var_long_name).c_str(),
 					view->variable->user_min,
 					view->variable->user_max );
 		else
-			snprintf( extra_label, 4095, "%s (%g to %g)", 
-					limit_string(view->variable->name),
+			snprintf( extra_label, 4095, "%s (%g to %g)",
+					limit_string(view->variable->name).c_str(),
 					view->variable->user_min,
 					view->variable->user_max );
 		}
@@ -1589,22 +1589,22 @@ set_range_labels( float min, float max )
 		{
 		snprintf( temp_label, 4095, "displayed range: %g to %g %s (%g to %g shown)",
 			view->variable->global_min,
-			view->variable->global_max, 
-			limit_string(units),
+			view->variable->global_max,
+			limit_string(units).c_str(),
 			view->variable->user_min,
 			view->variable->user_max );
-		if( var_long_name != NULL )
-			snprintf( extra_label, 4095, "%s (%g to %g %s)", 
-					limit_string(var_long_name),
+		if( !var_long_name.empty() )
+			snprintf( extra_label, 4095, "%s (%g to %g %s)",
+					limit_string(var_long_name).c_str(),
 					view->variable->user_min,
-					view->variable->user_max, 
-					limit_string(units) );
+					view->variable->user_max,
+					limit_string(units).c_str() );
 		else
-			snprintf( extra_label, 4095, "%s (%g to %g %s)", 
-					limit_string(view->variable->name),
+			snprintf( extra_label, 4095, "%s (%g to %g %s)",
+					limit_string(view->variable->name).c_str(),
 					view->variable->user_min,
-					view->variable->user_max, 
-					limit_string(units) );
+					view->variable->user_max,
+					limit_string(units).c_str() );
 		}
 
 	in_set_label( LABEL_DATA_EXTREMA, temp_label );
@@ -1960,63 +1960,65 @@ calculate_blowup( View *view, NCVar *var, int val_to_set_to )
 	static void
 draw_file_info( NCVar *var )
 {
-	char	*title, *units, *var_long_name;
+	std::string title, units, var_long_name;
 	char	range_label[256], temp_label[600];
 
 	title = fi_title( var->first_file->id );
-	if( title == NULL )
+	if( title.empty() )
 		in_set_label( LABEL_TITLE, PROGRAM_ID );
 	else
-		in_set_label( LABEL_TITLE, title );
+		/* in_set_label's own char* param is unconverted until Phase 7's
+		 * seam sweep; it only reads/copies the string, never mutates it. */
+		in_set_label( LABEL_TITLE, const_cast<char *>( title.c_str() ));
 
 	units = fi_var_units( var->first_file->id, var->name );
-	if( units == NULL ) {
-		if( (var->global_min != var->user_min) || (var->global_max != var->user_max)) 
-			snprintf( range_label, 255, "%g to %g (%g to %g shown)", 
-					var->global_min, 
+	if( units.empty() ) {
+		if( (var->global_min != var->user_min) || (var->global_max != var->user_max))
+			snprintf( range_label, 255, "%g to %g (%g to %g shown)",
+					var->global_min,
 					var->global_max,
 					var->user_min,
 					var->user_max );
 		else
-			snprintf( range_label, 255, "%g to %g", 
+			snprintf( range_label, 255, "%g to %g",
 					var->global_min,
 					var->global_max );
 		}
 	else
 		{
 		if( (var->global_min != var->user_min) || (var->global_max != var->user_max))
-			snprintf( range_label, 255, "%g to %g %s (%g to %g shown)", 
-					var->global_min, 
+			snprintf( range_label, 255, "%g to %g %s (%g to %g shown)",
+					var->global_min,
 					var->global_max,
-					limit_string(units),
+					limit_string(units).c_str(),
 					var->user_min,
 					var->user_max );
 		else
-			snprintf( range_label, 255, "%g to %g %s", 
+			snprintf( range_label, 255, "%g to %g %s",
 					var->global_min,
 					var->global_max,
-					limit_string(units) );
+					limit_string(units).c_str() );
 		}
 	snprintf( temp_label, 599, "displayed range: %s", range_label );
 	in_set_label( LABEL_DATA_EXTREMA, temp_label );
 
-	var_long_name = fi_long_var_name( view->variable->first_file->id, 
+	var_long_name = fi_long_var_name( view->variable->first_file->id,
 					view->variable->name );
-	if( var_long_name == NULL ) {
-		snprintf( temp_label, 255, "variable=%s", limit_string(view->variable->name) );
+	if( var_long_name.empty() ) {
+		snprintf( temp_label, 255, "variable=%s", limit_string(view->variable->name).c_str() );
 		in_set_label( LABEL_SCANVAR_NAME, temp_label );
 		if( options.want_extra_info ) {
-			snprintf( temp_label, 599, "%s (%s)", limit_string(view->variable->name), 
+			snprintf( temp_label, 599, "%s (%s)", limit_string(view->variable->name).c_str(),
 								range_label );
 			in_set_label( LABEL_CCINFO_1, temp_label );
 			}
 		}
 	else
 		{
-		snprintf( temp_label, 599, "displaying %s", limit_string(var_long_name) );
+		snprintf( temp_label, 599, "displaying %s", limit_string(var_long_name).c_str() );
 		in_set_label( LABEL_SCANVAR_NAME, temp_label );
 		if( options.want_extra_info ) {
-			snprintf( temp_label, 599, "%s (%s)",  limit_string(var_long_name), range_label );
+			snprintf( temp_label, 599, "%s (%s)",  limit_string(var_long_name).c_str(), range_label );
 			in_set_label( LABEL_CCINFO_1, temp_label );
 			}
 		}
@@ -2755,7 +2757,8 @@ plot_XY_sc( size_t *start, size_t *count )
 	float	t_xval, t_yval, tol, *tmp_yvals;
 	double	y_min, y_max, temp_double, bound_min, bound_max;
 	char	x_axis_title[132], y_axis_title[132], temp2_string[128], legend[512];
-	char	title[512], *file_title, temp_string[128], *dim_name, *units, *long_name;
+	char	title[512], temp_string[128], *dim_name;
+	std::string units, long_name, file_title;
 	char	message[512];
 	int	has_bounds, type, all_same, have_done_one, dim_to_plot, plot_index;
 	Stringlist *dimlist;
@@ -2900,9 +2903,9 @@ plot_XY_sc( size_t *start, size_t *count )
 	/* Get the X axis title */
 	snprintf( x_axis_title, sizeof(x_axis_title), "%s", (*(view->variable->dim + dim_to_plot))->name );
 	units    = fi_dim_units( view->variable->first_file->id, dim_name );
-	if( units != NULL ) {
+	if( !units.empty() ) {
 		strncat( x_axis_title, " (", sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
-		strncat( x_axis_title, units, sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
+		strncat( x_axis_title, units.c_str(), sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
 		strncat( x_axis_title, ")", sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
 		}
 
@@ -2930,21 +2933,23 @@ plot_XY_sc( size_t *start, size_t *count )
 	/* Get the Y (which is the active variable) axis title */
 	snprintf( y_axis_title, sizeof(y_axis_title), "%s", view->variable->name );
 	units = fi_var_units( view->variable->first_file->id, view->variable->name );
-	if( units != NULL ) {
+	if( !units.empty() ) {
 		strncat( y_axis_title, " (", sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
-		strncat( y_axis_title, units, sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
+		strncat( y_axis_title, units.c_str(), sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
 		strncat( y_axis_title, ")", sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
 		}
 
 	/* Get the overall plot title */
-	if( (long_name = fi_long_var_name( view->variable->first_file->id, 
-				view->variable->name )) != NULL )
-		snprintf( title, sizeof(title), "%s", long_name );
+	long_name = fi_long_var_name( view->variable->first_file->id,
+				view->variable->name );
+	if( !long_name.empty() )
+		snprintf( title, sizeof(title), "%s", long_name.c_str() );
 	else
 		snprintf( title, sizeof(title), "%s", view->variable->name );
-	if( (file_title = fi_title( view->variable->first_file->id )) != NULL ) {
+	file_title = fi_title( view->variable->first_file->id );
+	if( !file_title.empty() ) {
 		strncat( title, " from ", sizeof(title) - strlen(title) - 1 );
-		strncat( title, file_title, sizeof(title) - strlen(title) - 1 );
+		strncat( title, file_title.c_str(), sizeof(title) - strlen(title) - 1 );
 		}
 
 	/* Make the legend */
@@ -3037,8 +3042,12 @@ view_plot_XY_fmt_x_val( float val, int dimindex, char *s, size_t s_len )
 	void
 view_information( void )
 {
-	in_display_stuff( netcdf_att_string( view->variable->first_file->id,
-						view->variable->name ),  
+	/* in_display_stuff's own char* param is unconverted until Phase 7's
+	 * seam sweep; it copies the string into a widget synchronously, so
+	 * the temporary from netcdf_att_string() -- alive for this whole
+	 * full-expression -- is safe to hand it. */
+	in_display_stuff( const_cast<char *>( netcdf_att_string( view->variable->first_file->id,
+						view->variable->name ).c_str() ),
 			view->variable->name );
 }
 

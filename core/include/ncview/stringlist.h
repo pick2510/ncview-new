@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
