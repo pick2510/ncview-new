@@ -20,6 +20,14 @@ add_library(ncview_core STATIC
 )
 set_target_properties(ncview_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(ncview_core PRIVATE ncview_warning_flags ncview_sanitize_flags)
+# modernization.md Phase 9: core/WARNINGS.md is empty as of this phase, so
+# -Werror is enabled here -- only for ncview_core, not ncview_ui/app/tests,
+# which haven't had the same warning sweep done on their own sources.
+if(MSVC)
+    target_compile_options(ncview_core PRIVATE /WX)
+else()
+    target_compile_options(ncview_core PRIVATE -Werror)
+endif()
 target_include_directories(ncview_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
