@@ -99,7 +99,7 @@ print_init( void )
 
 	printopts.test_only		= TEST_ONLY;
 
-	strcpy( printopts.font_name, FONT_NAME );
+	snprintf( printopts.font_name, sizeof(printopts.font_name), "%s", FONT_NAME );
 
 	printer_options_init(); /* this initializes the X-windows interface
 				   part of the pinter options panel */
@@ -132,7 +132,7 @@ do_print( void )
 		return;
 
 	if( printopts.output_device == Device::Printer ) {
-	    strcpy( printopts.out_file_name, "/tmp/ncview.XXXXXX" );
+	    snprintf( printopts.out_file_name, sizeof(printopts.out_file_name), "%s", "/tmp/ncview.XXXXXX" );
 	    outfid = mkstemp( printopts.out_file_name );
 	    if (outfid == -1) {
 		snprintf( tstr, 1499, "Error opening temporary file for output!\n" );
@@ -246,9 +246,9 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 	if( printopts.include_title ) {
 		snprintf( tstr, 1499, "%s", main_long_name );
 		if( main_units != NULL ) {
-			strcat( tstr, " (" );
-			strcat( tstr, main_units );
-			strcat( tstr, ")" );
+			strncat( tstr, " (", sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, main_units, sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, ")", sizeof(tstr) - strlen(tstr) - 1 );
 			}
 
 		/* move to the center, then half the string's width */
@@ -263,11 +263,11 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 	/***** X axis title *****/
 	if( printopts.include_axis_labels ) {
 		set_font( outf, printopts.font_name, printopts.font_size );
-		strcpy( tstr, x_dim_longname );
+		snprintf( tstr, sizeof(tstr), "%s", x_dim_longname );
 		if( x_units != NULL ) {
-			strcat( tstr, " (" );
-			strcat( tstr, x_units );
-			strcat( tstr, ")" );
+			strncat( tstr, " (", sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, x_units, sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, ")", sizeof(tstr) - strlen(tstr) - 1 );
 			}
 		fprintf( outf, "%ld %ld moveto\n", 
 			center_x, bot_of_image-(long)(1.5*(float)printopts.font_size) );
@@ -276,11 +276,11 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 
 		/***** Y axis title *****/
 		set_font( outf, printopts.font_name, printopts.font_size );
-		strcpy( tstr, y_dim_longname );
+		snprintf( tstr, sizeof(tstr), "%s", y_dim_longname );
 		if( y_units != NULL ) {
-			strcat( tstr, " (" );
-			strcat( tstr, y_units );
-			strcat( tstr, ")" );
+			strncat( tstr, " (", sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, y_units, sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, ")", sizeof(tstr) - strlen(tstr) - 1 );
 			}
 		fprintf( outf, "%ld %ld moveto\n", 
 			center_x - (long)((float)x_size*output_scale/2.0),
@@ -331,8 +331,8 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			snprintf( tstr, 1499, "Range of %s: %g to %g", 
 				y_dim_longname, d->min, d->max );
 		if( y_units != NULL ) {
-			strcat( tstr, " " );
-			strcat( tstr, y_units );
+			strncat( tstr, " ", sizeof(tstr) - strlen(tstr) - 1 );
+			strncat( tstr, y_units, sizeof(tstr) - strlen(tstr) - 1 );
 			}
 		fprintf( outf, "gsave (%s) show grestore\n", tstr );
 		fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
@@ -353,8 +353,8 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 					snprintf( tstr, 1499, "Current %s: %s", dim_longname,
 						tstr2 );
 				if( units != NULL ) {
-					strcat( tstr, " " );
-					strcat( tstr, units );
+					strncat( tstr, " ", sizeof(tstr) - strlen(tstr) - 1 );
+					strncat( tstr, units, sizeof(tstr) - strlen(tstr) - 1 );
 					}
 				fprintf( outf, "gsave (%s) show grestore\n", tstr );
 				fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
@@ -368,8 +368,8 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		    (fi_recdim_id( view->variable->first_file->id ) != view->y_axis_id)) 
 			snprintf( tstr, 1499, "Frame %ld in ", 
 				*(actual_place + view->scan_axis_id)+1 );
-		strcat( tstr, "File " );
-		strcat( tstr, fdb->filename );
+		strncat( tstr, "File ", sizeof(tstr) - strlen(tstr) - 1 );
+		strncat( tstr, fdb->filename, sizeof(tstr) - strlen(tstr) - 1 );
 		fprintf( outf, "gsave (%s) show grestore\n", tstr );
 		fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
 		}
