@@ -42,7 +42,7 @@
 
 #define PROGRAM_ID		"Ncview 2.1.11 David W. Pierce 7 November 2024"
 #define PROGRAM_VERSION_STRING	"2.1.11"
-#define APP_RES_VERSION 	1.93
+constexpr double APP_RES_VERSION = 1.93;
 
 /******************** Buttons in the user interface **********************/
 #define	BUTTON_REWIND			1
@@ -77,7 +77,7 @@
 #define OVERLAY_USA			3
 #define OVERLAY_CUSTOM			4
 
-#define OVERLAY_N_OVERLAYS		5
+constexpr int OVERLAY_N_OVERLAYS = 5;
 
 
 /***************************************************************************
@@ -109,7 +109,7 @@
 
 /*****************************************************************************/
 /* Transforming the data before turning it into pixels is supported */
-#define N_TRANSFORMS		4
+constexpr int N_TRANSFORMS = 4;
 #define TRANSFORM_NONE		1
 #define TRANSFORM_LOW		2
 #define TRANSFORM_HI		3
@@ -119,40 +119,40 @@
  * Maximum number of X-Y plot windows which can pop up, and the max
  * number of lines on one plot.
  */
-#define MAX_PLOT_XY		10
-#define MAX_LINES_PER_PLOT	5
+constexpr int MAX_PLOT_XY = 10;
+constexpr int MAX_LINES_PER_PLOT = 5;
 
 /*****************************************************************************
  * This is for the popup windows which show all of a variable's attributes.
  */
-#define MAX_DISPLAY_POPUPS	10
+constexpr int MAX_DISPLAY_POPUPS = 10;
 
 /*****************************************************************************/
 /* Types of file data formats supported */
-#define FILE_TYPE_NETCDF	1
+constexpr int FILE_TYPE_NETCDF = 1;
 
 /*****************************************************************************/
 /* Maximum name length of a variable */
-#define MAX_VAR_NAME_LEN	4095
+constexpr int MAX_VAR_NAME_LEN = 4095;
 
 /*****************************************************************************/
 /* Maximum name length of a file */
-#define MAX_FILE_NAME_LEN	4095
+constexpr int MAX_FILE_NAME_LEN = 4095;
 
 /*****************************************************************************/
 /* Maximum name length of a recdim units */
-#define MAX_RECDIM_UNITS_LEN	4095
+constexpr int MAX_RECDIM_UNITS_LEN = 4095;
 
 /*****************************************************************************/
 /* Possible interpretations for the change_view routine; either change
  * the specified number of FRAMES or the specified PERCENT.
  */
-#define FRAMES	1
-#define PERCENT	2
+constexpr int FRAMES = 1;
+constexpr int PERCENT = 2;
 
 /*****************************************************************************/
 /* Truncate displayed strings which are longer than this */
-#define MAX_DISPLAYED_STRING_LENGTH 	250
+constexpr int MAX_DISPLAYED_STRING_LENGTH = 250;
 
 /*****************************************************************************/
 /* What dimension button sets we have */
@@ -180,7 +180,7 @@
  * different configuration files.  Sigh.  For use of this, see routine
  * 'check_app_res' in file x_interface.c
  */
-#define DEFAULT_DELTA_STEP	10
+constexpr int DEFAULT_DELTA_STEP = 10;
 
 /*****************************************************************************/
 /* Ways in which the file's min and max can be calculated */
@@ -190,12 +190,12 @@
 #define MIN_MAX_METHOD_EXHAUST	4
 
 /*****************************************************************************/
-/* Data which has the fill_value is IGNORED.  It is assumed to represent 
+/* Data which has the fill_value is IGNORED.  It is assumed to represent
  * out of domain or out of range data.  Netcdf has its own values for this
  * which replace this value, so in Netcdf implementations, this particular
  * value is not the one which is actually used.
  */
-#define DEFAULT_FILL_VALUE	1.0e35
+constexpr float DEFAULT_FILL_VALUE = 1.0e35f;
 
 /*******************************************************************
  * Ways to expand a small pixmap into a large one.
@@ -250,7 +250,7 @@
  * Maximum number of scalar "coord" attributes we can have for
  * variable.
  */
-#define MAX_SCALAR_COORDS	20
+constexpr int MAX_SCALAR_COORDS = 20;
 
 /*******************************************************************
  *
