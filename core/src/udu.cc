@@ -304,7 +304,7 @@ is_unique( char *units )
 	if( uniq == NULL ) {
 		ul_new = (UniqList *)malloc( sizeof(UniqList) );
 		ul_new->name = (char *)malloc(strlen(units)+1);
-		strcpy( ul_new->name, units );
+		snprintf( ul_new->name, strlen(units)+1, "%s", units );
 		ul_new->next = NULL;
 		uniq = ul_new;
 		return( true );
@@ -320,7 +320,7 @@ is_unique( char *units )
 
 	ul_new = (UniqList *)malloc( sizeof(UniqList) );
 	ul_new->name = (char *)malloc(strlen(units)+1);
-	strcpy( ul_new->name, units );
+	snprintf( ul_new->name, strlen(units)+1, "%s", units );
 	ul_new->next = NULL;
 	prev_ul->next = ul_new;
 	return( true );
