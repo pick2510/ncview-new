@@ -59,7 +59,7 @@ void	in_create_colormap	( char *name, ncv_pixel r[256], ncv_pixel g[256], ncv_pi
 char	*in_install_next_colormap( int do_widgets_flag );
 int	in_set_2d_size   	( size_t width, size_t height );
 void	in_set_sensitive	( int button_id, int state );
-int	in_dialog		( char *message, char *ret_string, int want_cancel_button );
+Message	in_dialog		( char *message, char *ret_string, int want_cancel_button );
 void 	in_var_set_sensitive	( char *var_name, int sensitivity );
 void 	in_fill_dim_info	( NCDim *d, int please_flip );
 void	in_set_cur_dim_value	( char *name, char *string );
@@ -87,9 +87,9 @@ char	*in_install_colormap_by_name( char *name, int do_widgets );
  * dialogs/state, implemented by ncview_ui.
  */
 void	set_options		( void );
-int	printer_options		( PrintOptions *po );
+Message	printer_options		( PrintOptions *po );
 void	printer_options_init	( void );
-int	x_range( float old_min, float old_max, float global_min, float global_max,
+Message	x_range( float old_min, float old_max, float global_min, float global_max,
 		float *new_min, float *new_max, int *allvars );
 void	x_dataedit( char **text, int nx );
 int	x_seen_colormap_name( char *name );

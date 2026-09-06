@@ -1094,7 +1094,7 @@ void MainWindow::setOptionsDialog()
 	}
 }
 
-int MainWindow::rangeDialog( float old_min, float old_max, float global_min, float global_max,
+Message MainWindow::rangeDialog( float old_min, float old_max, float global_min, float global_max,
 		float *new_min, float *new_max, int *allvars )
 {
 	Fl_Window win( 320, 190, "Set Range" );
@@ -1130,12 +1130,12 @@ int MainWindow::rangeDialog( float old_min, float old_max, float global_min, flo
 	win.show();
 	while( win.shown() ) Fl::wait();
 
-	if( !result.ok ) return MESSAGE_CANCEL;
+	if( !result.ok ) return Message::Cancel;
 
 	*new_min = (float)atof( min_input.value() );
 	*new_max = (float)atof( max_input.value() );
 	if( allvars ) *allvars = all_vars_cb.value();
-	return MESSAGE_OK;
+	return Message::OK;
 }
 
 int MainWindow::scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y_axis_name,
@@ -1185,7 +1185,7 @@ int MainWindow::scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y
 	return 1;
 }
 
-int MainWindow::printerOptionsDialog( PrintOptions *po )
+Message MainWindow::printerOptionsDialog( PrintOptions *po )
 {
 	Fl_Window win( 420, 300, "Printer Options" );
 	char buf[64];
@@ -1195,7 +1195,7 @@ int MainWindow::printerOptionsDialog( PrintOptions *po )
 	Fl_Round_Button dev_file( 175, 10, 70, 25, "File" );
 	dev_printer.type( FL_RADIO_BUTTON );
 	dev_file.type( FL_RADIO_BUTTON );
-	(po->output_device == DEVICE_PRINTER ? dev_printer : dev_file).setonly();
+	(po->output_device == Device::Printer ? dev_printer : dev_file).setonly();
 	Fl_Input outfile_input( 250, 10, 160, 25 );
 	outfile_input.value( po->out_file_name );
 
@@ -1244,9 +1244,9 @@ int MainWindow::printerOptionsDialog( PrintOptions *po )
 	win.show();
 	while( win.shown() ) Fl::wait();
 
-	if( !result.ok ) return MESSAGE_CANCEL;
+	if( !result.ok ) return Message::Cancel;
 
-	po->output_device = dev_printer.value() ? DEVICE_PRINTER : DEVICE_FILE;
+	po->output_device = dev_printer.value() ? Device::Printer : Device::File;
 	strncpy( po->out_file_name, outfile_input.value(), sizeof(po->out_file_name)-1 );
 	po->page_x_margin = (float)atof( xmar_input.value() );
 	po->page_upper_y_margin = (float)atof( ytmar_input.value() );
@@ -1261,7 +1261,7 @@ int MainWindow::printerOptionsDialog( PrintOptions *po )
 	po->include_id = include_id.value();
 	po->test_only = test_only.value();
 
-	return MESSAGE_OK;
+	return Message::OK;
 }
 
 } // namespace ncview_ui

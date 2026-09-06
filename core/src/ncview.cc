@@ -53,11 +53,11 @@
 #define DEFAULT_INVERT_PHYSICAL	false
 #define DEFAULT_INVERT_COLORS	false
 #define DEFAULT_BLOWUP		1
-#define DEFAULT_MIN_MAX_METHOD	MIN_MAX_METHOD_FAST
+#define DEFAULT_MIN_MAX_METHOD	MinMaxMethod::Fast
 #define DEFAULT_N_COLORS	200
 #define DEFAULT_PRIVATE_CMAP	false
-#define DEFAULT_BLOWUP_TYPE	BLOWUP_BILINEAR
-#define DEFAULT_SHRINK_METHOD	SHRINK_METHOD_MEAN
+#define DEFAULT_BLOWUP_TYPE	BlowupType::Bilinear
+#define DEFAULT_SHRINK_METHOD	ShrinkMethod::Mean
 #define DEFAULT_SAVEFRAMES	true
 #define DEFAULT_NO_AUTOFLIP	false
 #define DEFAULT_LISTSEL_MAX	40
@@ -115,7 +115,7 @@ ncview_main( int argc, char **argv )
 	 */
 	if( any_var_in_group( variables )) {
 		options.enable_group_sel = true;
-		options.varsel_style = VARSEL_MENU;
+		options.varsel_style = VarselStyle::Menu;
 		}
 	else
 		options.enable_group_sel = false;
@@ -169,23 +169,23 @@ parse_options( int argc, char *argv[] )
 					}
 
 				if( strncmp( argv[i+1], "fast", 4 ) == 0 ) {
-					options.min_max_method  = MIN_MAX_METHOD_FAST;
+					options.min_max_method  = MinMaxMethod::Fast;
 					i++;
 					}
 				else if( strncmp( argv[i+1], "med", 3 ) == 0 ) {
-					options.min_max_method  = MIN_MAX_METHOD_MED;
+					options.min_max_method  = MinMaxMethod::Med;
 					i++;
 					}
 				else if( strncmp( argv[i+1], "slow", 4 ) == 0 ) {
-					options.min_max_method  = MIN_MAX_METHOD_SLOW;
+					options.min_max_method  = MinMaxMethod::Slow;
 					i++;
 					}
 				else if( strncmp( argv[i+1], "exh", 3 ) == 0 ) {
-					options.min_max_method  = MIN_MAX_METHOD_EXHAUST;
+					options.min_max_method  = MinMaxMethod::Exhaust;
 					i++;
 					}
 				else if( strncmp( argv[i+1], "all", 3 ) == 0 ) {
-					options.min_max_method  = MIN_MAX_METHOD_EXHAUST;
+					options.min_max_method  = MinMaxMethod::Exhaust;
 					i++;
 					}
 				else
@@ -250,10 +250,14 @@ parse_options( int argc, char *argv[] )
 				options.t_conv = false;
 
 			else if( strncmp( argv[i], "-shrink_mode", 12) == 0 )
-				options.shrink_method = SHRINK_METHOD_MODE;
+				options.shrink_method = ShrinkMethod::Mode;
 
 			else if( strncmp( argv[i], "-repl", 5) == 0 )
-				options.blowup = BLOWUP_REPLICATE;
+				/* Pre-existing quirk, preserved: this sets options.blowup (the
+				 * blowup magnitude), not options.blowup_type, even though the
+				 * value 1 here is BlowupType::Replicate's numeric value -- see
+				 * modernization.md's Phase 1 follow-up notes. */
+				options.blowup = 1;
 
 			else if( strncmp( argv[i], "-c", 2 ) == 0 ) {
 				print_copying();
@@ -388,7 +392,7 @@ initialize_misc()
 	options.save_frames      = DEFAULT_SAVEFRAMES;
 	options.no_autoflip      = DEFAULT_NO_AUTOFLIP;
 	options.t_conv      	 = true;
-	options.varsel_style	 = VARSEL_LIST;
+	options.varsel_style	 = VarselStyle::List;
 	options.dump_frames	 = false;
 	options.listsel_max	 = DEFAULT_LISTSEL_MAX;
 	options.color_by_ndims	 = DEFAULT_COLOR_BY_NDIMS;
@@ -703,7 +707,7 @@ initialize_file_interface( Stringlist *input_files )
 	cache_scalar_coord_info( variables );
 
 	if( nvars > options.listsel_max )
-		options.varsel_style = VARSEL_MENU;
+		options.varsel_style = VarselStyle::Menu;
 
 	if( options.debug ) 
 		printf( "Done initializing file interface...\n" );

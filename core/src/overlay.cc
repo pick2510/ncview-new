@@ -71,7 +71,7 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 		case OVERLAY_NONE:
 			options.overlay->doit = false;
 			if( ! suppress_screen_changes ) {
-				view->data_status = VDS_INVALID;
+				view->data_status = ViewDataStatus::Invalid;
 				invalidate_all_saveframes();
 				change_view( 0, FRAMES );
 				}

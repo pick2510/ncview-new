@@ -315,10 +315,10 @@ do_transform( int modifier )
 do_blowup_type( int modifier )
 {
 	init_saveframes();
-	if( options.blowup_type == BLOWUP_REPLICATE )
-		set_blowup_type( BLOWUP_BILINEAR );
+	if( options.blowup_type == BlowupType::Replicate )
+		set_blowup_type( BlowupType::Bilinear );
 	else
-		set_blowup_type( BLOWUP_REPLICATE );
+		set_blowup_type( BlowupType::Replicate );
 	view_draw( true, false );
 }
 

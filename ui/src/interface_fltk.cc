@@ -287,20 +287,20 @@ void in_query_pointer_position( int *x, int *y )
 
 /* ---- dialogs / errors ---------------------------------------------------- */
 
-int in_dialog( char *message, char *ret_string, int want_cancel_button )
+Message in_dialog( char *message, char *ret_string, int want_cancel_button )
 {
 	if( ret_string != nullptr ) {
 		const char *result = fl_input( "%s", ret_string, message );
-		if( result == nullptr ) return MESSAGE_CANCEL;
+		if( result == nullptr ) return Message::Cancel;
 		std::strncpy( ret_string, result, STRINGLIST_MAX_LEN-1 );
-		return MESSAGE_OK;
+		return Message::OK;
 	}
 	if( want_cancel_button ) {
 		int r = fl_choice( "%s", "Cancel", "OK", nullptr, message );
-		return r == 1 ? MESSAGE_OK : MESSAGE_CANCEL;
+		return r == 1 ? Message::OK : Message::Cancel;
 	}
 	fl_alert( "%s", message );
-	return MESSAGE_OK;
+	return Message::OK;
 }
 
 void x_error( char *message )
@@ -511,14 +511,14 @@ void set_options( void )
 	instance()->setOptionsDialog();
 }
 
-int printer_options( PrintOptions *po )
+Message printer_options( PrintOptions *po )
 {
 	return instance()->printerOptionsDialog( po );
 }
 
 void printer_options_init( void ) {}
 
-int x_range( float old_min, float old_max, float global_min, float global_max, float *new_min, float *new_max, int *allvars )
+Message x_range( float old_min, float old_max, float global_min, float global_max, float *new_min, float *new_max, int *allvars )
 {
 	return instance()->rangeDialog( old_min, old_max, global_min, global_max, new_min, new_max, allvars );
 }

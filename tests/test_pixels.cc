@@ -79,7 +79,7 @@ struct PixelFixture {
     // Runs data_to_pixels() with the given options, sizing the pixel
     // buffer for whatever blowup/shrink they imply, and returns the
     // resulting pixel grid (row-major, new_x_size wide).
-    std::vector<ncv_pixel> run(int transform, int blowup_type, int blowup,
+    std::vector<ncv_pixel> run(int transform, BlowupType blowup_type, int blowup,
                                 bool invert_colors, int n_colors = 80,
                                 int n_extra_colors = 10) {
         options.transform = transform;
@@ -106,7 +106,7 @@ struct PixelFixture {
 
 // Replicates a src_w x src_h grid into a (src_w*factor) x (src_h*factor)
 // grid, each source cell becoming a factor x factor block -- the expected
-// shape of BLOWUP_REPLICATE's output, computed here rather than hand-typed
+// shape of BlowupType::Replicate's output, computed here rather than hand-typed
 // so the test documents the *relationship*, not 36 magic numbers.
 std::vector<ncv_pixel> replicate_grid(const std::vector<ncv_pixel> &src,
                                        size_t src_w, size_t src_h, int factor) {
@@ -143,7 +143,7 @@ TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, exact pixel values with a m
     // its j2 = new_y_size - j - 1) -- upstream's normal "y increases
     // upward" image convention. That's why the expected grid below is the
     // input grid's rows in reverse order, not a straight copy.
-    auto pix = f.run(TRANSFORM_NONE, BLOWUP_REPLICATE, /*blowup=*/1, /*invert_colors=*/false);
+    auto pix = f.run(TRANSFORM_NONE, BlowupType::Replicate, /*blowup=*/1, /*invert_colors=*/false);
     // clang-format off
     std::vector<ncv_pixel> expected = {
         70, 80, 89,   // rawdata 6,7,8 (rawdata=8 clips to 0.9999*80=79 -> +10)
@@ -162,7 +162,7 @@ TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, invert_colors flips the ram
     };
     PixelFixture f(3, 3, grid, -999, 0, 8);
 
-    auto pix = f.run(TRANSFORM_NONE, BLOWUP_REPLICATE, 1, /*invert_colors=*/true);
+    auto pix = f.run(TRANSFORM_NONE, BlowupType::Replicate, 1, /*invert_colors=*/true);
     // clang-format off
     std::vector<ncv_pixel> expected = {
         30, 20, 10,
@@ -176,7 +176,7 @@ TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, invert_colors flips the ram
     CHECK(pix[4] == 0);
 }
 
-TEST_CASE("data_to_pixels: BLOWUP_REPLICATE at blowup=2 replicates each pixel into a 2x2 block") {
+TEST_CASE("data_to_pixels: BlowupType::Replicate at blowup=2 replicates each pixel into a 2x2 block") {
     std::vector<float> grid = {
         0, 1, 2,
         3, -999, 5,
@@ -184,8 +184,8 @@ TEST_CASE("data_to_pixels: BLOWUP_REPLICATE at blowup=2 replicates each pixel in
     };
     PixelFixture f(3, 3, grid, -999, 0, 8);
 
-    auto pix1 = f.run(TRANSFORM_NONE, BLOWUP_REPLICATE, 1, false);
-    auto pix2 = f.run(TRANSFORM_NONE, BLOWUP_REPLICATE, 2, false);
+    auto pix1 = f.run(TRANSFORM_NONE, BlowupType::Replicate, 1, false);
+    auto pix2 = f.run(TRANSFORM_NONE, BlowupType::Replicate, 2, false);
     CHECK(pix2 == replicate_grid(pix1, 3, 3, 2));
 }
 
@@ -200,7 +200,7 @@ TEST_CASE("data_to_pixels: transform functions preserve ordering (monotonic ramp
     PixelFixture f(2, 2, grid, -999, 0, 8);
 
     for (int transform : {TRANSFORM_NONE, TRANSFORM_LOW, TRANSFORM_HI, TRANSFORM_CENTER}) {
-        auto pix = f.run(transform, BLOWUP_REPLICATE, 1, false);
+        auto pix = f.run(transform, BlowupType::Replicate, 1, false);
         // Row order is flipped (see the exact-value test above): row 0 of
         // the pixel grid holds rawdata {5,7}, row 1 holds rawdata {1,3}.
         CHECK(pix[2] < pix[3]); // rawdata 1 < rawdata 3
@@ -209,7 +209,7 @@ TEST_CASE("data_to_pixels: transform functions preserve ordering (monotonic ramp
     }
 }
 
-TEST_CASE("data_to_pixels: BLOWUP_BILINEAR produces a correctly-sized, in-range grid") {
+TEST_CASE("data_to_pixels: BlowupType::Bilinear produces a correctly-sized, in-range grid") {
     // Bilinear interpolation's exact arithmetic is worth less to pin down
     // byte-for-byte than its structural contract: it must not crash, must
     // produce a blowup*blowup-scaled grid, and every interpolated value
@@ -221,7 +221,7 @@ TEST_CASE("data_to_pixels: BLOWUP_BILINEAR produces a correctly-sized, in-range 
     };
     PixelFixture f(2, 2, grid, -999, 0, 12);
 
-    auto pix = f.run(TRANSFORM_NONE, BLOWUP_BILINEAR, /*blowup=*/4, false);
+    auto pix = f.run(TRANSFORM_NONE, BlowupType::Bilinear, /*blowup=*/4, false);
     CHECK(pix.size() == 4 * 2 * 4 * 2);
     // pix = (uchar)(data_n * n_colors) + 10, with data_n clipped to
     // [0, 0.9999]: 10 at rawdata==user_min, up to (uchar)(0.9999*80)+10==89

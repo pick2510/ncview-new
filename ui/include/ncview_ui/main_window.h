@@ -158,11 +158,11 @@ public:
 
 	// ---- M4 dialogs -------------------------------------------------
 	void setOptionsDialog();
-	int  rangeDialog( float old_min, float old_max, float global_min, float global_max,
+	Message  rangeDialog( float old_min, float old_max, float global_min, float global_max,
 			float *new_min, float *new_max, int *allvars );
 	int  scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y_axis_name,
 			Stringlist **new_dim_list );
-	int  printerOptionsDialog( PrintOptions *po );
+	Message  printerOptionsDialog( PrintOptions *po );
 
 private:
 	// Recomputes every widget's position/size for the current window

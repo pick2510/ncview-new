@@ -170,8 +170,7 @@ constexpr int MAX_DISPLAYED_STRING_LENGTH = 250;
 
 /*****************************************************************************/
 /* Messages which a dialog popup can return */
-#define MESSAGE_OK	1
-#define MESSAGE_CANCEL	2
+enum class Message { OK = 1, Cancel = 2 };
 
 /*****************************************************************************/
 /* This is used in x_interface.c, even though it has nothing to do with
@@ -184,10 +183,7 @@ constexpr int DEFAULT_DELTA_STEP = 10;
 
 /*****************************************************************************/
 /* Ways in which the file's min and max can be calculated */
-#define MIN_MAX_METHOD_FAST	1
-#define MIN_MAX_METHOD_MED	2
-#define MIN_MAX_METHOD_SLOW	3
-#define MIN_MAX_METHOD_EXHAUST	4
+enum class MinMaxMethod { Fast = 1, Med = 2, Slow = 3, Exhaust = 4 };
 
 /*****************************************************************************/
 /* Data which has the fill_value is IGNORED.  It is assumed to represent
@@ -200,34 +196,28 @@ constexpr float DEFAULT_FILL_VALUE = 1.0e35f;
 /*******************************************************************
  * Ways to expand a small pixmap into a large one.
  */
-#define BLOWUP_REPLICATE	1
-#define BLOWUP_BILINEAR		2
+enum class BlowupType { Replicate = 1, Bilinear = 2 };
 
 /*******************************************************************
  * Ways to contract a large pixmap into a small one.
  */
-#define SHRINK_METHOD_MEAN	0
-#define SHRINK_METHOD_MODE	1
+enum class ShrinkMethod { Mean = 0, Mode = 1 };
 
 /*********************************************************************
  * Possible states which the data inside the current buffer can be in
  */
-#define VDS_VALID	1
-#define VDS_INVALID	2
-#define VDS_EDITED	3
+enum class ViewDataStatus { Valid = 1, Invalid = 2, Edited = 3 };
 
 /*******************************************************************
  * Where postscript output can go.
  */
-#define DEVICE_PRINTER	1
-#define DEVICE_FILE	2
+enum class Device { Printer = 1, File = 2 };
 
 /*******************************************************************
  * Ways of handling the variable-select area.  We can either list
  * all the variables, or make a pull-down menu for selecting them.
  */
-#define VARSEL_LIST	1
-#define VARSEL_MENU	2
+enum class VarselStyle { List = 1, Menu = 2 };
 
 /*******************************************************************
  * Recognized standards by which the time axis may be described
@@ -463,7 +453,7 @@ typedef struct {
 	NCVar	*variable;
 	size_t	*var_place;	/* Where we currently are in that var's space, in that file */
 	void	*data;		/* The actual 2-D data to colorcontour */
-	int	data_status;	/* Either valid, invalid, or edited (changed) */
+	ViewDataStatus	data_status;	/* Either valid, invalid, or edited (changed) */
 	unsigned char *pixels;	/* Scaled, replicated, byte array version of data */
 	int	x_axis_id, 	/* which axes the 2-D data lies on.  'scan' */
 		y_axis_id,	/* is the one accessed by the pushbuttons */
@@ -509,13 +499,11 @@ typedef struct {
 		small,
 		dump_frames,
 		no_1d_vars,
-		min_max_method,
-		delta_step,	/* if > 0, percent of total frames to step when pressing the 
-				 * 'forward' or 'backward' button and holding down the Ctrl 
+		delta_step,	/* if > 0, percent of total frames to step when pressing the
+				 * 'forward' or 'backward' button and holding down the Ctrl
 				 * key; if < 0, absolute number of frames to step.
 				 */
 		transform,
-		varsel_style,	/* can be VARSEL_LIST or VARSEL_MENU */
 		listsel_max,	/* if # of vars is more than this, auto switch from VARSEL_LIST to VARSEL_MENU */
 		color_by_ndims,	/* if 1, then button is color coded by # of effective dims */
 		beep_on_restart,
@@ -525,15 +513,18 @@ typedef struct {
 		maxsize_pct,	/* -1 if a width/height pair specified instead */
 		maxsize_width,	/* in pixels */
 		maxsize_height,	/* in pixels */
-		shrink_method,
 		blowup_default_size,
 		display_type;	/* This uses std 'X' defines; PseudoColor, DirectColor, etc */
+
+	MinMaxMethod	min_max_method;
+	VarselStyle	varsel_style;	/* can be VarselStyle::List or VarselStyle::Menu */
+	ShrinkMethod	shrink_method;
 
 	char	*ncview_base_dir,
 		*window_title,
 		*calendar;	/* This OVERRIDES any 'calendar' attribute in the data file */
 
-	int	blowup_type;	/* can be BLOWUP_REPLICATE or BLOWUP_BILINEAR */
+	BlowupType	blowup_type;	/* can be BlowupType::Replicate or BlowupType::Bilinear */
 
 	int	autoscale;	/* If TRUE, then tries to automatically scale colors for EACH frame.  Much slower!! */
 
@@ -561,8 +552,8 @@ typedef struct {
 		header_font_size;		/* In points */
 	char	font_name[132],			/* Postscript name */
 		out_file_name[1024];
-	int	output_device,
-		include_outline, 
+	Device	output_device;
+	int	include_outline,
 		include_id,
 		include_title,
 		include_axis_labels,

@@ -434,10 +434,10 @@ change_view( int delta, int interpretation )
 				/* generated before the view has been initialized */
 
 	if( delta != 0 ) {
-		if( view->data_status == VDS_EDITED ) {
+		if( view->data_status == ViewDataStatus::Edited ) {
 			fprintf( stderr, "warning! flushing changes!\n" );
 			}
-		view->data_status = VDS_INVALID;
+		view->data_status = ViewDataStatus::Invalid;
 		}
 
 	/* Apply the skip */
@@ -580,7 +580,7 @@ set_scan_view( size_t scan_place )
 		   */
 	in_set_label( LABEL_SCAN_PLACE, view_place );
 	in_set_cur_dim_value( dim_name, temp_string );
-	view->data_status = VDS_INVALID;
+	view->data_status = ViewDataStatus::Invalid;
 	if( options.want_extra_info ) {
 		in_set_label( LABEL_CCINFO_2, temp_string );
 		}
@@ -650,7 +650,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		view->variable->user_min = min;
 		view->variable->user_max = max;
 		set_range_labels( min, max );
-		view->data_status = VDS_INVALID;
+		view->data_status = ViewDataStatus::Invalid;
 		invalidate_all_saveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is true, it won't happen */
 		view_recompute_colorbar();
 		}
@@ -692,7 +692,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 			}
 		}
 
-	if( view->data_status == VDS_INVALID ) {
+	if( view->data_status == ViewDataStatus::Invalid ) {
 		if( options.debug )
 			printf( "Reading data to contour...\n" );
 		fill_view_data( view );
@@ -936,7 +936,7 @@ view_check_new_data( int unused )
 			view->variable->user_min = min;
 			view->variable->user_max = max;
 			set_range_labels( min, max );
-			view->data_status = VDS_INVALID;
+			view->data_status = ViewDataStatus::Invalid;
 			invalidate_all_saveframes();
 			view_recompute_colorbar();
 			}
@@ -1122,7 +1122,7 @@ fill_view_data( View *v )
 	size_t	*count;
 	int	i;
 
-	if( v->data_status == VDS_VALID )
+	if( v->data_status == ViewDataStatus::Valid )
 		return;
 
 	count = (size_t *)malloc( v->variable->n_dims * sizeof( size_t ));
@@ -1153,7 +1153,7 @@ fill_view_data( View *v )
 
 	fi_get_data( v->variable, v->var_place, count, v->data );
 
-	v->data_status = VDS_VALID;
+	v->data_status = ViewDataStatus::Valid;
 	free( count );
 }
 
@@ -1253,7 +1253,7 @@ view_change_cur_dim( char *dim_name, int modifier )
 		return;
 		}
 
-	if( view->data_status == VDS_EDITED ) 
+	if( view->data_status == ViewDataStatus::Edited ) 
 		view_data_edit_warn();
 
 	fileid = view->variable->first_file->id;
@@ -1305,7 +1305,7 @@ view_change_cur_dim( char *dim_name, int modifier )
 	if( options.debug )
 		fprintf( stderr, "calling init_saveframes from view_change_cur_dim\n" );
 
-	view->data_status = VDS_INVALID;
+	view->data_status = ViewDataStatus::Invalid;
 	init_saveframes();
 
 	view_draw( true, false ); /* 'true' because we initialized saveframes above */
@@ -1325,7 +1325,9 @@ view_set_scan_dims( void )
 	NCVar	   *v;
 	char	   *cur_x_name, *cur_y_name;
 	char	   scan_dim[256];
-	int        new_x_id, new_y_id, message;
+	int        new_x_id, new_y_id;
+	int        scan_dims_result;
+	Message    message;
 
 	v          = view->variable;
 	cur_x_name = (*(v->dim+view->x_axis_id))->name;
@@ -1335,9 +1337,13 @@ view_set_scan_dims( void )
 	strcpy( scan_dim, dim_list->string );
 
 	/* Pop up the dialog box which asks for the user's selection */
-	message  = in_set_scan_dims( dim_list, cur_x_name, 
+	scan_dims_result = in_set_scan_dims( dim_list, cur_x_name,
 				cur_y_name, &new_dim_list );
-	if( message == MESSAGE_CANCEL )
+	/* Pre-existing upstream quirk, preserved: in_set_scan_dims() returns a
+	 * plain 0/1 (cancelled/ok), never Message::Cancel's numeric value, so
+	 * this check never actually fires -- see modernization.md's Phase 1
+	 * follow-up notes. */
+	if( scan_dims_result == static_cast<int>(Message::Cancel) )
 		return;
 
 	/* A special check: we don't allow transposition of the data
@@ -1352,7 +1358,7 @@ view_set_scan_dims( void )
 	new_x_id = fi_dim_name_to_id( v->first_file->id, v->name, s->string );
 	if( new_x_id < new_y_id ) {
 		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", NULL, true );
-		if( message == MESSAGE_CANCEL )
+		if( message == Message::Cancel )
 			return;
 		inv_dim_list = NULL;
 		stringlist_add_string( &inv_dim_list, s->string, NULL, SLTYPE_NULL );
@@ -1386,7 +1392,7 @@ view_set_scan_dims( void )
 		view_set_axis( view, DIMENSION_SCAN, scan_dim );
 		flip_if_inverted( view );
 		redraw_dimension_info();
-		view->data_status = VDS_INVALID;
+		view->data_status = ViewDataStatus::Invalid;
 		alloc_view_storage( view );
 		init_saveframes();
 		set_scan_buttons( view );
@@ -1470,9 +1476,9 @@ alloc_view_storage( View *view )
 	/* Allocate storage space for the data in the view structure
 	 */
 
-	if( view->data_status == VDS_EDITED )
+	if( view->data_status == ViewDataStatus::Edited )
 		view_data_edit_warn();
-	view->data_status = VDS_INVALID;
+	view->data_status = ViewDataStatus::Invalid;
 		
 	if( view->data   != NULL )
 		free( view->data   );
@@ -1528,19 +1534,20 @@ alloc_view_storage( View *view )
 view_set_range( void )
 {
 	float	new_min, new_max;
-	int	message, allvars;
+	int	allvars;
+	Message	message;
 	NCVar	*cursor;
 
 	message = x_range( view->variable->user_min, view->variable->user_max, 
 		view->variable->global_min, view->variable->global_max, 
 		&new_min, &new_max, &allvars );
-	if( message == MESSAGE_CANCEL )
+	if( message == Message::Cancel )
 		return;
 
 	view->variable->user_min = new_min;
 	view->variable->user_max = new_max;
 	set_range_labels( new_min, new_max );
-	view->data_status = VDS_INVALID;
+	view->data_status = ViewDataStatus::Invalid;
 	invalidate_all_saveframes();
 	view_draw( true, false ); /* 'true' because we just invalidated all saveframes */
 
@@ -1724,7 +1731,7 @@ init_view( View **view, NCVar *var )
 		exit( -1 );
 		}
 	(*view)->data         = NULL;
-	(*view)->data_status  = VDS_INVALID;
+	(*view)->data_status  = ViewDataStatus::Invalid;
 	(*view)->pixels       = NULL;
 	(*view)->x_axis_id    = -1;
 	(*view)->y_axis_id    = -1;
@@ -2161,9 +2168,9 @@ view_report_position( int x, int y, unsigned int button_mask )
 	if( view->variable->effective_dimensionality == 1 )
 		return;
 
-	if( view->data_status == VDS_INVALID ) {
+	if( view->data_status == ViewDataStatus::Invalid ) {
 		fill_view_data( view );
-		view->data_status = VDS_VALID;
+		view->data_status = ViewDataStatus::Valid;
 		}
 
 	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
@@ -2338,9 +2345,9 @@ set_dataedit_place()
 	int	x, y;
 	size_t	index;
 
-	if( view->data_status == VDS_INVALID ) {
+	if( view->data_status == ViewDataStatus::Invalid ) {
 		fill_view_data( view );
-		view->data_status = VDS_VALID;
+		view->data_status = ViewDataStatus::Valid;
 		}
 
 	in_query_pointer_position( &x, &y );
@@ -2383,9 +2390,9 @@ set_min_from_curdata()
 	if( view == NULL )
 		return;
 
-	if( view->data_status == VDS_INVALID ) {
+	if( view->data_status == ViewDataStatus::Invalid ) {
 		fill_view_data( view );
-		view->data_status = VDS_VALID;
+		view->data_status = ViewDataStatus::Valid;
 		}
 
 	in_query_pointer_position( &x, &y );
@@ -2430,9 +2437,9 @@ set_max_from_curdata()
 	if( view == NULL )
 		return;
 
-	if( view->data_status == VDS_INVALID ) {
+	if( view->data_status == ViewDataStatus::Invalid ) {
 		fill_view_data( view );
-		view->data_status = VDS_VALID;
+		view->data_status = ViewDataStatus::Valid;
 		}
 
 	in_query_pointer_position( &x, &y );
@@ -2504,7 +2511,7 @@ view_change_dat( size_t index, float new_val )
 {
 	size_t	x_size, y_size, scaled_x_size, scaled_y_size, x, y;
 
-	view->data_status = VDS_EDITED;
+	view->data_status = ViewDataStatus::Edited;
 
 	x_size = *(view->variable->size + view->x_axis_id);
 	y_size = *(view->variable->size + view->y_axis_id);
@@ -2537,18 +2544,19 @@ view_change_dat( size_t index, float new_val )
 view_data_edit_dump( void )
 {
 	char	filename[132], *dim_name, *var_name;
-	int	message, ncid, dims[2];
+	int	ncid, dims[2];
+	Message	message;
 	size_t	x_size, y_size, start[2], count[2];
 	int	x_dimid, y_dimid, varid, err;
 
-	if( view->data_status != VDS_EDITED ) {
+	if( view->data_status != ViewDataStatus::Edited ) {
 		fprintf( stderr, "Warning!  Data is NOT CHANGED!\n" );
 		}
 
 	strcpy( filename, "dump.data" );
 	
 	message = in_dialog( "Filename to dump data to:", filename, true );
-	if( message == MESSAGE_OK ) {
+	if( message == Message::OK ) {
 		ncid = nccreate( filename, NC_CLOBBER );
 
 		x_size = *(view->variable->size + view->x_axis_id);
@@ -2585,10 +2593,10 @@ view_data_edit_dump( void )
 	static void
 view_data_edit_warn()
 {
-	int	message;
+	Message	message;
 
 	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", NULL, true );
-	if( message == MESSAGE_CANCEL ) 
+	if( message == Message::Cancel ) 
 		return;
 
 	view_data_edit_dump();

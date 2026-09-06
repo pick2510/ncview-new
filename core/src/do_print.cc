@@ -36,7 +36,7 @@
 #define FONT_NAME		"Helvetica"
 #define LEADING			3
 
-#define DEFAULT_DEVICE		DEVICE_PRINTER
+#define DEFAULT_DEVICE		Device::Printer
 #define	INCLUDE_OUTLINE		true
 #define	INCLUDE_TITLE		true
 #define	INCLUDE_AXIS_LABELS	true
@@ -128,10 +128,10 @@ do_print( void )
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
 	snprintf( printopts.out_file_name, 1024, "ncview.%s.ps", view->variable->name ); 
-	if( printer_options( &printopts ) == MESSAGE_CANCEL )
+	if( printer_options( &printopts ) == Message::Cancel )
 		return;
 
-	if( printopts.output_device == DEVICE_PRINTER ) {
+	if( printopts.output_device == Device::Printer ) {
 	    strcpy( printopts.out_file_name, "/tmp/ncview.XXXXXX" );
 	    outfid = mkstemp( printopts.out_file_name );
 	    if (outfid == -1) {
@@ -148,7 +148,7 @@ do_print( void )
 	    close(outfid);
 	}
 	else {
-	    if( warn_if_file_exits( printopts.out_file_name ) == MESSAGE_CANCEL )
+	    if( warn_if_file_exits( printopts.out_file_name ) == Message::Cancel )
 		return;
 	    
 	    if( (outf = fopen(printopts.out_file_name, "w" )) == NULL ) {
@@ -390,7 +390,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 	/****** All done! *****/
 	fprintf( outf, "\n\nshowpage\n" );
 	fclose( outf );
-	if( printopts.output_device == DEVICE_PRINTER ) {
+	if( printopts.output_device == Device::Printer ) {
 		/* Before executing the command, ensure that the file name exists ... helps
 		 * to prevent problems if a strange file name is specified, such as "out.ps ; rm -r ."
 		 */

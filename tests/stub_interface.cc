@@ -23,7 +23,7 @@ void in_create_colormap(char*, ncv_pixel[256], ncv_pixel[256], ncv_pixel[256]) {
 char *in_install_next_colormap(int) { return nullptr; }
 int in_set_2d_size(size_t, size_t) { return 0; }
 void in_set_sensitive(int, int) {}
-int in_dialog(char*, char *ret_string, int) { if (ret_string) ret_string[0] = '\0'; return 0; }
+Message in_dialog(char*, char *ret_string, int) { if (ret_string) ret_string[0] = '\0'; return Message::OK; }
 void in_var_set_sensitive(char*, int) {}
 void in_fill_dim_info(NCDim*, int) {}
 void in_set_cur_dim_value(char*, char*) {}
@@ -43,9 +43,9 @@ char *in_install_prev_colormap(int) { return nullptr; }
 char *in_install_colormap_by_name(char*, int) { return nullptr; }
 
 void set_options() {}
-int printer_options(PrintOptions*) { return 0; }
+Message printer_options(PrintOptions*) { return Message::OK; }
 void printer_options_init() {}
-int x_range(float, float, float, float, float*, float*, int*) { return 0; }
+Message x_range(float, float, float, float, float*, float*, int*) { return Message::OK; }
 // Captured for test_view_data_edit.cc: view_data_edit() builds this array
 // and hands ownership to x_dataedit(), which upstream's real FLTK dialog
 // consumes and frees once the user closes it. The stub can't reproduce

@@ -205,7 +205,9 @@ data_to_pixels( View *v )
 	size_t	x_size, y_size, new_x_size, new_y_size;
 	ncv_pixel pix_val;
 	float	data_range, rawdata, data, fill_value, *scaled_data;
-	long	blowup, result, orig_minmax_method;
+	long	blowup;
+	Message	result;
+	MinMaxMethod	orig_minmax_method;
 	char	error_message[1024];
 	double	pi;
 
@@ -264,7 +266,7 @@ data_to_pixels( View *v )
 	    (! options.autoscale) ) {
 		in_set_cursor_normal();
 		in_button_pressed( BUTTON_PAUSE, MOD_1 );
-		if( options.min_max_method == MIN_MAX_METHOD_EXHAUST ) {
+		if( options.min_max_method == MinMaxMethod::Exhaust ) {
 	    		snprintf( error_message, 1022, "min and max both 0 for variable %s (checked all data)\nSetting range to (-1,1)", 
 								v->variable->name );
 			in_error( error_message );
@@ -276,9 +278,9 @@ data_to_pixels( View *v )
 	    	snprintf( error_message, 1022, "min and max both 0 for variable %s.\nI can check ALL the data instead of subsampling if that's OK,\nor just cancel viewing this variable.",
 	    				v->variable->name );
 		result = in_dialog( error_message, NULL, true );
-		if( result == MESSAGE_OK ) {
+		if( result == Message::OK ) {
 			orig_minmax_method = options.min_max_method;
-			options.min_max_method = MIN_MAX_METHOD_EXHAUST;
+			options.min_max_method = MinMaxMethod::Exhaust;
 			init_min_max( v->variable );
 			options.min_max_method = orig_minmax_method;
 			if( (v->variable->user_max == 0) &&
@@ -703,12 +705,12 @@ init_min_max( NCVar *var )
 		}
 
 	switch( options.min_max_method ) {
-		case MIN_MAX_METHOD_FAST: 
+		case MinMaxMethod::Fast: 
 			if( verbose )
 				printf( "\n" );
 			break;
 			
-		case MIN_MAX_METHOD_MED:     
+		case MinMaxMethod::Med:     
 			verbose = true;
 			step = (n_timesteps-1L)/4L;
 			get_min_max_onestep( var, n_other, step, data, 
@@ -720,7 +722,7 @@ init_min_max( NCVar *var )
 				printf( "\n" );
 			break;
 				
-		case MIN_MAX_METHOD_SLOW:
+		case MinMaxMethod::Slow:
 			verbose = true;
 			for( i=2; i<=9; i++ ) { 
 				printf( "." );
@@ -732,7 +734,7 @@ init_min_max( NCVar *var )
 				printf( "\n" );
 			break;
 			
-		case MIN_MAX_METHOD_EXHAUST:
+		case MinMaxMethod::Exhaust:
 			verbose = true;
 			for( i=1; i<(n_timesteps-2L); i++ ) {
 				step = i;
@@ -760,20 +762,20 @@ init_min_max( NCVar *var )
 check_ranges( NCVar *var )
 {
 	float	min, max;
-	int	message;
+	Message	message;
 	char	temp_string[ 1024 ];
 
 	if( netcdf_min_max_option_set( var, &min, &max ) ) {
 		if( var->global_min < min ) {
 			snprintf( temp_string, 1022, "Calculated minimum (%g) is less than\nvalid_range minimum (%g).  Reset\nminimum to valid_range minimum?", var->global_min, min );
 			message = in_dialog( temp_string, NULL, true );
-			if( message == MESSAGE_OK )
+			if( message == Message::OK )
 				var->global_min = min;
 			}
 		if( var->global_max > max ) {
 			snprintf( temp_string, 1022, "Calculated maximum (%g) is greater\nthan valid_range maximum (%g). Reset\nmaximum to valid_range maximum?", var->global_max, max );
 			message = in_dialog( temp_string, NULL, true );
-			if( message == MESSAGE_OK )
+			if( message == Message::OK )
 				var->global_max = max;
 			}
 		}
@@ -782,7 +784,7 @@ check_ranges( NCVar *var )
 		if( var->global_min < min ) {
 			snprintf( temp_string, 1022, "Calculated minimum (%g) is less than\nvalid_min minimum (%g).  Reset\nminimum to valid_min value?", var->global_min, min );
 			message = in_dialog( temp_string, NULL, true );
-			if( message == MESSAGE_OK )
+			if( message == Message::OK )
 				var->global_min = min;
 			}
 		}
@@ -791,7 +793,7 @@ check_ranges( NCVar *var )
 		if( var->global_max > max ) {
 			snprintf( temp_string, 1022, "Calculated maximum (%g) is greater than\nvalid_max maximum (%g).  Reset\nmaximum to valid_max value?", var->global_max, max );
 			message = in_dialog( temp_string, NULL, true );
-			if( message == MESSAGE_OK )
+			if( message == Message::OK )
 				var->global_max = max;
 			}
 		}
@@ -1655,10 +1657,10 @@ contract_data( float *small_data, View *v, float fill_value )
 			tmpv[ii + jj*n] = *((float *)v->data + idx);
 			}
 
-		if( options.shrink_method == SHRINK_METHOD_MEAN )
+		if( options.shrink_method == ShrinkMethod::Mean )
 			small_data[i + j*new_nx] = util_mean( tmpv, n*n, fill_value );
 
-		else if( options.shrink_method == SHRINK_METHOD_MODE ) {
+		else if( options.shrink_method == ShrinkMethod::Mode ) {
 			small_data[i + j*new_nx] = util_mode( tmpv, n*n, fill_value );
 			}
 		else
@@ -1714,7 +1716,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 		exit( -1 );
 		}
 
-	if( (blowup == 1) || (options.blowup_type == BLOWUP_REPLICATE)) { 
+	if( (blowup == 1) || (options.blowup_type == BlowupType::Replicate)) { 
 		for( jl=0; jl<nyl; jl++ ) {
 			for( il=0; il<nxl; il++ )
 				for( i2b=0; i2b<blowup; i2b++ ) {
@@ -1734,7 +1736,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 			}
 		} 
 
-	else 	{ /* BLOWUP_BILINEAR */
+	else 	{ /* BlowupType::Bilinear */
 		bupr = 1.0/(float)blowup;
 
 		/* Offset where we will put the center value into the big array. These are offsets
@@ -2040,16 +2042,16 @@ expand_data( float *big_data, View *v, size_t array_size )
 				}
 			}
 
-		}	/* end of BLOWUP_BILINEAR case */
+		}	/* end of BlowupType::Bilinear case */
 }
 
 /******************************************************************************
  * Set the style of blowup we want to do.
  */
 	void
-set_blowup_type( int new_type )
+set_blowup_type( BlowupType new_type )
 {
-	if( new_type == BLOWUP_REPLICATE ) 
+	if( new_type == BlowupType::Replicate ) 
 		in_set_label( LABEL_BLOWUP_TYPE, "Repl"   );
 	else
 		in_set_label( LABEL_BLOWUP_TYPE, "Bi-lin" );
@@ -2081,15 +2083,15 @@ limit_string( char *s )
  * If we try to print to an already existing file, then warn the user
  * before clobbering it.
  */
-	int
+	Message
 warn_if_file_exits( char *fname )
 {
-	int	retval;
+	Message	retval;
 	FILE	*f;
 	char	message[1024];
 
 	if( (f = fopen(fname, "r")) == NULL )
-		return( MESSAGE_OK );
+		return( Message::OK );
 	fclose(f);
 
 	snprintf( message, 1022, "OK to overwrite existing file %s?\n", fname );
