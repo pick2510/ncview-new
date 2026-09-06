@@ -99,7 +99,7 @@ ncview_main( int argc, char **argv )
 	input_files = parse_options ( argc,  argv );	/* This parses ALL the non-X11 command line options, not just the input files */
 	determine_file_type         ( input_files );
 
-	options.window_title = input_files->string;
+	options.window_title = (char *)(*input_files)[0].string.c_str();
 	options.blowup       = 1;
 
 	/* this routine sets up the 'variables' structure */
@@ -368,7 +368,7 @@ parse_options( int argc, char *argv[] )
 				}
 			}
 		else /* found an entry which is NOT in option syntax -- assume a filename */
-			stringlist_add_string( &file_list, argv[i], NULL, SLTYPE_NULL );
+			stringlist_add_string( &file_list, argv[i] );
 		} /* end of i loop through argv's */
 
 	return( file_list );
@@ -676,10 +676,9 @@ initialize_file_interface( Stringlist *input_files )
 
 	nfiles = stringlist_len( input_files );
 
-	while( input_files != NULL ) {
-		fi_initialize( input_files->string, nfiles );
-		input_files = input_files->next;
-		}
+	if( input_files != NULL )
+		for( auto &f : *input_files )
+			fi_initialize( (char *)f.string.c_str(), nfiles );
 	if( options.debug ) 
 		printf( "...calculating dim min & maxes...\n" );
 	calc_dim_minmaxes();

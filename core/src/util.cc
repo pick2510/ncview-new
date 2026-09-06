@@ -397,18 +397,15 @@ n_vars_in_list( NCVar *v )
 	void
 add_vars_to_list( Stringlist *var_list, int id, char *filename, int nfiles )
 {
-	Stringlist *var;
-
 	if( options.debug )
 		printf( "add_vars_to_list: entering, adding vars to list for file %s\n", filename );
-	var = var_list;
-	while( var != NULL ) {
-		if( options.debug ) 
-			printf( "adding variable %s to list\n", var->string );
-		add_var_to_list( var->string, id, filename, nfiles );
-		var = var->next;
+	if( var_list != NULL )
+	for( auto &e : *var_list ) {
+		if( options.debug )
+			printf( "adding variable %s to list\n", e.string.c_str() );
+		add_var_to_list( (char *)e.string.c_str(), id, filename, nfiles );
 		}
-	if( options.debug ) 
+	if( options.debug )
 		printf( "done adding vars for file %s\n", filename );
 }
 
@@ -2309,12 +2306,12 @@ int count_nslashes( char *s )
  * lives in the root group, then the return list includes "/". If no var lives in the root
  * group, then the list does NOT include "/".
  */
-Stringlist *get_group_list( NCVar *vars ) 
+Stringlist *get_group_list( NCVar *vars )
 {
-	Stringlist	*retval = NULL, *tg;
+	Stringlist	*retval = NULL;
 	NCVar		*cursor;
 	char		group_name[ MAX_NC_NAME*20 ];	/* Assume no more than 20 levels of groups */
-	int		i, ierr, n_so_far, foundit;
+	int		ierr;
 
 	cursor = vars;
 	while( cursor != NULL ) {
@@ -2322,18 +2319,8 @@ Stringlist *get_group_list( NCVar *vars )
 		ierr = unpack_groupname( cursor->name, -1, group_name );	/* -1 means get full group name */
 
 		/* Only add to list if not already there */
-		n_so_far = stringlist_len( retval );
-		tg = retval;
-		foundit = 0;
-		while( tg != NULL ) {
-			if( strcmp( tg->string, group_name ) == 0 ) {
-				foundit = 1;
-				break;
-				}
-			tg = tg->next;
-			}
-		if( foundit == 0 )
-			ierr = stringlist_add_string( &retval, group_name, NULL, SLTYPE_NULL );
+		if( stringlist_match_string_exact( retval, group_name ) == nullptr )
+			ierr = stringlist_add_string( &retval, group_name );
 
 		cursor = cursor->next;
 		}

@@ -216,7 +216,7 @@ void netcdf_fi_list_vars_inner( Stringlist **ret_val, int gid, char *groupname )
 							printf( "%ld ", size[kk] );
 						printf( "\n" );
 						}
-					stringlist_add_string( ret_val, grp_var_name, NULL, SLTYPE_NULL );
+					stringlist_add_string( ret_val, grp_var_name );
 					}
 				}
 			else
@@ -331,7 +331,7 @@ Stringlist *netcdf_scannable_dims( int fileid, char *var_name )
 		 * in layer models -- typically just 1 to 2 in that case.
 		 */
 		if( (i == 0) || (dim_size > 1) )
-			stringlist_add_string( &dimlist, dim_name, NULL, SLTYPE_NULL );
+			stringlist_add_string( &dimlist, dim_name );
 		}
 
 	return( dimlist );

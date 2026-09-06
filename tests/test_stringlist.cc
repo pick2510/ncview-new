@@ -1,5 +1,8 @@
-// Unit tests for core/src/stringlist.cc -- the singly-linked string-list
-// type used throughout core for variable/dimension name lists.
+// Unit tests for core/src/stringlist.cc -- the std::vector<StringlistEntry>
+// based string-list type used throughout core for variable/dimension name
+// lists (modernization.md Phase 3 replaced the original intrusive doubly-
+// linked list with this container; see stringlist.h's own comment for why
+// most call sites still hold a `Stringlist *`).
 #include <cstdio>
 #include <cstring>
 
@@ -12,21 +15,14 @@
 
 TEST_CASE("stringlist: add_string appends in order") {
     Stringlist *sl = nullptr;
-    CHECK(stringlist_add_string(&sl, (char *)"one", nullptr, SLTYPE_NULL) == 0);
-    CHECK(stringlist_add_string(&sl, (char *)"two", nullptr, SLTYPE_NULL) == 0);
-    CHECK(stringlist_add_string(&sl, (char *)"three", nullptr, SLTYPE_NULL) == 0);
+    CHECK(stringlist_add_string(&sl, "one") == 0);
+    CHECK(stringlist_add_string(&sl, "two") == 0);
+    CHECK(stringlist_add_string(&sl, "three") == 0);
     REQUIRE(sl != nullptr);
-    CHECK(std::strcmp(sl->string, "one") == 0);
-    // Stringlist::next is an AnyPtr (see ncview/anyptr.h), not a raw
-    // Stringlist*, so it converts implicitly on assignment but doesn't
-    // support chained -> -- hop through explicit locals instead.
-    Stringlist *second = sl->next;
-    REQUIRE(second != nullptr);
-    CHECK(std::strcmp(second->string, "two") == 0);
-    Stringlist *third = second->next;
-    REQUIRE(third != nullptr);
-    CHECK(std::strcmp(third->string, "three") == 0);
-    CHECK(third->next == nullptr);
+    REQUIRE(sl->size() == 3);
+    CHECK((*sl)[0].string == "one");
+    CHECK((*sl)[1].string == "two");
+    CHECK((*sl)[2].string == "three");
     CHECK(stringlist_len(sl) == 3);
     stringlist_delete_entire_list(sl);
 }
@@ -37,42 +33,58 @@ TEST_CASE("stringlist: empty list has zero length") {
 
 TEST_CASE("stringlist: match_string_exact finds and misses") {
     Stringlist *sl = nullptr;
-    stringlist_add_string(&sl, (char *)"alpha", nullptr, SLTYPE_NULL);
-    stringlist_add_string(&sl, (char *)"beta", nullptr, SLTYPE_NULL);
+    stringlist_add_string(&sl, "alpha");
+    stringlist_add_string(&sl, "beta");
 
-    Stringlist *hit = stringlist_match_string_exact(sl, (char *)"beta");
+    StringlistEntry *hit = stringlist_match_string_exact(sl, "beta");
     REQUIRE(hit != nullptr);
-    CHECK(std::strcmp(hit->string, "beta") == 0);
+    CHECK(hit->string == "beta");
 
-    CHECK(stringlist_match_string_exact(sl, (char *)"gamma") == nullptr);
+    CHECK(stringlist_match_string_exact(sl, "gamma") == nullptr);
     // Exact match: a substring or differently-cased match must not hit.
-    CHECK(stringlist_match_string_exact(sl, (char *)"bet") == nullptr);
-    CHECK(stringlist_match_string_exact(sl, (char *)"BETA") == nullptr);
+    CHECK(stringlist_match_string_exact(sl, "bet") == nullptr);
+    CHECK(stringlist_match_string_exact(sl, "BETA") == nullptr);
 
     stringlist_delete_entire_list(sl);
 }
 
 TEST_CASE("stringlist: cat appends second list to first") {
     Stringlist *a = nullptr, *b = nullptr;
-    stringlist_add_string(&a, (char *)"a1", nullptr, SLTYPE_NULL);
-    stringlist_add_string(&a, (char *)"a2", nullptr, SLTYPE_NULL);
-    stringlist_add_string(&b, (char *)"b1", nullptr, SLTYPE_NULL);
+    stringlist_add_string(&a, "a1");
+    stringlist_add_string(&a, "a2");
+    stringlist_add_string(&b, "b1");
 
     CHECK(stringlist_cat(&a, &b) == 0);
     CHECK(stringlist_len(a) == 3);
-    Stringlist *a_next = a->next;
-    REQUIRE(a_next != nullptr);
-    Stringlist *a_third = a_next->next;
-    REQUIRE(a_third != nullptr);
-    CHECK(std::strcmp(a_third->string, "b1") == 0);
+    REQUIRE(a->size() == 3);
+    CHECK((*a)[2].string == "b1");
 
     stringlist_delete_entire_list(a);
+    stringlist_delete_entire_list(b);
+}
+
+TEST_CASE("stringlist: aux data round-trips through the variant") {
+    Stringlist *sl = nullptr;
+    stringlist_add_string(&sl, "an_int", 42);
+    stringlist_add_string(&sl, "a_float", 3.5f);
+    stringlist_add_string(&sl, "a_string", std::string("hello"));
+    stringlist_add_string(&sl, "a_bool", true);
+    stringlist_add_string(&sl, "no_aux");
+
+    REQUIRE(sl->size() == 5);
+    CHECK(std::get<int>((*sl)[0].aux) == 42);
+    CHECK(std::get<float>((*sl)[1].aux) == doctest::Approx(3.5f));
+    CHECK(std::get<std::string>((*sl)[2].aux) == "hello");
+    CHECK(std::get<bool>((*sl)[3].aux) == true);
+    CHECK(std::holds_alternative<std::monostate>((*sl)[4].aux));
+
+    stringlist_delete_entire_list(sl);
 }
 
 TEST_CASE("stringlist: write then read round-trips through a file") {
     Stringlist *sl = nullptr;
-    stringlist_add_string(&sl, (char *)"round", nullptr, SLTYPE_NULL);
-    stringlist_add_string(&sl, (char *)"trip", nullptr, SLTYPE_NULL);
+    stringlist_add_string(&sl, "round");
+    stringlist_add_string(&sl, "trip");
 
     FILE *f = std::tmpfile();
     REQUIRE(f != nullptr);
@@ -83,10 +95,9 @@ TEST_CASE("stringlist: write then read round-trips through a file") {
     CHECK(stringlist_read_from_file(&readback, f) == 0);
     CHECK(stringlist_len(readback) == 2);
     REQUIRE(readback != nullptr);
-    CHECK(std::strcmp(readback->string, "round") == 0);
-    Stringlist *readback_next = readback->next;
-    REQUIRE(readback_next != nullptr);
-    CHECK(std::strcmp(readback_next->string, "trip") == 0);
+    REQUIRE(readback->size() == 2);
+    CHECK((*readback)[0].string == "round");
+    CHECK((*readback)[1].string == "trip");
 
     std::fclose(f);
     stringlist_delete_entire_list(sl);

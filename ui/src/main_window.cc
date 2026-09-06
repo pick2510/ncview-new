@@ -788,9 +788,10 @@ void MainWindow::dimStepCallback( Fl_Widget *, void *data )
 void MainWindow::makeDimButtons( Stringlist *dim_list )
 {
 	clearDimButtons();
-	for( Stringlist *s = dim_list; s != nullptr; s = (Stringlist *)s->next ) {
+	if( dim_list != nullptr )
+	for( auto &e : *dim_list ) {
 		DimRow row;
-		row.name = s->string;
+		row.name = e.string;
 		rebuildDimRow( row );
 		dim_rows_.push_back( row );
 	}
@@ -1142,8 +1143,9 @@ int MainWindow::scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y
 		Stringlist **new_dim_list )
 {
 	std::vector<std::string> names;
-	for( Stringlist *s = dim_list; s != nullptr; s = (Stringlist *)s->next )
-		names.push_back( s->string );
+	if( dim_list != nullptr )
+		for( auto &e : *dim_list )
+			names.push_back( e.string );
 	if( names.empty() ) return 0;
 
 	Fl_Window win( 320, 150, "Set Scan Dimensions" );
@@ -1180,8 +1182,8 @@ int MainWindow::scanDimsDialog( Stringlist *dim_list, char *x_axis_name, char *y
 	// in_set_scan_dims contract: "first the name of the Y dimension, then
 	// the name of the X dimension").
 	*new_dim_list = nullptr;
-	stringlist_add_string( new_dim_list, (char *)names[y_choice.value()].c_str(), nullptr, SLTYPE_NULL );
-	stringlist_add_string( new_dim_list, (char *)names[x_choice.value()].c_str(), nullptr, SLTYPE_NULL );
+	stringlist_add_string( new_dim_list, names[y_choice.value()].c_str() );
+	stringlist_add_string( new_dim_list, names[x_choice.value()].c_str() );
 	return 1;
 }
 

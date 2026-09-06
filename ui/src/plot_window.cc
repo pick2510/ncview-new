@@ -307,9 +307,10 @@ PlotWindow *PlotWindow::create( size_t n, int dimindex, const double *xvals, con
 	pw->locked_btn_->callback( lockedCallback, pw );
 
 	pw->xaxis_choice_ = new Fl_Choice( 320, 10, 150, 25 );
-	for( Stringlist *s = scannable_dims; s != nullptr; s = (Stringlist *)s->next ) {
-		pw->axis_names_.push_back( s->string );
-		pw->xaxis_choice_->add( s->string );
+	if( scannable_dims != nullptr )
+	for( auto &e : *scannable_dims ) {
+		pw->axis_names_.push_back( e.string );
+		pw->xaxis_choice_->add( e.string.c_str() );
 	}
 	pw->xaxis_choice_->value( 0 );
 	pw->xaxis_choice_->callback( xAxisChoiceCallback, pw );

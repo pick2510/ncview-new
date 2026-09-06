@@ -76,10 +76,9 @@ std::string read_file(const std::string &path) {
 // use for "disabled"/"enabled".
 Stringlist *make_cmap_state() {
     Stringlist *state = nullptr;
-    int one = 1, zero = 0;
-    REQUIRE(stringlist_add_string(&state, (char *)"CMAP_3gauss", &one, SLTYPE_INT) == 0);
-    REQUIRE(stringlist_add_string(&state, (char *)"CMAP_bright", &zero, SLTYPE_INT) == 0);
-    REQUIRE(stringlist_add_string(&state, (char *)"CMAP_rainbow", &one, SLTYPE_INT) == 0);
+    REQUIRE(stringlist_add_string(&state, "CMAP_3gauss", 1) == 0);
+    REQUIRE(stringlist_add_string(&state, "CMAP_bright", 0) == 0);
+    REQUIRE(stringlist_add_string(&state, "CMAP_rainbow", 1) == 0);
     return state;
 }
 
@@ -135,26 +134,24 @@ TEST_CASE("rc file: read_state_from_file round-trips names, types, and values") 
     // which ignores the index field it just parsed out of the line), so
     // this checks name/type/value only.
     REQUIRE(stringlist_len(read_back) == 4);
+    REQUIRE(read_back->size() == 4);
 
-    Stringlist *header = read_back;
-    CHECK(std::strcmp(header->string, "NCVIEW_STATE_FILE_VERSION") == 0);
-    CHECK(*(int *)header->aux == 1);
+    const StringlistEntry &header = (*read_back)[0];
+    CHECK(header.string == "NCVIEW_STATE_FILE_VERSION");
+    CHECK(std::get<int>(header.aux) == 1);
 
-    Stringlist *e0 = header->next; // AnyPtr -- no chained ->, see anyptr.h
-    REQUIRE(e0 != nullptr);
-    CHECK(std::strcmp(e0->string, "CMAP_3gauss") == 0);
-    CHECK(e0->sltype == SLTYPE_INT);
-    CHECK(*(int *)e0->aux == 1);
+    const StringlistEntry &e0 = (*read_back)[1];
+    CHECK(e0.string == "CMAP_3gauss");
+    CHECK(std::holds_alternative<int>(e0.aux));
+    CHECK(std::get<int>(e0.aux) == 1);
 
-    Stringlist *e1 = e0->next;
-    REQUIRE(e1 != nullptr);
-    CHECK(std::strcmp(e1->string, "CMAP_bright") == 0);
-    CHECK(*(int *)e1->aux == 0);
+    const StringlistEntry &e1 = (*read_back)[2];
+    CHECK(e1.string == "CMAP_bright");
+    CHECK(std::get<int>(e1.aux) == 0);
 
-    Stringlist *e2 = e1->next;
-    REQUIRE(e2 != nullptr);
-    CHECK(std::strcmp(e2->string, "CMAP_rainbow") == 0);
-    CHECK(*(int *)e2->aux == 1);
+    const StringlistEntry &e2 = (*read_back)[3];
+    CHECK(e2.string == "CMAP_rainbow");
+    CHECK(std::get<int>(e2.aux) == 1);
 
     stringlist_delete_entire_list(read_back);
 }
@@ -183,10 +180,9 @@ TEST_CASE("rc file: a real upstream file with CMAP_* entries reads back untouche
     Stringlist *read_back = nullptr;
     REQUIRE(read_state_from_file(&read_back) == 0);
     CHECK(stringlist_len(read_back) == 7);
-    CHECK(std::strcmp(read_back->string, "NCVIEW_STATE_FILE_VERSION") == 0);
-    Stringlist *first_cmap = read_back->next;
-    REQUIRE(first_cmap != nullptr);
-    CHECK(std::strcmp(first_cmap->string, "CMAP_3gauss") == 0);
+    REQUIRE(read_back->size() == 7);
+    CHECK((*read_back)[0].string == "NCVIEW_STATE_FILE_VERSION");
+    CHECK((*read_back)[1].string == "CMAP_3gauss");
 
     // Reading must not touch the file at all.
     CHECK(read_file(home.rc_path()) == original);

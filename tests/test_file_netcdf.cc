@@ -102,7 +102,7 @@ std::string make_sample_file() {
 // opening it for real.
 int open_sample_file(const std::string &path) {
     Stringlist *files = nullptr;
-    stringlist_add_string(&files, const_cast<char *>(path.c_str()), nullptr, SLTYPE_NULL);
+    stringlist_add_string(&files, path.c_str());
     determine_file_type(files);
     stringlist_delete_entire_list(files);
     return netcdf_fi_initialize(const_cast<char *>(path.c_str()));
@@ -139,16 +139,10 @@ TEST_CASE("file_netcdf: scannable_dims lists every dim of a 3-D variable") {
     Stringlist *dims = netcdf_scannable_dims(f.fileid, (char *)"temp");
     REQUIRE(dims != nullptr);
     CHECK(stringlist_len(dims) == 3);
-    CHECK(std::strcmp(dims->string, "time") == 0);
-    // Stringlist::next is an AnyPtr (see ncview/anyptr.h), not a raw
-    // Stringlist*, so it converts implicitly on assignment but doesn't
-    // support chained -> -- hop through explicit locals instead.
-    Stringlist *second = dims->next;
-    REQUIRE(second != nullptr);
-    CHECK(std::strcmp(second->string, "lat") == 0);
-    Stringlist *third = second->next;
-    REQUIRE(third != nullptr);
-    CHECK(std::strcmp(third->string, "lon") == 0);
+    REQUIRE(dims->size() == 3);
+    CHECK((*dims)[0].string == "time");
+    CHECK((*dims)[1].string == "lat");
+    CHECK((*dims)[2].string == "lon");
 }
 
 TEST_CASE("file_netcdf: dim name/id lookups round-trip") {

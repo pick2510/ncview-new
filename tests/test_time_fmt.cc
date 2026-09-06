@@ -89,7 +89,7 @@ struct TgranFixture {
         REQUIRE(nc_close(ncid) == NC_NOERR);
 
         Stringlist *files = nullptr;
-        stringlist_add_string(&files, const_cast<char *>(path.c_str()), nullptr, SLTYPE_NULL);
+        stringlist_add_string(&files, path.c_str());
         determine_file_type(files);
         stringlist_delete_entire_list(files);
         fileid = netcdf_fi_initialize(const_cast<char *>(path.c_str()));

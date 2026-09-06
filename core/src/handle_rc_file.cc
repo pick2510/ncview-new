@@ -59,7 +59,7 @@ write_state_to_file( Stringlist *state_to_save )
 
 	/* Make our ncview header */
 	ival = NCVIEW_STATE_FILE_VERSION;
-	if( (err = stringlist_add_string( &header, "NCVIEW_STATE_FILE_VERSION", &ival, SLTYPE_INT )) != 0 ) {
+	if( (err = stringlist_add_string( &header, "NCVIEW_STATE_FILE_VERSION", ival )) != 0 ) {
 		fprintf( stderr, "Error making header for ncview save state file\n" );
 		return( -1 );
 		}

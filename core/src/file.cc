@@ -577,20 +577,22 @@ determine_file_type( Stringlist *input_files )
 		exit( -1 );
 		}
 
-	if( netcdf_fi_confirm( input_files->string ) )
+	const char *first_file = (*input_files)[0].string.c_str();
+
+	if( netcdf_fi_confirm( (char *)first_file ) )
 		file_type = FILE_TYPE_NETCDF;
 	else
 		{
-		ierr = stat( input_files->string, &buf );
+		ierr = stat( first_file, &buf );
 		if( ierr == 0 ) {
 			fprintf( stderr, "ncview: can't recognize format of input file %s\n",
-				input_files->string );
+				first_file );
 			exit( -1 );
 			}
 		else
 			{
 			fprintf( stderr, "ncview: can't open file %s",
-				input_files->string );
+				first_file );
 			perror(" ");
 			exit( -1 );
 			}

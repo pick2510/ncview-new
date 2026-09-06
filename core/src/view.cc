@@ -1038,31 +1038,30 @@ initial_determine_scan_axes( View *view, NCVar *var )
 		case 1:
 			view->scan_axis_id = -1;
 			view->y_axis_id    = -1;
-			view->x_axis_id    = fi_dim_name_to_id( 
+			view->x_axis_id    = fi_dim_name_to_id(
 					var->first_file->id,
 					var->name,
-					dimlist->string );
+					(char *)(*dimlist)[0].string.c_str() );
 			break;
 
 		case 2:
 			view->scan_axis_id = -1;
-			view->y_axis_id    = fi_dim_name_to_id( 
+			view->y_axis_id    = fi_dim_name_to_id(
 					var->first_file->id,
 					var->name,
-					dimlist->string );
+					(char *)(*dimlist)[0].string.c_str() );
 			if( view->y_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					dimlist->string, var->name );
+					(*dimlist)[0].string.c_str(), var->name );
 				exit(-1);
 				}
-			dimlist            = dimlist->next;
-			view->x_axis_id    = fi_dim_name_to_id( 
+			view->x_axis_id    = fi_dim_name_to_id(
 					var->first_file->id,
 					var->name,
-					dimlist->string );
+					(char *)(*dimlist)[1].string.c_str() );
 			if( view->x_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					dimlist->string, var->name );
+					(*dimlist)[1].string.c_str(), var->name );
 				exit(-1);
 				}
 			break;
@@ -1070,39 +1069,34 @@ initial_determine_scan_axes( View *view, NCVar *var )
 		default:
 			/* By default, set the scan dimension to the first of the scannable
 	 		* dims, because that one will be the 'time' dimension by netCDF
-	 		* standards.
+	 		* standards. Y/X axes are the last two entries.
 	 		*/
-			view->scan_axis_id = fi_dim_name_to_id( 
+			view->scan_axis_id = fi_dim_name_to_id(
 					var->first_file->id,
 					var->name,
-					dimlist->string );
+					(char *)(*dimlist)[0].string.c_str() );
 			if( view->scan_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					dimlist->string, var->name );
+					(*dimlist)[0].string.c_str(), var->name );
 				exit(-1);
 				}
-			dimlist            = dimlist->next;
 
-			/* Go to the second to the last entry */
-			while( ((Stringlist *)(dimlist->next))->next != NULL )
-				dimlist = dimlist->next;
-			view->y_axis_id    = fi_dim_name_to_id( 
+			view->y_axis_id    = fi_dim_name_to_id(
 					var->first_file->id,
 					var->name,
-					dimlist->string );
+					(char *)(*dimlist)[n_dims-2].string.c_str() );
 			if( view->y_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					dimlist->string, var->name );
+					(*dimlist)[n_dims-2].string.c_str(), var->name );
 				exit(-1);
 				}
-			dimlist            = dimlist->next;
-			view->x_axis_id    = fi_dim_name_to_id( 
+			view->x_axis_id    = fi_dim_name_to_id(
 					var->first_file->id,
 					var->name,
-					dimlist->string );
+					(char *)(*dimlist)[n_dims-1].string.c_str() );
 			if( view->x_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					dimlist->string, var->name );
+					(*dimlist)[n_dims-1].string.c_str(), var->name );
 				exit(-1);
 				}
 			break;
@@ -1320,7 +1314,7 @@ view_change_cur_dim( char *dim_name, Modifier modifier )
 	void
 view_set_scan_dims( void )
 {
-	Stringlist *dim_list, *new_dim_list = NULL, *inv_dim_list, *s;
+	Stringlist *dim_list, *new_dim_list = NULL, *inv_dim_list;
 	int	   changed_something = false;
 	NCVar	   *v;
 	char	   *cur_x_name, *cur_y_name;
@@ -1334,7 +1328,7 @@ view_set_scan_dims( void )
 	cur_y_name = (*(v->dim+view->y_axis_id))->name;
 
 	dim_list = fi_scannable_dims( v->first_file->id, v->name );
-	snprintf( scan_dim, sizeof(scan_dim), "%s", dim_list->string );
+	snprintf( scan_dim, sizeof(scan_dim), "%s", (*dim_list)[0].string.c_str() );
 
 	/* Pop up the dialog box which asks for the user's selection */
 	scan_dims_result = in_set_scan_dims( dim_list, cur_x_name,
@@ -1351,18 +1345,18 @@ view_set_scan_dims( void )
 	 * auto-transform it back to the desired configuration.  To
 	 * take care of this, if the axes are transposed, then warn
 	 * the user, and flip them.
+	 * new_dim_list is Y-axis first, then X-axis (see in_set_scan_dims's
+	 * own contract).
 	 */
-	s        = new_dim_list;
-	new_y_id = fi_dim_name_to_id( v->first_file->id, v->name, s->string );
-	s        = s->next;
-	new_x_id = fi_dim_name_to_id( v->first_file->id, v->name, s->string );
+	new_y_id = fi_dim_name_to_id( v->first_file->id, v->name, (char *)(*new_dim_list)[0].string.c_str() );
+	new_x_id = fi_dim_name_to_id( v->first_file->id, v->name, (char *)(*new_dim_list)[1].string.c_str() );
 	if( new_x_id < new_y_id ) {
 		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", NULL, true );
 		if( message == Message::Cancel )
 			return;
 		inv_dim_list = NULL;
-		stringlist_add_string( &inv_dim_list, s->string, NULL, SLTYPE_NULL );
-		stringlist_add_string( &inv_dim_list, new_dim_list->string, NULL, SLTYPE_NULL );
+		stringlist_add_string( &inv_dim_list, (*new_dim_list)[1].string.c_str() );
+		stringlist_add_string( &inv_dim_list, (*new_dim_list)[0].string.c_str() );
 		new_dim_list = inv_dim_list;
 		}
 	if( new_x_id == new_y_id ) {
@@ -1372,14 +1366,13 @@ view_set_scan_dims( void )
 
 	in_set_cursor_busy();
 
-	if( strcmp( cur_y_name, new_dim_list->string ) != 0 ) {
-		view_set_axis( view, Dimension::Y, new_dim_list->string );
+	if( strcmp( cur_y_name, (*new_dim_list)[0].string.c_str() ) != 0 ) {
+		view_set_axis( view, Dimension::Y, (char *)(*new_dim_list)[0].string.c_str() );
 		changed_something = true;
 		}
 
-	new_dim_list = new_dim_list->next;
-	if( strcmp( cur_x_name, new_dim_list->string ) != 0 ) {
-		view_set_axis( view, Dimension::X, new_dim_list->string );
+	if( strcmp( cur_x_name, (*new_dim_list)[1].string.c_str() ) != 0 ) {
+		view_set_axis( view, Dimension::X, (char *)(*new_dim_list)[1].string.c_str() );
 		changed_something = true;
 		}
 
@@ -2073,9 +2066,10 @@ show_current_dim_values( View *view )
 	var = view->variable;
 	scannable_dims   = fi_scannable_dims( var->first_file->id, var->name );
 
-	while( scannable_dims != NULL ) {
-		dim_name   = scannable_dims->string;
-		dimid      = fi_dim_name_to_id( 
+	if( scannable_dims != NULL )
+	for( auto &e : *scannable_dims ) {
+		dim_name   = (char *)e.string.c_str();
+		dimid      = fi_dim_name_to_id(
 					var->first_file->id,
 					var->name,
 					dim_name );
@@ -2087,7 +2081,6 @@ show_current_dim_values( View *view )
 		if( type == NC_DOUBLE )
 			snprintf( temp_string, 1023, "%lg", new_dimval );
 		in_set_cur_dim_value( dim_name, temp_string );
-		scannable_dims = scannable_dims->next;
 		}
 }
 
@@ -2991,7 +2984,7 @@ plot_XY_sc( size_t *start, size_t *count )
 	 */
 	dimlist = NULL;
 	/* Put the current dim first on the list */
-	stringlist_add_string( &dimlist, (*(view->variable->dim + dim_to_plot))->name, NULL, SLTYPE_NULL );
+	stringlist_add_string( &dimlist, (*(view->variable->dim + dim_to_plot))->name );
 	for( i=0; i<view->variable->n_dims; i++ )
 		/* We are using here the fact that view->variable->dim was initialized
 		 * so that non-scannable dims were set to NULL.  However, this can still
@@ -3001,7 +2994,7 @@ plot_XY_sc( size_t *start, size_t *count )
 		 */
 		if( (*(view->variable->dim+i) != NULL) && (i != dim_to_plot)
 		    && (*(view->variable->size+i) > 1)) 
-			stringlist_add_string( &dimlist, (*(view->variable->dim + i))->name, NULL, SLTYPE_NULL );
+			stringlist_add_string( &dimlist, (*(view->variable->dim + i))->name );
 
 	if( options.debug ) {
 		fprintf( stderr, "about to call in_popup_XY_graph...\n" );

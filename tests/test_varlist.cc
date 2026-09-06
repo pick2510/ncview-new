@@ -78,7 +78,7 @@ std::string make_virtual_piece(const char *var_name, int nt, int nlat, int nlon,
 
 int open_for_core(const std::string &path) {
     Stringlist *files = nullptr;
-    stringlist_add_string(&files, const_cast<char *>(path.c_str()), nullptr, SLTYPE_NULL);
+    stringlist_add_string(&files, path.c_str());
     determine_file_type(files);
     stringlist_delete_entire_list(files);
     return netcdf_fi_initialize(const_cast<char *>(path.c_str()));
