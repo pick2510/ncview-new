@@ -1199,7 +1199,7 @@ Message MainWindow::printerOptionsDialog( PrintOptions *po )
 	dev_file.type( FL_RADIO_BUTTON );
 	(po->output_device == Device::Printer ? dev_printer : dev_file).setonly();
 	Fl_Input outfile_input( 250, 10, 160, 25 );
-	outfile_input.value( po->out_file_name );
+	outfile_input.value( po->out_file_name.c_str() );
 
 	Fl_Box margin_label( 10, 45, 90, 25, "Margins (in):" );
 	Fl_Box xmar_label( 100, 45, 20, 25, "X" );
@@ -1214,7 +1214,7 @@ Message MainWindow::printerOptionsDialog( PrintOptions *po )
 
 	Fl_Box font_label( 10, 80, 90, 25, "Font:" );
 	Fl_Input font_name_input( 100, 80, 120, 25 );
-	font_name_input.value( po->font_name );
+	font_name_input.value( po->font_name.c_str() );
 	Fl_Box fontsize_label( 230, 80, 40, 25, "Size" );
 	Fl_Float_Input fontsize_input( 270, 80, 40, 25 );
 	snprintf( buf, sizeof(buf), "%d", po->font_size ); fontsize_input.value( buf );
@@ -1249,11 +1249,11 @@ Message MainWindow::printerOptionsDialog( PrintOptions *po )
 	if( !result.ok ) return Message::Cancel;
 
 	po->output_device = dev_printer.value() ? Device::Printer : Device::File;
-	strncpy( po->out_file_name, outfile_input.value(), sizeof(po->out_file_name)-1 );
+	po->out_file_name = outfile_input.value();
 	po->page_x_margin = (float)atof( xmar_input.value() );
 	po->page_upper_y_margin = (float)atof( ytmar_input.value() );
 	po->page_lower_y_margin = (float)atof( ybmar_input.value() );
-	strncpy( po->font_name, font_name_input.value(), sizeof(po->font_name)-1 );
+	po->font_name = font_name_input.value();
 	po->font_size = atoi( fontsize_input.value() );
 	po->header_font_size = atoi( headsize_input.value() );
 	po->include_title = include_title.value();

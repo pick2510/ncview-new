@@ -437,10 +437,10 @@ struct NCVar {
  */
 typedef struct {
 	NCVar	*variable;
-	size_t	*var_place;	/* Where we currently are in that var's space, in that file */
-	void	*data;		/* The actual 2-D data to colorcontour */
+	std::vector<size_t>	var_place;	/* Where we currently are in that var's space, in that file */
+	std::vector<float>	data;		/* The actual 2-D data to colorcontour */
 	ViewDataStatus	data_status;	/* Either valid, invalid, or edited (changed) */
-	unsigned char *pixels;	/* Scaled, replicated, byte array version of data */
+	std::vector<ncv_pixel>	pixels;	/* Scaled, replicated, byte array version of data */
 	int	x_axis_id, 	/* which axes the 2-D data lies on.  'scan' */
 		y_axis_id,	/* is the one accessed by the pushbuttons */
 		scan_axis_id;
@@ -457,8 +457,8 @@ typedef struct {
 	int	valid;		/* Is ANYTHING in the frame store valid? */
 	size_t	nt;		/* # of frames in the store.  Can be > than nt cuz we allocate some extra to handle file growth */
 	size_t	nx, ny;		/* # of X and Y entries per frame */
-	ncv_pixel *frame;	/* Actual store of the frames */
-	int	*frame_valid;	/* Is this particular frame valid? */
+	std::vector<ncv_pixel> frame;	/* Actual store of the frames */
+	std::vector<int> frame_valid;	/* Is this particular frame valid? */
 } FrameStore;
 
 /*****************************************************************************/
@@ -467,7 +467,7 @@ typedef struct {
 /* Options for the overlay feature */
 typedef struct {
 	int	doit;
-	int	*overlay;
+	std::vector<int>	overlay;
 } OverlayOptions;
 
 typedef struct {
@@ -506,9 +506,9 @@ typedef struct {
 	VarselStyle	varsel_style;	/* can be VarselStyle::List or VarselStyle::Menu */
 	ShrinkMethod	shrink_method;
 
-	char	*ncview_base_dir,
-		*window_title,
-		*calendar;	/* This OVERRIDES any 'calendar' attribute in the data file */
+	std::string	ncview_base_dir,	/* apparently dead: never read as options.ncview_base_dir anywhere -- see modernization.md Phase 6 */
+			window_title,		/* apparently dead: written but never read anywhere -- see modernization.md Phase 6 */
+			calendar;	/* This OVERRIDES any 'calendar' attribute in the data file; empty means "not set" */
 
 	BlowupType	blowup_type;	/* can be BlowupType::Replicate or BlowupType::Bilinear */
 
@@ -524,7 +524,7 @@ typedef struct {
 	float	scale, offset;	/* These do NOT refer to the scale & offset in the netcdf file. They are for changing units of data */
 				/* SCALE IS APPLIED FIRST. So to conv C to F, use -scale 1.8 -offset 32 */
 
-	OverlayOptions *overlay;
+	std::unique_ptr<OverlayOptions> overlay;
 } Options;
 
 /***********************************************************************************************************/
@@ -536,8 +536,8 @@ typedef struct {
 	int	font_size,
 		leading,
 		header_font_size;		/* In points */
-	char	font_name[132],			/* Postscript name */
-		out_file_name[1024];
+	std::string	font_name,			/* Postscript name */
+			out_file_name;
 	Device	output_device;
 	int	include_outline,
 		include_id,

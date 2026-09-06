@@ -140,7 +140,7 @@ set_scan_variable( NCVar *var )
 			start = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
 			count = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
 			for( i=0; i<view->variable->n_dims; i++ ) {
-				*(start+i) = *(view->var_place+i);
+				start[i] = view->var_place[i];
 				*(count+i) = 1L;
 				}
 			*(count+view->x_axis_id) = view->variable->size[view->x_axis_id];
@@ -200,7 +200,7 @@ set_scan_variable( NCVar *var )
 			start = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
 			count = (size_t *)malloc(view->variable->n_dims*sizeof(size_t));
 			for( i=0; i<view->variable->n_dims; i++ ) {
-				*(start+i) = *(view->var_place+i);
+				start[i] = view->var_place[i];
 				*(count+i) = 1L;
 				}
 			*(count+view->x_axis_id) = view->variable->size[view->x_axis_id];
@@ -249,10 +249,15 @@ set_scan_variable( NCVar *var )
 				(xdim_new->size != xdim_old->size) || (ydim_new->size != ydim_old->size))
 			do_overlay(OVERLAY_NONE,NULL,true);
 
-		/* Release the old storage */
-		free( old_view->data      );
-		free( old_view->pixels    );
-		free( old_view->var_place );
+		/* Release the old storage. old_view itself (the View object) is
+		 * intentionally leaked here, exactly as upstream did with malloc --
+		 * only its heap-backed members were ever freed on variable change. */
+		old_view->data.clear();
+		old_view->data.shrink_to_fit();
+		old_view->pixels.clear();
+		old_view->pixels.shrink_to_fit();
+		old_view->var_place.clear();
+		old_view->var_place.shrink_to_fit();
 
 		view = new_view;
 		}
@@ -328,7 +333,7 @@ set_scan_variable( NCVar *var )
 	if( view->scan_axis_id == -1 ) 
 		set_scan_view( 0L );
 	else
-		set_scan_view( *(view->var_place+view->scan_axis_id) );
+		set_scan_view( view->var_place[view->scan_axis_id] );
 
 	/* Actually draw the color contour map of the data! */
 	if( options.debug )
@@ -470,7 +475,7 @@ change_view( int delta, int interpretation )
 			delta = (int)provisional_delta;
 		}
 
-	place = *(view->var_place + view->scan_axis_id) + delta;
+	place = view->var_place[view->scan_axis_id] + delta;
 	size  = view->variable->size[view->scan_axis_id];
 
 	/* Have we incremented past the maximum allowed value?
@@ -529,12 +534,12 @@ set_scan_view( size_t scan_place )
 		
 	dim = view->variable->dim[view->scan_axis_id].get();
 	dim_name = const_cast<char *>(dim->name.c_str());
-	*(view->var_place + view->scan_axis_id) = scan_place;
+	view->var_place[view->scan_axis_id] = scan_place;
 	snprintf( view_place, 1023, "frame %1ld/%1ld ", scan_place+1, size );
 
 	/* type is the data type of the dimension--can be float or character */
-	type = fi_dim_value( view->variable, view->scan_axis_id, scan_place, &new_dimval, 
-			temp_string, &has_bounds, &bound_min, &bound_max, view->var_place );
+	type = fi_dim_value( view->variable, view->scan_axis_id, scan_place, &new_dimval,
+			temp_string, &has_bounds, &bound_min, &bound_max, view->var_place.data() );
 	if( type == NC_DOUBLE ) {
 		if( dim->timelike && options.t_conv ) {
 			fmt_time( temp_string, 1024, new_dimval, dim, 1 );
@@ -620,7 +625,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	 * window gets 'expose' events, which happens on program startup,
 	 * before the view has been initialized.
 	 */
-	if( (view == NULL) || (view->data == NULL)) { 
+	if( (view == NULL) || (view->data.empty())) {
 		lockout_view_changes = false;
 		return(0);
 		}
@@ -635,7 +640,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		max = -min;
 
 		for( i=0; i<x_size*y_size; i++ ) {
-			dat = *((float *)(view->data)+i);
+			dat = view->data[i];
 			if( dat != dat ) 
 				dat = view->variable->fill_value;
 			if( ! close_enough( dat, view->variable->fill_value) && (dat != FILL_FLOAT)) {
@@ -660,7 +665,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	if( view->scan_axis_id == -1 )
 		frameno = 0;
 	else
-		frameno = *(view->var_place + view->scan_axis_id);
+		frameno = view->var_place[view->scan_axis_id];
 
 	if( options.debug ) {
 		fprintf( stderr, "in view_draw:\n" );
@@ -674,10 +679,10 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 
 	/* Is this frame stored in the framestore? */
 	if( framestore.valid && allow_framestore_usage ) {
-		if( *(framestore.frame_valid + frameno) == true ) {
+		if( framestore.frame_valid[frameno] == true ) {
 			if( options.debug )
 				printf( "drawing from framestore...\n" );
-			in_draw_2d_field( (framestore.frame + frameno*framesize), 
+			in_draw_2d_field( (framestore.frame.data() + frameno*framesize),
 				scaled_x_size, scaled_y_size, frameno );
 			lockout_view_changes = false;
 
@@ -721,12 +726,12 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 
 	if( options.debug )
 		printf( "Calling draw_2d_field...\n" );
-	in_draw_2d_field( view->pixels, scaled_x_size, scaled_y_size, frameno );
+	in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, frameno );
 
 	if( framestore.valid == true ) {
 		for( i=0; i<framesize; i++ )
-			*(framestore.frame + frameno*framesize + i) = *(view->pixels + i);
-		*(framestore.frame_valid + frameno) = true;
+			framestore.frame[frameno*framesize + i] = view->pixels[i];
+		framestore.frame_valid[frameno] = true;
 		}
 
 	/* If we just drew the last time entry for this var, then
@@ -854,21 +859,12 @@ view_check_new_data( int unused )
 		if( options.debug )
 			printf( "reallocating framestore to new nt=%ld\n", framestore.nt );
 
-		framestore.frame = (ncv_pixel *)realloc( framestore.frame, storage_size*sizeof(ncv_pixel) );
-		if( framestore.frame == NULL ) {
-			framestore.valid = false;
-			return;
-			}
-
-		framestore.frame_valid = (int *)realloc( framestore.frame_valid, framestore.nt*sizeof(int) );
-		if( framestore.frame_valid == NULL ) {
-			framestore.valid = false;
-			return;
-			}
+		framestore.frame.resize( storage_size );
+		framestore.frame_valid.resize( framestore.nt );
 
 		/* Initialize to NOT a valid frame for the new frames */
 		for( i=old_nt; i<framestore.nt; i++ )
-			*(framestore.frame_valid+i) = false;
+			framestore.frame_valid[i] = false;
 		}
 
 	view->variable->size[ timelike_index ] = nt_new;
@@ -1131,7 +1127,7 @@ fill_view_data( View *v )
 	if( options.debug || options.show_sel ) {
 		printf( "-var %s -start \\(", v->variable->name.c_str() );
 		for( i=v->variable->n_dims-1; i >= 0; i-- ) {
-			printf( "%1ld", 1 + (*(v->var_place+i)) );
+			printf( "%1ld", 1 + (v->var_place[i]) );
 			if( i != 0 )
 				printf( "," );
 			}
@@ -1144,7 +1140,7 @@ fill_view_data( View *v )
 		printf( "\\) %s\n", v->variable->files.front()->filename.c_str() );
 		}
 
-	fi_get_data( v->variable, v->var_place, count, v->data );
+	fi_get_data( v->variable, v->var_place.data(), count, v->data.data() );
 
 	v->data_status = ViewDataStatus::Valid;
 	free( count );
@@ -1191,13 +1187,11 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 		view->variable->user_set_blowup = options.blowup;
 		}
 
-	free( view->pixels );
-
 	x_size       = view->variable->size[view->x_axis_id];
 	y_size       = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
-	view->pixels = (unsigned char *)malloc( scaled_x_size*scaled_y_size*sizeof(ncv_pixel) );
+	view->pixels.resize( scaled_x_size*scaled_y_size );
 
 	if( options.save_frames == true ) {
 		if( options.debug )
@@ -1260,32 +1254,32 @@ view_change_cur_dim( char *dim_name, Modifier modifier )
 
 	/* Modifier 1 is the standard action */
 	if( modifier == Modifier::M1 ) {
-		*(view->var_place+dimid) = *(view->var_place+dimid)+1L;
-		if( *(view->var_place+dimid) > view->variable->size[dimid]-1L )
-			*(view->var_place+dimid) = 0L;
+		view->var_place[dimid] = view->var_place[dimid]+1L;
+		if( view->var_place[dimid] > view->variable->size[dimid]-1L )
+			view->var_place[dimid] = 0L;
 		}
 	else if( modifier == Modifier::M2 ) {
 		/* Modifier 2 means "do it faster" */
 		size  = view->variable->size[dimid];
 		delta = (int)(0.1*(float)size);
-		*(view->var_place+dimid) = *(view->var_place+dimid)+(long)delta;
-		if( *(view->var_place+dimid) > view->variable->size[dimid]-1L )
-			*(view->var_place+dimid) = 0L;
+		view->var_place[dimid] = view->var_place[dimid]+(long)delta;
+		if( view->var_place[dimid] > view->variable->size[dimid]-1L )
+			view->var_place[dimid] = 0L;
 		}
 	else
 		{
 		/* Modifier 3 means to go backwards */
-		prov_place = *(view->var_place+dimid)-1L;
+		prov_place = view->var_place[dimid]-1L;
 		if( prov_place < 0L )
-			*(view->var_place+dimid) = view->variable->size[dimid] -1L;
+			view->var_place[dimid] = view->variable->size[dimid] -1L;
 		else
-			*(view->var_place+dimid) = prov_place;
+			view->var_place[dimid] = prov_place;
 		}
 
-	place = *(view->var_place+dimid);
+	place = view->var_place[dimid];
 
-	type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string, 
-		&has_bounds, &bound_min, &bound_max, view->var_place );
+	type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
+		&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 	if( type == NC_DOUBLE ) {
 		if( dim->timelike && options.t_conv ) {
 			fmt_time( temp_string, 1024, new_dimval, dim, 1 );
@@ -1414,7 +1408,7 @@ view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 						new_dim_name );
 			old_id = local_view->x_axis_id;
 			local_view->x_axis_id = new_id;
-			*(local_view->var_place+new_id) = 0L;
+			local_view->var_place[new_id] = 0L;
 			break;
 
 		case Dimension::Y:
@@ -1425,7 +1419,7 @@ view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 						new_dim_name );
 			old_id = local_view->y_axis_id;
 			local_view->y_axis_id = new_id;
-			*(local_view->var_place+new_id) = 0L;
+			local_view->var_place[new_id] = 0L;
 			break;
 
 		case Dimension::Scan:
@@ -1463,58 +1457,28 @@ view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 	static void
 alloc_view_storage( View *view )
 {
-	size_t	x_size, y_size, tot_size, scaled_x_size, scaled_y_size;
+	size_t	x_size, y_size, scaled_x_size, scaled_y_size;
 
-	/* Allocate storage space for the data in the view structure
+	/* Allocate storage space for the data in the view structure. Note:
+	 * the old malloc()-failure diagnostics (dumping var/axis names before
+	 * exit(-1)) are gone -- std::vector::resize() throws std::bad_alloc
+	 * instead of returning NULL, and this codebase already treats OOM as
+	 * fatal everywhere else via unconditional exit(-1), so an unhandled
+	 * bad_alloc terminating the program is the same outcome (a hard
+	 * stop), just via a different, standard mechanism. See
+	 * modernization.md's Phase 6 notes for the record of this decision.
 	 */
 
 	if( view->data_status == ViewDataStatus::Edited )
 		view_data_edit_warn();
 	view->data_status = ViewDataStatus::Invalid;
-		
-	if( view->data   != NULL )
-		free( view->data   );
-	if( view->pixels != NULL )
-		free( view->pixels );
+
 	x_size       = view->variable->size[view->x_axis_id];
 	y_size       = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
-	tot_size     = x_size*y_size*sizeof(float);
-	view->data   = (void *)malloc( tot_size );
-	if( view->data == NULL ) {
-		fprintf( stderr, "ncview: can't allocate data array\n" );
-		fprintf( stderr, "variable name: %s\n", view->variable->name.c_str() );
-		fprintf( stderr, "requested size: %ldx%ld\n", x_size, y_size );
-		fprintf( stderr, "x axis id:%d  y axis id:%d\n",
-			view->x_axis_id, view->y_axis_id );
-		fprintf( stderr, "x axis name:%s  y axis name:%s\n",
-			fi_dim_id_to_name( view->variable->files.front().get()->id,
-					   view->variable->name,
-					   view->x_axis_id ).c_str(),
-			fi_dim_id_to_name( view->variable->files.front().get()->id,
-					   view->variable->name,
-					   view->y_axis_id ).c_str() );
-		exit( -1 );
-		}
-	view->pixels = (ncv_pixel *)malloc( scaled_x_size*scaled_y_size*sizeof(ncv_pixel) );
-	if( view->pixels == NULL ) {
-		fprintf( stderr, "ncview: can't allocate pixel array\n" );
-		fprintf( stderr, "variable name: %s\n", view->variable->name.c_str() );
-		fprintf( stderr, "requested size: %ld x %ld\n", 
-				scaled_x_size, 
-				scaled_y_size );
-		fprintf( stderr, "x axis id:%d  y axis id:%d\n",
-			view->x_axis_id, view->y_axis_id );
-		fprintf( stderr, "x axis name:%s  y axis name:%s\n",
-			fi_dim_id_to_name( view->variable->files.front().get()->id,
-					   view->variable->name,
-					   view->x_axis_id ).c_str(),
-			fi_dim_id_to_name( view->variable->files.front().get()->id,
-					   view->variable->name,
-					   view->y_axis_id ).c_str() );
-		exit( -1 );
-		}
+	view->data.resize( x_size*y_size );
+	view->pixels.resize( scaled_x_size*scaled_y_size );
 }
 
 /********************************************************************
@@ -1633,17 +1597,16 @@ beep()
 	void
 init_saveframes()
 {
-	long	i;
 	size_t	storage_size, n_scan_entries, xsize, ysize, n_extra_frames;
 	char	err_message[132];
 
 	if( options.save_frames == false )
 		return;
 
-	if( framestore.frame != NULL ) {
-		free( framestore.frame );
-		free( framestore.frame_valid );
-		}
+	framestore.frame.clear();
+	framestore.frame.shrink_to_fit();
+	framestore.frame_valid.clear();
+	framestore.frame_valid.shrink_to_fit();
 
 	if( view->scan_axis_id == -1 ) {
 		n_scan_entries = 1;
@@ -1674,20 +1637,26 @@ init_saveframes()
 		fprintf( stderr, "	total storage size:%ld\n", storage_size );
 		}
 
-	framestore.frame = (ncv_pixel *)malloc( storage_size*sizeof( ncv_pixel ));
-	if( framestore.frame == NULL ) {
+	/* Unlike alloc_view_storage()'s hard exit(-1) on allocation failure,
+	 * this path was always meant to degrade gracefully (in-core frame
+	 * caching is an optional speed optimization, not required for
+	 * correctness) -- preserved here by catching std::bad_alloc from
+	 * resize() rather than letting it propagate. */
+	try {
+		framestore.frame.resize( storage_size );
+		framestore.frame_valid.resize( framestore.nt, false );
+		framestore.valid = true;
+		}
+	catch( const std::bad_alloc & ) {
+		framestore.frame.clear();
+		framestore.frame.shrink_to_fit();
+		framestore.frame_valid.clear();
+		framestore.frame_valid.shrink_to_fit();
 		framestore.valid = false;
 		snprintf( err_message, 131, "Can't allocate space for frame store.\nRequested size: %.1f MB",
 				(float)(storage_size*sizeof( ncv_pixel ))/1000000. );
 		options.save_frames = false;
 		in_error( err_message );
-		}
-	else
-		{
-		framestore.valid = true;
-		framestore.frame_valid = (int *)(malloc( framestore.nt * sizeof( int )));
-		for( i=0; i<framestore.nt; i++ )
-			*(framestore.frame_valid+i) = false;
 		}
 }
 
@@ -1704,33 +1673,26 @@ invalidate_all_saveframes()
 		return;
 
 	for( i=0L; i<framestore.nt; i++ )
-		*(framestore.frame_valid+i) = false;
+		framestore.frame_valid[i] = false;
 }
 
 /**************************************************************************************/
-/* Initialize a new view structure and set defaults */
+/* Initialize a new view structure and set defaults. Note: the View object
+ * itself is intentionally leaked here via 'new', exactly as upstream leaked
+ * it via 'malloc' -- only its data/pixels/var_place members ever get
+ * released, in set_scan_variable() above, on variable change. */
 	static void
 init_view( View **view, NCVar *var )
 {
-	int	i;
-
-	(*view) = (View *)malloc( sizeof( View ));
-	if( (*view) == NULL ) {
-		fprintf( stderr, "failed on allocation of view structure\n" );
-		exit( -1 );
-		}
-	(*view)->data         = NULL;
+	(*view) = new View();
 	(*view)->data_status  = ViewDataStatus::Invalid;
-	(*view)->pixels       = NULL;
 	(*view)->x_axis_id    = -1;
 	(*view)->y_axis_id    = -1;
 	(*view)->scan_axis_id = -1;
 	(*view)->skip         =  1;
 
 	(*view)->variable  = var;
-	(*view)->var_place = (size_t *)malloc(var->n_dims * sizeof( size_t ));
-	for( i=0; i<var->n_dims; i++ )
-		*((*view)->var_place + i) = 0;
+	(*view)->var_place.assign( var->n_dims, 0 );
 
 	(*view)->plot_XY_axis   = -1;
 	(*view)->plot_XY_nlines = 0;
@@ -1861,8 +1823,8 @@ set_scan_place( View *new_view, NCVar *var, View *old_view )
 	/* All place information for the displayed axes MUST be
 	 * set to zero!!
 	 */
-	*(new_view->var_place+new_view->x_axis_id) = 0L;
-	*(new_view->var_place+new_view->y_axis_id) = 0L;
+	new_view->var_place[new_view->x_axis_id] = 0L;
+	new_view->var_place[new_view->y_axis_id] = 0L;
 }
 
 /**************************************************************************************/
@@ -1872,8 +1834,8 @@ initial_set_scan_place( View *view, NCVar *var )
 	int	i;
 
 	for( i=0; i<var->n_dims; i++ )
-		*(view->var_place+i) = 0L;
-		
+		view->var_place[i] = 0L;
+
 }
 
 /**************************************************************************************/
@@ -1897,9 +1859,9 @@ re_set_scan_place( View *new_view, NCVar *new_var, View *old_view )
 			dim_index = fi_dim_name_to_id( old_var->files.front().get()->id,
 					const_cast<char *>(old_var->name.c_str()), const_cast<char *>(new_dim->name.c_str()) );
 			if( dim_index != -1 ) {
-				old_place = *(old_view->var_place+dim_index);
+				old_place = old_view->var_place[dim_index];
 				if( old_place < new_var->size[i] )
-					*(new_view->var_place+i) = old_place;
+					new_view->var_place[i] = old_place;
 				}
 			}
 		}
@@ -2072,10 +2034,10 @@ show_current_dim_values( View *view )
 					const_cast<char *>(var->name.c_str()),
 					dim_name );
 
-		place = *(view->var_place+dimid);
+		place = view->var_place[dimid];
 
 		type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
-			&has_bounds, &bound_min, &bound_max, view->var_place );
+			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 		if( type == NC_DOUBLE )
 			snprintf( temp_string, 1023, "%lg", new_dimval );
 		in_set_cur_dim_value( dim_name, temp_string );
@@ -2182,7 +2144,7 @@ view_report_position( int x, int y, unsigned int button_mask )
 		data_y = y_size - data_y - 1;
 	
 	/* Get the value of the data field under the cursor */
-	val = *((float *)view->data + data_x + data_y*x_size);
+	val = view->data[data_x + data_y*x_size];
 
 	/* Get the values of the X and Y indices. 
 	* 'type' is the data type of the dimension--can be float or character 
@@ -2194,8 +2156,8 @@ view_report_position( int x, int y, unsigned int button_mask )
 	y_is_mapped = (view->variable->dim_map_info[ view->y_axis_id ] != NULL);
 	if( 1 || x_is_mapped || y_is_mapped ) {
 		/* Get virtual position in all dims for this mouse cursor point */
-		for( i=0; i<view->variable->n_dims; i++ ) 
-			virt_cursor_pos[i] = *(view->var_place+i);
+		for( i=0; i<view->variable->n_dims; i++ )
+			virt_cursor_pos[i] = view->var_place[i];
 		virt_cursor_pos[ view->x_axis_id ] = data_x;
 		virt_cursor_pos[ view->y_axis_id ] = data_y;
 		}
@@ -2242,14 +2204,14 @@ view_construct_scalar_coord_str( char *str, int slen )
 	str[0] = '\0';
 
 	if( (view == NULL) || (view->variable == NULL) || (view->variable->scalar_dim_map_info.empty())
-				|| (view->var_place == NULL)) {
+				|| (view->var_place.empty())) {
 		return;
 		}
 
-	/* Get the time step (value of first dim, which must be the only 
-	 * dim that is virtually concatenated along different files). 
+	/* Get the time step (value of first dim, which must be the only
+	 * dim that is virtually concatenated along different files).
 	 */
-	ts = *(view->var_place);
+	ts = view->var_place[0];
 
 	/* The file associated with this time step */
 	fdb = view->variable->timestep_2_fdb[ts];
@@ -2405,7 +2367,7 @@ set_min_from_curdata()
 		data_y = y_size - data_y - 1;
 	
 	/* Get the value of the data field under the cursor */
-	val = *((float *)view->data + data_x + data_y*x_size);
+	val = view->data[data_x + data_y*x_size];
 
 	view->variable->user_min = val;
 	set_range_labels( val, view->variable->user_max );
@@ -2452,7 +2414,7 @@ set_max_from_curdata()
 		data_y = y_size - data_y - 1;
 	
 	/* Get the value of the data field under the cursor */
-	val = *((float *)view->data + data_x + data_y*x_size);
+	val = view->data[data_x + data_y*x_size];
 
 	view->variable->user_max = val;
 	set_range_labels( val, view->variable->user_max );
@@ -2486,7 +2448,7 @@ view_data_edit( void )
 			j2 = j;
 		else
 			j2 = y_size - j - 1;
-		val = *((float *)view->data + i + j2*x_size);
+		val = view->data[i + j2*x_size];
 		line_array[index] = (char *)malloc( 32 );
 		snprintf( line_array[index], 31, "%-10.5g", val );
 		index++;
@@ -2513,10 +2475,10 @@ view_change_dat( size_t index, float new_val )
 	if( !options.invert_physical )
 		y = y_size - y - 1;
 
-	printf( "changed (%3ld,%3ld) from %9f to %9f\n", x, y, 
-		*((float *)view->data + x + (x_size)*y), new_val );
+	printf( "changed (%3ld,%3ld) from %9f to %9f\n", x, y,
+		view->data[x + (x_size)*y], new_val );
 
-	*((float *)view->data + x + (x_size)*y) = new_val;
+	view->data[x + (x_size)*y] = new_val;
 	init_saveframes();
 	lockout_view_changes = true;
 	if( data_to_pixels( view ) < 0 ) {
@@ -2527,7 +2489,7 @@ view_change_dat( size_t index, float new_val )
 		}
 	lockout_view_changes = false;
 	in_set_2d_size  ( scaled_x_size, scaled_y_size );
-	in_draw_2d_field( view->pixels, scaled_x_size, scaled_y_size, 0 );
+	in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, 0 );
 }
 
 /**************************************************************************************/
@@ -2571,7 +2533,7 @@ view_data_edit_dump( void )
 		start[1] = 0L;
 		count[0] = y_size;
 		count[1] = x_size;
-		err = nc_put_vara_float( ncid, varid, start, count, (const float *)view->data );
+		err = nc_put_vara_float( ncid, varid, start, count, view->data.data() );
 		if( err != NC_NOERR ) {
 			fprintf( stderr, "Error writing data to new netcdf file!!\n" );
 			fprintf( stderr, "%s\n", nc_strerror(err) );
@@ -2657,7 +2619,7 @@ plot_XY()
 	 */
         n = view->variable->size[X_axis];
 	for( i=0; i<view->variable->n_dims; i++ ) {
-		*(start+i) = *(view->var_place+i);
+		start[i] = view->var_place[i];
 		*(count+i) = 1L;
 		}
 	*(start + view->x_axis_id) = data_x;
@@ -2838,7 +2800,7 @@ plot_XY_sc( size_t *start, size_t *count )
 	for(i_size=0L; i_size<n; i_size++) {
 
 		for( i=0; i<view->variable->n_dims; i++ )
-			virt_cursor_place[i] = *(view->var_place + i);
+			virt_cursor_place[i] = view->var_place[i];
 		virt_cursor_place[dim_to_plot] = i_size;
 
 		type = fi_dim_value( view->variable, dim_to_plot, i_size, &temp_double, 
@@ -2967,7 +2929,7 @@ plot_XY_sc( size_t *start, size_t *count )
 			if( have_done_one )
 				strncat( legend, ", ", sizeof(legend) - strlen(legend) - 1 );
 			type = fi_dim_value( view->variable, i, *(start+i), &temp_double, temp_string,
-					&has_bounds, &bound_min, &bound_max, view->var_place );
+					&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 			if( type == NC_DOUBLE ) {
 				snprintf( temp2_string, 127, "%lg", temp_double );
 				strncat( legend, temp2_string, sizeof(legend) - strlen(legend) - 1 );
@@ -3122,7 +3084,7 @@ view_data_has_missing( View *v )
 		ny = v->variable->size[v->y_axis_id];
 
 	for( i=0; i<nx*ny; i++ ) {
-		dat = *((float *)(v->data) + i);
+		dat = v->data[i];
 		if( close_enough( dat, v->variable->fill_value) || (dat == FILL_FLOAT)) 
 			return(true);
 		}

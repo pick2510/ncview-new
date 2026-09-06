@@ -66,7 +66,7 @@
 
 Options	  options;
 std::vector<std::unique_ptr<NCVar>> variables;
-ncv_pixel *pixel_transform;
+std::vector<ncv_pixel> pixel_transform;
 FrameStore framestore;
 Stringlist *read_in_state;
 
@@ -99,7 +99,7 @@ ncview_main( int argc, char **argv )
 	input_files = parse_options ( argc,  argv );	/* This parses ALL the non-X11 command line options, not just the input files */
 	determine_file_type         ( input_files );
 
-	options.window_title = (char *)(*input_files)[0].string.c_str();
+	options.window_title = (*input_files)[0].string;
 	options.blowup       = 1;
 
 	/* this routine sets up the 'variables' structure */
@@ -198,16 +198,7 @@ parse_options( int argc, char *argv[] )
 				}
 
 			else if( strncmp( argv[i], "-cal", 4 ) == 0 ) {
-				/* Pre-existing bug, fixed here as a direct consequence of
-				 * this conversion: the size expression was
-				 * strlen(argv[i+1] + 2) -- strlen of the string starting 2
-				 * bytes in, not strlen(argv[i+1]) + 2 -- undersizing the
-				 * allocation for any calendar name longer than 2 characters
-				 * and heap-overflowing the strcpy() below on every real use
-				 * of -cal. Parenthesized correctly so the allocation
-				 * actually fits the string being copied. */
-				options.calendar = (char *)malloc( strlen(argv[i+1]) + 2 );
-				snprintf( options.calendar, strlen(argv[i+1]) + 2, "%s", argv[i+1] );
+				options.calendar = argv[i+1];
 				i++;
 				}
 
@@ -406,13 +397,11 @@ initialize_misc()
 	options.color_by_ndims	 = DEFAULT_COLOR_BY_NDIMS;
 	options.auto_overlay	 = DEFAULT_AUTO_OVERLAY;
 	options.autoscale	 = false;
-	options.calendar	 = NULL;
 	options.scale		 = 1.e30;	/* This val means do NOT do any user scaling of data */
 	options.offset		 = 1.e30;	/* This val means do NOT do any user offset of data */
 
-	options.overlay          = (OverlayOptions *)malloc( sizeof( OverlayOptions ));
+	options.overlay          = std::make_unique<OverlayOptions>();
 	options.overlay->doit    = false;
-	options.overlay->overlay = NULL;
 
 	options.maxsize_pct	 = 75;	/* maximum size of a window, in percent of screen, before switching to scrollbars */
 
@@ -421,7 +410,6 @@ initialize_misc()
 	options.missval_g 	= 255;
 	options.missval_b 	= 255;
 
-	framestore.frame = NULL;
 	framestore.valid = false;
 
 }
@@ -730,7 +718,7 @@ initialize_display_interface()
 	 * util.cc:data_to_pixels() unconditionally dereferences a NULL
 	 * pixel_transform for the first missing/fill-value pixel it sees.
 	 */
-	pixel_transform = (ncv_pixel *)malloc( (options.n_colors+options.n_extra_colors) * sizeof(ncv_pixel) );
+	pixel_transform.resize( options.n_colors+options.n_extra_colors );
 	for( int i=0; i<options.n_colors+options.n_extra_colors; i++ )
 		pixel_transform[i] = (ncv_pixel)i;
 

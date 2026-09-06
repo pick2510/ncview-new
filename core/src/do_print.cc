@@ -69,7 +69,7 @@ static char *get_login_name( void )
 
 static void print_header( FILE *out_file, float scale, size_t x, size_t y, size_t top_of_image );
 static void calc_scale( float *scale, size_t x, size_t y );
-static void set_font( FILE *outf, char *name, int size );
+static void set_font( FILE *outf, const char *name, int size );
 static void do_outline( FILE *f, size_t x, size_t y );
 static void print_other_info( FILE *out_file, float output_scale, size_t x_size, size_t y_size, 
 			size_t center_x, size_t center_y, size_t top_of_image, size_t bot_of_image );
@@ -99,7 +99,7 @@ print_init( void )
 
 	printopts.test_only		= TEST_ONLY;
 
-	snprintf( printopts.font_name, sizeof(printopts.font_name), "%s", FONT_NAME );
+	printopts.font_name = FONT_NAME;
 
 	printer_options_init(); /* this initializes the X-windows interface
 				   part of the pinter options panel */
@@ -127,31 +127,31 @@ do_print( void )
 	y_size = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
-	snprintf( printopts.out_file_name, 1024, "ncview.%s.ps", view->variable->name.c_str() );
+	printopts.out_file_name = "ncview." + view->variable->name + ".ps";
 	if( printer_options( &printopts ) == Message::Cancel )
 		return;
 
 	if( printopts.output_device == Device::Printer ) {
-	    snprintf( printopts.out_file_name, sizeof(printopts.out_file_name), "%s", "/tmp/ncview.XXXXXX" );
-	    outfid = mkstemp( printopts.out_file_name );
+	    printopts.out_file_name = "/tmp/ncview.XXXXXX";
+	    outfid = mkstemp( printopts.out_file_name.data() );
 	    if (outfid == -1) {
 		snprintf( tstr, 1499, "Error opening temporary file for output!\n" );
 		in_error( tstr );
 		return;
 	    }
-	    if( (outf = fopen(printopts.out_file_name, "a" )) == NULL ) {
+	    if( (outf = fopen(printopts.out_file_name.c_str(), "a" )) == NULL ) {
 		snprintf( tstr, 1499, "Error opening file %s for output!\n",
-			 printopts.out_file_name );
+			 printopts.out_file_name.c_str() );
 		in_error( tstr );
 		return;
 	    }
 	    close(outfid);
 	}
 	else {
-	    if( warn_if_file_exits( printopts.out_file_name ) == Message::Cancel )
+	    if( warn_if_file_exits( const_cast<char *>(printopts.out_file_name.c_str()) ) == Message::Cancel )
 		return;
-	    
-	    if( (outf = fopen(printopts.out_file_name, "w" )) == NULL ) {
+
+	    if( (outf = fopen(printopts.out_file_name.c_str(), "w" )) == NULL ) {
 		snprintf( tstr, 1499, "Error opening file %s for output!\n",
 			 outfname );
 		in_error( tstr );
@@ -179,7 +179,7 @@ do_print( void )
 		n_print = 0;
 		for( j=0; j<scaled_y_size; j++ ) {
 			for( i=0; i<scaled_x_size; i++ ) {
-				pix = *(view->pixels + j*scaled_x_size + i);
+				pix = view->pixels[j*scaled_x_size + i];
 				pix_to_rgb( pix, &r, &g, &b );
 				fprintf( outf, "%02x%02x%02x", (r>>8), (g>>8), (b>>8)); 
 				n_print += 6;
@@ -252,7 +252,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			}
 
 		/* move to the center, then half the string's width */
-		set_font( outf, printopts.font_name, printopts.header_font_size );
+		set_font( outf, printopts.font_name.c_str(), printopts.header_font_size );
 		fprintf( outf, "%ld %ld moveto\n",
 				center_x,
 				top_of_image+printopts.font_size );
@@ -262,7 +262,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 
 	/***** X axis title *****/
 	if( printopts.include_axis_labels ) {
-		set_font( outf, printopts.font_name, printopts.font_size );
+		set_font( outf, printopts.font_name.c_str(), printopts.font_size );
 		snprintf( tstr, sizeof(tstr), "%s", x_dim_longname.c_str() );
 		if( !x_units.empty() ) {
 			strncat( tstr, " (", sizeof(tstr) - strlen(tstr) - 1 );
@@ -275,7 +275,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		fprintf( outf, "(%s) show\n", tstr );
 
 		/***** Y axis title *****/
-		set_font( outf, printopts.font_name, printopts.font_size );
+		set_font( outf, printopts.font_name.c_str(), printopts.font_size );
 		snprintf( tstr, sizeof(tstr), "%s", y_dim_longname.c_str() );
 		if( !y_units.empty() ) {
 			strncat( tstr, " (", sizeof(tstr) - strlen(tstr) - 1 );
@@ -293,7 +293,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 
 	/***************** Other information *******************/
 	if( printopts.include_extra_info ) {
-		set_font( outf, printopts.font_name, printopts.font_size );
+		set_font( outf, printopts.font_name.c_str(), printopts.font_size );
 		fprintf( outf, "%ld %ld moveto\n", (long)(printopts.page_x_margin*printopts.ppi),
 			bot_of_image - 4*printopts.font_size );
 
@@ -346,8 +346,8 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 				dim_name     = const_cast<char *>(view->variable->dim[i]->name.c_str());
 				dim_longname = fi_dim_longname( view->variable->files.front().get()->id, dim_name );
 				units        = fi_dim_units( view->variable->files.front().get()->id, dim_name );
-				type         = fi_dim_value( view->variable, i, *(view->var_place+i),
-							&temp_double, tstr2, &has_bounds, &bound_min, &bound_max, view->var_place );
+				type         = fi_dim_value( view->variable, i, view->var_place[i],
+							&temp_double, tstr2, &has_bounds, &bound_min, &bound_max, view->var_place.data() );
 				if( type == NC_DOUBLE )
 					snprintf( tstr, 1499, "Current %s: %lg", dim_longname.c_str(), temp_double );
 				else
@@ -364,7 +364,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		/*** Name of file ***/
 		tstr[0] = '\0';
 		actual_place = (size_t *)malloc( sizeof(size_t)*20 );
-		virt_to_actual_place( view->variable, view->var_place, actual_place, &fdb );
+		virt_to_actual_place( view->variable, view->var_place.data(), actual_place, &fdb );
 		if( (fi_recdim_id( view->variable->files.front().get()->id ) != view->x_axis_id ) &&
 		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->y_axis_id)) 
 			snprintf( tstr, 1499, "Frame %ld in ", 
@@ -379,7 +379,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		sec_since_1970 = time(NULL);
 		snprintf( tstr, 1499, "%s %s", get_login_name(), ctime(&sec_since_1970) );
 		/* Make the id font a bit smaller */
-		set_font( outf, printopts.font_name, 
+		set_font( outf, printopts.font_name.c_str(), 
 				(int)((float)printopts.font_size*ID_FONT_SIZE_SCALE) );
 		fprintf( outf, "gsave %ld %ld translate 0 0 moveto\n", 
 			center_x + (long)((float)x_size*output_scale/2.0) 
@@ -395,15 +395,15 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		/* Before executing the command, ensure that the file name exists ... helps
 		 * to prevent problems if a strange file name is specified, such as "out.ps ; rm -r ."
 		 */
-		if( (f_dummy = fopen( printopts.out_file_name, "r" )) == NULL ) {
+		if( (f_dummy = fopen( printopts.out_file_name.c_str(), "r" )) == NULL ) {
 			fprintf( stderr, "Error, could not open file \"%s\" for reading, which is a prerequisite to printing it\n",
-				printopts.out_file_name );
+				printopts.out_file_name.c_str() );
 			exit( -1 );
 			}
 		fclose( f_dummy );
-		snprintf( tstr, 1499, "lpr \"%s\"\n", printopts.out_file_name );
+		snprintf( tstr, 1499, "lpr \"%s\"\n", printopts.out_file_name.c_str() );
 		istat = system( tstr );
-		unlink( printopts.out_file_name );
+		unlink( printopts.out_file_name.c_str() );
 		}
 
 	fprintf( stdout, "" );
@@ -415,7 +415,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 }
 
 	static void
-set_font( FILE *outf, char *name, int size )
+set_font( FILE *outf, const char *name, int size )
 {
 	fprintf( outf, "/%s findfont\n", name );
 	fprintf( outf, "%d scalefont setfont\n", size );

@@ -46,7 +46,7 @@ extern Options  options;
 static int	my_current_overlay;
 
 static int 	gen_xform( float value, int n, float *dimvals );
-static int 	*gen_overlay_internal( View *v, float *data, long n );
+static std::vector<int> gen_overlay_internal( View *v, float *data, long n );
 static void 	do_overlay_inner( View *v, float *data, long nvals, int suppress_screen_changes );
 static void 	overlay_find_closest_pt( size_t point_number, float locx, float locy, float *xvals, float *yvals, size_t nx, size_t ny,
 			size_t *idxx, size_t *idxy );
@@ -63,8 +63,8 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 		}
 
 	/* Free space for previous overlay */
-	if( options.overlay->doit && (options.overlay->overlay != NULL ))
-		free( options.overlay->overlay );
+	if( options.overlay->doit )
+		options.overlay->overlay.clear();
 
 	switch(n) {
 		
@@ -97,8 +97,8 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 				in_error( "Specified custom overlay filename is not a valid filename!\n" );
 				return;
 				}
-			options.overlay->overlay = gen_overlay( view, custom_filename ); 
-			if( options.overlay->overlay != NULL ) {
+			options.overlay->overlay = gen_overlay( view, custom_filename );
+			if( ! options.overlay->overlay.empty() ) {
 				options.overlay->doit = true;
 				if( ! suppress_screen_changes ) {
 					invalidate_all_saveframes();
@@ -123,7 +123,7 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 do_overlay_inner( View *v, float *data, long nvals, int suppress_screen_changes )
 {
 	options.overlay->overlay = gen_overlay_internal( v, data, nvals );
-	if( options.overlay->overlay != NULL ) {
+	if( ! options.overlay->overlay.empty() ) {
 		options.overlay->doit = true;
 		if( ! suppress_screen_changes ) {
 			invalidate_all_saveframes();
@@ -140,7 +140,7 @@ do_overlay_inner( View *v, float *data, long nvals, int suppress_screen_changes 
 overlay_init()
 {
 	my_current_overlay       = OVERLAY_NONE;
-	options.overlay->overlay = NULL;
+	options.overlay->overlay.clear();
 	options.overlay->doit    = false;
 }
 
@@ -181,7 +181,7 @@ determine_overlay_base_dir( char *overlay_base_dir, int n )
  * two data values per location, nvals is TWICE the number of locations.
  */
 	void
-gen_overlay_internal_mapped( View *v, float *data, long nvals, int *overlay )
+gen_overlay_internal_mapped( View *v, float *data, long nvals, std::vector<int> &overlay )
 {
 	NCDim	*dim_x, *dim_y;
 	size_t	ii, jj, kk, x_size, y_size, cursor_place[MAX_NC_DIMS];
@@ -240,7 +240,7 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, int *overlay )
 		/* printf( "pt %ld / %ld (x,y)=(%f,%f)\n", kk, nvals, x, y ); */
 		overlay_find_closest_pt( kk, x, y, dimval_x_2d, dimval_y_2d, x_size, y_size,
 			&ii, &jj );
-		*(overlay + jj*x_size + ii) = 1;
+		overlay[jj*x_size + ii] = 1;
 		}
 
 	free(dimval_x_2d);
@@ -254,12 +254,12 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, int *overlay )
  * first X coordinate, data[1] is the first Y coordinate, data[2] is the
  * second X coordinate, etc.
  */
-	int *
+	std::vector<int>
 gen_overlay_internal( View *v, float *data, long nvals )
 {
 	NCDim	*dim_x, *dim_y;
 	size_t	x_size, y_size, ii;
-	int	*overlay, x_is_mapped, y_is_mapped;
+	int	x_is_mapped, y_is_mapped;
 	float	x, y;
 	long	i, j;
 
@@ -269,13 +269,7 @@ gen_overlay_internal( View *v, float *data, long nvals )
 	x_size = v->variable->size[v->x_axis_id];
 	y_size = v->variable->size[v->y_axis_id];
 
-	overlay = (int *)malloc( x_size*y_size*sizeof(int) );
-	if( overlay == NULL ) {
-		in_error( "Malloc of overlay field failed\n" );
-		return( NULL );
-		}
-	for( ii=0; ii<x_size*y_size; ii++ )
-		*(overlay+ii) = 0;
+	std::vector<int> overlay( x_size*y_size, 0 );
 
 	x_is_mapped = (v->variable->dim_map_info[ v->x_axis_id ] != NULL);
 	y_is_mapped = (v->variable->dim_map_info[ v->y_axis_id ] != NULL);
@@ -290,13 +284,13 @@ gen_overlay_internal( View *v, float *data, long nvals )
 			y = data[ii+1];
 
 			i = gen_xform( x, x_size, dim_x->values.data() );
-			if( i == -2 ) 
-				return( NULL );
+			if( i == -2 )
+				return {};
 			j = gen_xform( y, y_size, dim_y->values.data() );
-			if( j == -2 ) 
-				return( NULL );
-			if( (i > 0) && (j > 0)) 
-				*(overlay + j*x_size + i) = 1;
+			if( j == -2 )
+				return {};
+			if( (i > 0) && (j > 0))
+				overlay[j*x_size + i] = 1;
 			}
 		}
 
@@ -306,7 +300,7 @@ gen_overlay_internal( View *v, float *data, long nvals )
 /******************************************************************************
  * Generate an overlay from data in an overlay file.
  */
-	int *
+	std::vector<int>
 gen_overlay( View *v, char *overlay_fname )
 {
 	FILE	*f;
@@ -314,15 +308,14 @@ gen_overlay( View *v, char *overlay_fname )
 	float	x, y, version;
 	long	i, j;
 	size_t	x_size, y_size;
-	int	*overlay;
 	NCDim	*dim_x, *dim_y;
 
 	/* Open the overlay file */
 	if( (f = fopen(overlay_fname, "r")) == NULL ) {
-		snprintf( err_mess, 1024, "Error: can't open overlay file named \"%s\"\n", 
+		snprintf( err_mess, 1024, "Error: can't open overlay file named \"%s\"\n",
 			overlay_fname );
 		in_error( err_mess );
-		return( NULL );
+		return {};
 		}
 
 	/* Make sure it is a valid overlay file
@@ -331,20 +324,20 @@ gen_overlay( View *v, char *overlay_fname )
 		snprintf( err_mess, 1024, "Error trying to read overlay file named \"%s\"\n",
 			overlay_fname );
 		in_error( err_mess );
-		return( NULL );
+		return {};
 		}
 	for( i=0; i<strlen(id_string); i++ )
 		if( line[i] != id_string[i] ) {
-			snprintf( err_mess, 1024, "Error trying to read overlay file named \"%s\"\nFile does not start with \"%s version-num\"\n", 
+			snprintf( err_mess, 1024, "Error trying to read overlay file named \"%s\"\nFile does not start with \"%s version-num\"\n",
 				overlay_fname, id_string );
 			in_error( err_mess );
-			return( NULL );
+			return {};
 			}
 	sscanf( line, "%*s %f", &version );
 	if( (version < 0.95) || (version > 1.05)) {
 		snprintf( err_mess, 1024, "Error, overlay file has unknown version number: %f\nI am set up for version 1.0\n", version );
 		in_error( err_mess );
-		return( NULL );
+		return {};
 		}
 
 	dim_x = v->variable->dim[v->x_axis_id].get();
@@ -353,28 +346,22 @@ gen_overlay( View *v, char *overlay_fname )
 	x_size = v->variable->size[v->x_axis_id];
 	y_size = v->variable->size[v->y_axis_id];
 
-	overlay = (int *)malloc( x_size*y_size*sizeof(int) );
-	if( overlay == NULL ) {
-		in_error( "Malloc of overlay field failed\n" );
-		return( NULL );
-		}
-	for( i=0; i<x_size*y_size; i++ )
-		*(overlay+i) = 0;
+	std::vector<int> overlay( x_size*y_size, 0 );
 
-	/* Read in the overlay file -- skip lines with first char of #, 
+	/* Read in the overlay file -- skip lines with first char of #,
 	 * they are comments.
 	 */
-	while( fgets(line, 80, f) != NULL ) 
+	while( fgets(line, 80, f) != NULL )
 		if( line[0] != '#' ) {
 			sscanf( line, "%f %f", &x, &y );
 			i = gen_xform( x, x_size, dim_x->values.data() );
-			if( i == -2 ) 
-				return( NULL );
+			if( i == -2 )
+				return {};
 			j = gen_xform( y, y_size, dim_y->values.data() );
-			if( j == -2 ) 
-				return( NULL );
-			if( (i > 0) && (j > 0)) 
-				*(overlay + j*x_size + i) = 1;
+			if( j == -2 )
+				return {};
+			if( (i > 0) && (j > 0))
+				overlay[j*x_size + i] = 1;
 			}
 
 	return( overlay );

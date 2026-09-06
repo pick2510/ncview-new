@@ -151,7 +151,7 @@ void 	fill_dim_structs   ( NCVar *v );
 void 	expand_data	   ( float *big_data, View *v, size_t array_size );
 void 	check_ranges       ( NCVar *var );
 std::string limit_string   ( std::string_view s );
-int 	*gen_overlay       ( View *v, char *overlay_fname );
+std::vector<int> gen_overlay       ( View *v, char *overlay_fname );
 void 	fmt_time	   ( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity );
 int	n_vars_in_list	   ( const std::vector<std::unique_ptr<NCVar>> &v );
 void 	set_blowup_type	   ( BlowupType new_type );

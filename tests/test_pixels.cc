@@ -25,7 +25,7 @@
 
 // Not declared in any header (see protos.h's own comment on why 'options'
 // and 'variables' are): the one other global data_to_pixels() depends on.
-extern ncv_pixel *pixel_transform;
+extern std::vector<ncv_pixel> pixel_transform;
 
 namespace {
 
@@ -35,10 +35,8 @@ namespace {
 // identity table (see initialize_display_interface()'s comment). Backed by
 // a static vector, not a raw new[], so nothing to free.
 void setup_identity_pixel_transform(int n_colors, int n_extra_colors) {
-    static std::vector<ncv_pixel> table;
-    table.resize(n_colors + n_extra_colors);
-    for (size_t i = 0; i < table.size(); i++) table[i] = (ncv_pixel)i;
-    pixel_transform = table.data();
+    pixel_transform.resize(n_colors + n_extra_colors);
+    for (size_t i = 0; i < pixel_transform.size(); i++) pixel_transform[i] = (ncv_pixel)i;
 }
 
 // A minimal but fully wired View + NCVar over a caller-supplied nx*ny data
@@ -49,7 +47,6 @@ struct PixelFixture {
     NCVar var{};
     View view{};
     std::vector<float> data;
-    std::vector<ncv_pixel> pixels;
     size_t nx, ny;
 
     PixelFixture(size_t nx_, size_t ny_, std::vector<float> values,
@@ -70,7 +67,7 @@ struct PixelFixture {
         view.variable = &var;
         view.x_axis_id = 1;
         view.y_axis_id = 0;
-        view.data = data.data();
+        view.data = data;
     }
 
     // Runs data_to_pixels() with the given options, sizing the pixel
@@ -93,11 +90,10 @@ struct PixelFixture {
 
         size_t new_nx, new_ny;
         view_get_scaled_size(blowup, nx, ny, &new_nx, &new_ny);
-        pixels.assign(new_nx * new_ny, 0);
-        view.pixels = pixels.data();
+        view.pixels.assign(new_nx * new_ny, 0);
 
         REQUIRE(data_to_pixels(&view) == 0);
-        return pixels;
+        return view.pixels;
     }
 };
 

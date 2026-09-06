@@ -176,8 +176,8 @@ fi_var_units( int fileid, std::string_view var_name )
 fi_dim_calendar( int fileid, std::string_view dim_name )
 {
 	/* Command line specified calendar OVERRIDES info in the file */
-	if( options.calendar != NULL )
-		return( std::string( options.calendar ));
+	if( ! options.calendar.empty() )
+		return options.calendar;
 
 	if( file_type != FILE_TYPE_NETCDF )
 		{

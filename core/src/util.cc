@@ -47,7 +47,7 @@ extern ut_system *unitsys;
 
 extern Options   options;
 extern std::vector<std::unique_ptr<NCVar>> variables;
-extern ncv_pixel *pixel_transform;
+extern std::vector<ncv_pixel> pixel_transform;
 extern FrameStore framestore;
 
 static void handle_time_dim( int fileid, NCVar *v, int dimid );
@@ -197,11 +197,11 @@ data_to_pixels( View *v )
 	scaled_data.resize( new_x_size*new_y_size );
 
 	/* If we are doing overlays, implement them */
-	if( options.overlay->doit && (options.overlay->overlay != NULL)) {
+	if( options.overlay->doit && (! options.overlay->overlay.empty())) {
 		for( i=0; i<(x_size*y_size); i++ ) {
-			*((float *)v->data + i) = 
-			     (float)(1 - *(options.overlay->overlay+i)) * *((float *)v->data + i) +
-			     (float)(*(options.overlay->overlay+i)) * v->variable->fill_value;
+			v->data[i] =
+			     (float)(1 - options.overlay->overlay[i]) * v->data[i] +
+			     (float)(options.overlay->overlay[i]) * v->variable->fill_value;
 			}
 		}
 
@@ -256,7 +256,7 @@ data_to_pixels( View *v )
 			}
 		else
 			{
-			if( ! data_has_mv( (float *)v->data, x_size*y_size, fill_value ) )
+			if( ! data_has_mv( v->data.data(), x_size*y_size, fill_value ) )
 				return( -1 );
 			v->variable->user_max = 1;
 			}
@@ -267,7 +267,7 @@ data_to_pixels( View *v )
 	    	snprintf( error_message, 1022, "min and max both %g for variable %s",
 	    		v->variable->user_min, v->variable->name.c_str() );
 		x_error( error_message );
-		if( ! data_has_mv( (float *)v->data, x_size*y_size, fill_value ) ) {
+		if( ! data_has_mv( v->data.data(), x_size*y_size, fill_value ) ) {
 			v->variable->user_max += 0.1 * v->variable->user_max;
 			v->variable->user_min -= 0.1 * v->variable->user_min;
 			v->variable->auto_set_no_range = 1;
@@ -294,7 +294,7 @@ data_to_pixels( View *v )
 		for( i=0; i<new_x_size; i++ ) {
 			rawdata =  scaled_data[i + j2*new_x_size];
 			if( close_enough(rawdata, fill_value) || (rawdata == FILL_FLOAT))
-				pix_val = *pixel_transform;
+				pix_val = pixel_transform[0];
 			else
 				{
 				data = (rawdata - v->variable->user_min) / data_range;
@@ -320,9 +320,9 @@ data_to_pixels( View *v )
 					data = 1. - data;
 				pix_val = (ncv_pixel)(data * options.n_colors) + 10;
 				if( options.display_type == PseudoColor )
-					pix_val = *(pixel_transform+pix_val);
+					pix_val = pixel_transform[pix_val];
 				}
-			*(v->pixels + i + j*new_x_size) = pix_val;
+			v->pixels[i + j*new_x_size] = pix_val;
 			}
 		}
 
@@ -1530,7 +1530,7 @@ contract_data( float *small_data, View *v, float fill_value )
 			if( joffset >= ny )
 				joffset = ny-1;
 			idx = ioffset + joffset*nx;
-			tmpv[ii + jj*n] = *((float *)v->data + idx);
+			tmpv[ii + jj*n] = v->data[idx];
 			}
 
 		if( options.shrink_method == ShrinkMethod::Mean )
@@ -1599,7 +1599,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 #ifdef CHECK_MEM
 					if( il*blowup + jl*nxb*blowup + i2b >= array_size ) { fprintf( stderr, "mem error 001\n" ); exit(-1); }
 #endif
-					*(big_data + il*blowup + jl*nxb*blowup + i2b) = *((float *)((float *)v->data)+il+jl*nxl);
+					*(big_data + il*blowup + jl*nxb*blowup + i2b) = v->data[il+jl*nxl];
 					}
 			for( line=1; line<blowup; line++ )
 				for( i2b=0; i2b<nxb; i2b++ ) {
@@ -1624,8 +1624,8 @@ expand_data( float *big_data, View *v, size_t array_size )
 		/* Horizontal base lines */
 		for( jl=0; jl<nyl; jl++ ) {
 			for( il=0; il<nxl-1; il++ ) {
-				base_val  = *((float *)v->data + il   + jl*nxl);
-				right_val = *((float *)v->data + il+1 + jl*nxl);
+				base_val  = v->data[il   + jl*nxl];
+				right_val = v->data[il+1 + jl*nxl];
 
 				miss_base  = close_enough(base_val,  fill_val);
 				miss_right = close_enough(right_val, fill_val);
@@ -1666,14 +1666,14 @@ expand_data( float *big_data, View *v, size_t array_size )
 #ifdef CHECK_MEM
 			if( (nxl-1)*blowup+offset_xb + jl*blowup*nxb + offset_yb*nxb >= array_size ) { fprintf( stderr, "mem error 004\n" ); exit(-1); }
 #endif
-			*(big_data + (nxl-1)*blowup+offset_xb + jl*blowup*nxb + offset_yb*nxb ) = *((float *)v->data + (nxl-1) + jl*nxl);
+			*(big_data + (nxl-1)*blowup+offset_xb + jl*blowup*nxb + offset_yb*nxb ) = v->data[(nxl-1) + jl*nxl];
 			}
 
 		/* Vertical base lines */
 		for( jl=0; jl<nyl-1; jl++ ) 
 		for( il=0; il<nxl;   il++ ) {
-			base_val  = *((float *)v->data + il + jl*nxl);
-			below_val = *((float *)v->data + il + (jl+1)*nxl);
+			base_val  = v->data[il + jl*nxl];
+			below_val = v->data[il + (jl+1)*nxl];
 
 			miss_base  = close_enough(base_val,  fill_val);
 			miss_below = close_enough(below_val, fill_val);
@@ -1716,7 +1716,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 #ifdef CHECK_MEM
 			if( il*blowup+offset_xb + (nyl-1)*blowup*nxb + offset_yb*nxb >= array_size ) { fprintf( stderr, "mem error 006\n" ); exit(-1); }
 #endif
-			*(big_data + il*blowup+offset_xb + (nyl-1)*blowup*nxb + offset_yb*nxb) = *((float *)v->data + il + (nyl-1)*nxl);
+			*(big_data + il*blowup+offset_xb + (nyl-1)*blowup*nxb + offset_yb*nxb) = v->data[il + (nyl-1)*nxl];
 			}
 
 		/* Now, fill in the interior of the interior squares by 
@@ -1846,7 +1846,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 		/* Lower left corner */
 		il = 0;
 		jl = 0;
-		cval = *((float *)v->data + il + jl*nxl);          /* Data value in lower left corner */
+		cval = v->data[il + jl*nxl];          /* Data value in lower left corner */
 		if( ! close_enough( cval, fill_val )) {
 			/* Fill in lower left corner */
 			for( j2b=0; j2b<=offset_yb; j2b++ )
@@ -1861,7 +1861,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 		/* Lower right corner */
 		il = nxl - 1;
 		jl = 0;
-		cval = *((float *)v->data + il + jl*nxl);          /* Data value in lower left corner */
+		cval = v->data[il + jl*nxl];          /* Data value in lower left corner */
 		if( ! close_enough( cval, fill_val )) {
 			/* Fill in lower right corner */
 			for( j2b=0; j2b<=offset_yb; j2b++ )
@@ -1876,7 +1876,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 		/* Upper right corner */
 		il = nxl - 1;
 		jl = nyl - 1;
-		cval = *((float *)v->data + il + jl*nxl);          /* Data value in lower left corner */
+		cval = v->data[il + jl*nxl];          /* Data value in lower left corner */
 		if( ! close_enough( cval, fill_val )) {
 			/* Fill in upper right corner */
 			for( j2b=offset_yb; j2b<blowup; j2b++ )
@@ -1891,7 +1891,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 		/* Upper left corner */
 		il = 0;
 		jl = nyl - 1;
-		cval = *((float *)v->data + il + jl*nxl);          /* Data value in lower left corner */
+		cval = v->data[il + jl*nxl];          /* Data value in lower left corner */
 		if( ! close_enough( cval, fill_val )) {
 			/* Fill in upper left corner */
 			for( j2b=offset_yb; j2b<blowup; j2b++ )
@@ -1906,7 +1906,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 		/* Paint missing value blocks */
 		for( jl=0; jl<nyl; jl++ )
 		for( il=0; il<nxl; il++ ) {
-			base_val  = *((float *)v->data + il   + jl*nxl);
+			base_val  = v->data[il   + jl*nxl];
 			if( close_enough( base_val, fill_val )) {
 				for( j2b=0; j2b<blowup; j2b++ )
 				for( i2b=0; i2b<blowup; i2b++ ) {
