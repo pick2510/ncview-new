@@ -139,7 +139,7 @@ calcalcs_cal *ccs_init_calendar( const char *calname )
 			}
 		retval->sig  = CCS_VALID_SIG;
 		retval->name = (char *)malloc( sizeof(char) * (strlen(calname)+1) );
-		strcpy( retval->name, calname );
+		snprintf( retval->name, strlen(calname)+1, "%s", calname );
 
 		retval->mixed = 1;
 		retval->early_cal = ccs_init_calendar( "proleptic_julian" );
@@ -183,7 +183,7 @@ calcalcs_cal *ccs_init_calendar( const char *calname )
 			}
 		retval->sig  = CCS_VALID_SIG;
 		retval->name = (char *)malloc( sizeof(char) * (strlen(calname)+1) );
-		strcpy( retval->name, calname );
+		snprintf( retval->name, strlen(calname)+1, "%s", calname );
 
 		retval->mixed = 1;
 		retval->early_cal = ccs_init_calendar( "proleptic_julian_y0" );
@@ -223,7 +223,7 @@ calcalcs_cal *ccs_init_calendar( const char *calname )
 			}
 		retval->sig  = CCS_VALID_SIG;
 		retval->name = (char *)malloc( sizeof(char) * (strlen(calname)+1) );
-		strcpy( retval->name, calname );
+		snprintf( retval->name, strlen(calname)+1, "%s", calname );
 		retval->ndays_reg  = 365;
 		retval->ndays_leap = 366;
 
@@ -247,7 +247,7 @@ calcalcs_cal *ccs_init_calendar( const char *calname )
 			}
 		retval->sig  = CCS_VALID_SIG;
 		retval->name = (char *)malloc( sizeof(char) * (strlen(calname)+1) );
-		strcpy( retval->name, calname );
+		snprintf( retval->name, strlen(calname)+1, "%s", calname );
 		retval->ndays_reg  = 365;
 		retval->ndays_leap = 366;
 
@@ -268,7 +268,7 @@ calcalcs_cal *ccs_init_calendar( const char *calname )
 			}
 		retval->sig  = CCS_VALID_SIG;
 		retval->name = (char *)malloc( sizeof(char) * (strlen(calname)+1) );
-		strcpy( retval->name, calname );
+		snprintf( retval->name, strlen(calname)+1, "%s", calname );
 		retval->ndays_reg  = 365;
 		retval->ndays_leap = 366;
 
@@ -290,7 +290,7 @@ calcalcs_cal *ccs_init_calendar( const char *calname )
 			}
 		retval->sig  = CCS_VALID_SIG;
 		retval->name = (char *)malloc( sizeof(char) * (strlen("noleap")+1) );
-		strcpy( retval->name, "noleap" );
+		snprintf( retval->name, strlen("noleap")+1, "%s", "noleap" );
 		retval->ndays_reg  = 365;
 		retval->ndays_leap = 365;
 
@@ -310,7 +310,7 @@ calcalcs_cal *ccs_init_calendar( const char *calname )
 			}
 		retval->sig  = CCS_VALID_SIG;
 		retval->name = (char *)malloc( sizeof(char) * (strlen(calname)+1) );
-		strcpy( retval->name, calname );
+		snprintf( retval->name, strlen(calname)+1, "%s", calname );
 		retval->ndays_reg  = 360;
 		retval->ndays_leap = 360;
 
@@ -760,7 +760,7 @@ static void ccs_gxd_add_country( char *code, char *longname, int year, int month
 			code );
 		exit(-1);
 		}
-	strcpy( ccs_xition_dates[ccs_n_country_codes]->code, code );
+	snprintf( ccs_xition_dates[ccs_n_country_codes]->code, strlen(code)+1, "%s", code );
 
 	ccs_xition_dates[ccs_n_country_codes]->longname = (char *)malloc( sizeof(char) * (strlen(longname)+1) );
 	if( ccs_xition_dates[ccs_n_country_codes]->longname == NULL ) {
@@ -768,7 +768,7 @@ static void ccs_gxd_add_country( char *code, char *longname, int year, int month
 			longname );
 		exit(-1);
 		}
-	strcpy( ccs_xition_dates[ccs_n_country_codes]->longname, longname );
+	snprintf( ccs_xition_dates[ccs_n_country_codes]->longname, strlen(longname)+1, "%s", longname );
 
  	ccs_xition_dates[ccs_n_country_codes]->year  = year;
  	ccs_xition_dates[ccs_n_country_codes]->month = month;
