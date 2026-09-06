@@ -215,7 +215,7 @@ stringlist_copy_aux( Stringlist *new_el, void *aux, int sltype )
 				fprintf( stderr, "stringlist_copy_aux: failed to allocate a string of length %d\n", slen+1 );
 				return(-1);
 				}
-			strcpy( (char *)(new_el->aux), (char *)aux );
+			snprintf( (char *)(new_el->aux), slen + 1, "%s", (char *)aux );
 			break;
 
 		case SLTYPE_FLOAT:
@@ -536,7 +536,7 @@ stringlist_copy_name( Stringlist *new_el, char *new_string )
 		fprintf( stderr, "string trying to add: %s\n", new_string );
 		return( -1 );
 		}
-	strcpy( new_el->string, new_string );
+	snprintf( new_el->string, strlen( new_string )+1, "%s", new_string );
 
 	return(0);
 }
