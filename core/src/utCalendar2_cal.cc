@@ -244,10 +244,10 @@ fuckyou = (char *)ccs_err_str((int)ierr);
 			}
 
 		prev_calendar = (char *)malloc( sizeof(char) * (strlen(cal2use->name)+1 ));
-		strcpy( prev_calendar, cal2use->name );
+		snprintf( prev_calendar, strlen(cal2use->name)+1, "%s", cal2use->name );
 
 		prev_dataunits_str = (char *)malloc( sizeof(char) * (strlen(dataunits_str)+1 ));
-		strcpy( prev_dataunits_str, dataunits_str );
+		snprintf( prev_dataunits_str, strlen(dataunits_str)+1, "%s", dataunits_str );
 		}
 
 	/* Convert user value of offset to floating point days */
@@ -441,10 +441,10 @@ int utInvCalendar2_cal( int year, int month, int day, int hour, int minute, doub
 			}
 
 		prev_calendar = (char *)malloc( sizeof(char) * (strlen(cal2use->name)+1 ));
-		strcpy( prev_calendar, cal2use->name );
+		snprintf( prev_calendar, strlen(cal2use->name)+1, "%s", cal2use->name );
 
 		prev_user_unit_str = (char *)malloc( sizeof(char) * (strlen(user_unit_str)+1 ));
-		strcpy( prev_user_unit_str, user_unit_str );
+		snprintf( prev_user_unit_str, strlen(user_unit_str)+1, "%s", user_unit_str );
 		}
 
 	/* Turn passed date into a Julian day */
@@ -732,7 +732,7 @@ static calcalcs_cal *getcal( const char *name )
 
 	known_cal[new_index] = new_cal;
 	known_cal_name[new_index] = (char *)malloc( sizeof(char) * (strlen(name)+1 ));
-	strcpy( known_cal_name[new_index], name );
+	snprintf( known_cal_name[new_index], strlen(name)+1, "%s", name );
 
 	return( new_cal );
 }
@@ -822,7 +822,7 @@ static void unknown_cal_emit_warning( const char *calendar_name )
 		return;
 		}
 
-	strcpy( unknown_cal_emitted_warning_for[ n_unkcal ], calendar_name );
+	snprintf( unknown_cal_emitted_warning_for[ n_unkcal ], strlen(calendar_name)+1, "%s", calendar_name );
 	n_unkcal++;
 }
 
@@ -840,8 +840,9 @@ static void strip_timezone_info( const char *units_orig, char *out )
 	 */
 
 	char *ptr;
-	char *s = (char *)malloc( strlen( units_orig ) + 1 );
-	strcpy( s, units_orig );
+	size_t s_size = strlen( units_orig ) + 1;
+	char *s = (char *)malloc( s_size );
+	snprintf( s, s_size, "%s", units_orig );
 
 	/* First time thru, figure out how many tokens there are. If less than
 	 * 5, just return the original string. If more than 5, it's an error.
@@ -854,7 +855,7 @@ static void strip_timezone_info( const char *units_orig, char *out )
 	while( ptr != NULL ) {
 		ntoks++;
 		if( ntoks != 5 ) {
-			strcat( out, ptr );
+			strncat( out, ptr, s_size - strlen(out) - 1 );
 			}
 
 		if( ntoks > 5 ) {
@@ -866,7 +867,7 @@ static void strip_timezone_info( const char *units_orig, char *out )
 		ptr = strtok( NULL, " " );
 
 		if( ptr != NULL )
-			strcat( out, " " );
+			strncat( out, " ", s_size - strlen(out) - 1 );
 		}
 
 	free( s );
