@@ -30,6 +30,8 @@
 /* This memory check makes things run slow */
 /* define CHECK_MEM */
 
+#include <vector>
+
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
@@ -204,7 +206,8 @@ data_to_pixels( View *v )
 	long	i, j, j2;
 	size_t	x_size, y_size, new_x_size, new_y_size;
 	ncv_pixel pix_val;
-	float	data_range, rawdata, data, fill_value, *scaled_data;
+	float	data_range, rawdata, data, fill_value;
+	std::vector<float> scaled_data;
 	long	blowup;
 	Message	result;
 	MinMaxMethod	orig_minmax_method;
@@ -228,15 +231,10 @@ data_to_pixels( View *v )
 
 	view_get_scaled_size( options.blowup, x_size, y_size, &new_x_size, &new_y_size );
 
-	scaled_data   = (float *)malloc( new_x_size*new_y_size*sizeof(float));
-	if( scaled_data == NULL ) {
-		fprintf( stderr, "ncview: data_to_pixels: can't allocate data expansion array\n" );
-		fprintf( stderr, "requested size: %ld bytes\n", new_x_size*new_y_size*sizeof(float) );
-		fprintf( stderr, "new_x_size, new_y_size, float_size: %ld %ld %ld\n", 
-				new_x_size, new_y_size, sizeof(float) );
-		fprintf( stderr, "blowup: %d\n", options.blowup );
-		exit( -1 );
-		}
+	/* std::vector's own allocator throws std::bad_alloc on failure (there is
+	 * no NULL-check equivalent to preserve); everything downstream is
+	 * otherwise identical to the old malloc()'d buffer. */
+	scaled_data.resize( new_x_size*new_y_size );
 
 	/* If we are doing overlays, implement them */
 	if( options.overlay->doit && (options.overlay->overlay != NULL)) {
@@ -251,12 +249,12 @@ data_to_pixels( View *v )
 
 	if( blowup > 0 ) {
 		if( options.debug ) printf( "..expanding data, blowup=%ld\n", blowup );
-		expand_data( scaled_data, v, new_x_size*new_y_size );
+		expand_data( scaled_data.data(), v, new_x_size*new_y_size );
 		}
 	else
 		{
 		if( options.debug ) printf( "..contracting data, blowup=%ld\n", blowup );
-		contract_data( scaled_data, v, fill_value );
+		contract_data( scaled_data.data(), v, fill_value );
 		}
 
 	data_range = v->variable->user_max - v->variable->user_min;
@@ -334,7 +332,7 @@ data_to_pixels( View *v )
 			j2 = new_y_size - j - 1;
 
 		for( i=0; i<new_x_size; i++ ) {
-			rawdata =  *(scaled_data + i + j2*new_x_size);
+			rawdata =  scaled_data[i + j2*new_x_size];
 			if( close_enough(rawdata, fill_value) || (rawdata == FILL_FLOAT))
 				pix_val = *pixel_transform;
 			else
@@ -368,7 +366,6 @@ data_to_pixels( View *v )
 			}
 		}
 
-	free( scaled_data );
 	return( 0 );
 }
 
@@ -645,7 +642,8 @@ init_min_max( NCVar *var )
 {
 	long	n_other, i, step;
 	size_t	n_timesteps;
-	float	*data, init_min, init_max;
+	float	init_min, init_max;
+	std::vector<float> data;
 	int	verbose;
 
 	init_min =  9.9e30;
@@ -661,45 +659,38 @@ init_min_max( NCVar *var )
 	for( i=1; i<var->n_dims; i++ )
 		n_other *= *(var->size+i);
 
-	data = (float *)malloc( n_other * sizeof( float ));
-	if( data == NULL ) {
-		fprintf( stderr, "ncview: init_min_max_file: failed on malloc of data array\n" );
-		exit( -1 );
-		}
+	data.resize( n_other );
 
 	/* We always get the min and max of the first, middle, and last time 
 	 * entries if they are distinct.
 	 */
 	verbose = true;
 	step    = 0L;
-	get_min_max_onestep( var, n_other, step, data, 
+	get_min_max_onestep( var, n_other, step, data.data(), 
 			&(var->global_min), &(var->global_max), verbose );
 	if( n_timesteps == 1 ) {
 		if( verbose )
 			printf( "\n" );
-		free( data );
 		check_ranges( var );
 		return;
 		}
 
 	step = n_timesteps-1L;
-	get_min_max_onestep( var, n_other, step, data, 
+	get_min_max_onestep( var, n_other, step, data.data(), 
 			&(var->global_min), &(var->global_max), verbose );
 	if( n_timesteps == 2 ) {
 		if( verbose )
 			printf( "\n" );
-		free( data );
 		check_ranges( var );
 		return;
 		}
 
 	step = (n_timesteps-1L)/2L;
-	get_min_max_onestep( var, n_other, step, data, 
+	get_min_max_onestep( var, n_other, step, data.data(), 
 			&(var->global_min), &(var->global_max), verbose );
 	if( n_timesteps == 3 ) {
 		if( verbose )
 			printf( "\n" );
-		free( data );
 		check_ranges( var );
 		return;
 		}
@@ -713,10 +704,10 @@ init_min_max( NCVar *var )
 		case MinMaxMethod::Med:     
 			verbose = true;
 			step = (n_timesteps-1L)/4L;
-			get_min_max_onestep( var, n_other, step, data, 
+			get_min_max_onestep( var, n_other, step, data.data(), 
 				&(var->global_min), &(var->global_max), verbose );
 			step = (3L*(n_timesteps-1L))/4L;
-			get_min_max_onestep( var, n_other, step, data, 
+			get_min_max_onestep( var, n_other, step, data.data(), 
 				&(var->global_min), &(var->global_max), verbose );
 			if( verbose )
 				printf( "\n" );
@@ -727,7 +718,7 @@ init_min_max( NCVar *var )
 			for( i=2; i<=9; i++ ) { 
 				printf( "." );
 				step = (i*(n_timesteps-1L))/10L;
-				get_min_max_onestep( var, n_other, step, data, 
+				get_min_max_onestep( var, n_other, step, data.data(), 
 					&(var->global_min), &(var->global_max), verbose );
 				}
 			if( verbose )
@@ -738,7 +729,7 @@ init_min_max( NCVar *var )
 			verbose = true;
 			for( i=1; i<(n_timesteps-2L); i++ ) {
 				step = i;
-				get_min_max_onestep( var, n_other, step, data, 
+				get_min_max_onestep( var, n_other, step, data.data(), 
 					&(var->global_min), &(var->global_max), verbose );
 				}
 			if( verbose )
@@ -752,7 +743,6 @@ init_min_max( NCVar *var )
 		}
 		
 	check_ranges( var );
-	free( data );
 }
 
 /******************************************************************************
@@ -815,13 +805,16 @@ check_ranges( NCVar *var )
 get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data, 
 					float *min, float *max, int verbose )
 {
-	size_t	*start, *count, n_time;
+	std::vector<size_t> start_v, count_v;
+	size_t	n_time;
 	size_t	j;
 	int	i;
 	float	dat, fill_v;
-	
-	count  = (size_t *)malloc( var->n_dims * sizeof( size_t ));
-	start  = (size_t *)malloc( var->n_dims * sizeof( size_t ));
+
+	count_v.resize( var->n_dims );
+	start_v.resize( var->n_dims );
+	size_t	*start = start_v.data();
+	size_t	*count = count_v.data();
 	fill_v = var->fill_value;
 
 	n_time = *(var->size);
@@ -854,9 +847,6 @@ get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data,
 				*min = dat;
 			}
 		}
-		
-	free( count );
-	free( start );
 }
 
 /******************************************************************************
@@ -1404,19 +1394,18 @@ util_mode( float *x, size_t n, float fill_value )
 {
 	long 	i, n_vals;
 	double 	sum;
-	long 	ival, *count_vals, max_count, *unique_vals;
+	long 	ival, max_count;
+	std::vector<long> count_vals, unique_vals;
 	int	foundval, j, max_index;
 	float	retval;
 
-	count_vals  = (long *)malloc( n*sizeof(long) );
-	unique_vals = (long *)malloc( n*sizeof(long) );
+	count_vals.resize( n );
+	unique_vals.resize( n );
 
 	sum = 0.0;
 	n_vals = 0;
 	for( i=0L; i<n; i++ ) {
 		if( close_enough( x[i], fill_value )) {
-			free(count_vals);
-			free(unique_vals);
 			return( fill_value );
 			}
 		ival = (x[i] > 0.) ? (long)(x[i]+.4) : (long)(x[i]-.4); /* round x[i] to nearest integer */
@@ -1445,9 +1434,6 @@ util_mode( float *x, size_t n, float fill_value )
 			}
 
 	retval = (float)unique_vals[max_index];
-
-	free(count_vals);
-	free(unique_vals);
 
 	return( retval );
 }
