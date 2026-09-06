@@ -158,3 +158,41 @@ jobs:
         with:
           name: ncview-windows
           path: build/ncview-*.zip
+
+  # modernization.md Phase 0d / PORTING.md's own verification step 5 ("Leak/
+  # UB pass -- the mechanical C->C++ conversion of 14k lines is exactly
+  # where this pays off"). Linux-only (ASan/UBSan support on the other two
+  # platforms' toolchains here is less reliable, and one clean sanitizer
+  # signal is enough to act on). Debug, not RelWithDebInfo, for accurate
+  # stack traces and so -O2 doesn't optimize away what UBSan is looking for.
+  # No package/upload steps: this job exists to fail loudly on real bugs
+  # while the core modernization work is in progress, not to ship a
+  # release artifact -- see core/WARNINGS.md for the equivalent approach to
+  # the -Wall/-Wextra baseline.
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libnetcdf-dev libexpat1-dev \
+            libx11-dev libxext-dev libxft-dev libxinerama-dev \
+            libxcursor-dev libxrender-dev libxfixes-dev \
+            flex bison texinfo patchelf
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          -DFLTK_BACKEND_WAYLAND=OFF -DFLTK_BUILD_GL=OFF
+          -DNCVIEW_SANITIZE=address,undefined
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure

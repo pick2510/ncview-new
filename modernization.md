@@ -163,7 +163,17 @@ Strict parity means these are *found* during the work and fixed afterwards, each
 - `core/src/view.cc:1231` — an unguarded `printf("got an expose event\n")` in `redraw_ccontour()`, writing to stdout in normal operation.
 - `core/src/util.cc:232-234` — `size_t` values printed through `%ld`, undefined on Windows/LLP64 where the CI already builds.
 - `core/src/udu.cc:udu_calc_tgran()` — always returns `TGRAN_SEC` for any CF-convention "`<units> since <reference-date>`" time axis (i.e. virtually every real netCDF file), never `TGRAN_MIN`/`HOUR`/`DAY`/`MONTH`/`YEAR`. Root cause (confirmed against this project's vendored UDUNITS-2, `third_party/udunits2`, pinned v2.2.28): `ut_are_convertible(unit, seconds)` reports a unit *with* a reference origin as not convertible to plain `seconds` (a bare `"days"`, with no `"since"`, correctly reports convertible), so the function's own `if (!ut_are_convertible(...)) return TGRAN_SEC;` guard fires unconditionally. Found via `tests/test_time_fmt.cc`'s `udu_calc_tgran` characterization test (Phase 0b) — see that test's comment for the full derivation.
-- Whatever 0d's sanitizer run turns up that RAII does not resolve on its own.
+
+## Sanitizer findings (Phase 0d)
+
+Two passes, both against a local `-DCMAKE_BUILD_TYPE=Debug -DNCVIEW_SANITIZE=address,undefined` build (not yet run in CI at the time of writing):
+
+1. **`ctest` / the doctest suite (`ncview_core_tests`)**: completely clean. No ASan errors, no LeakSanitizer reports, no UBSan `runtime error:` output, across all 47 test cases (`ASAN_OPTIONS=detect_leaks=1`, `UBSAN_OPTIONS=print_stacktrace=1`).
+
+2. **The real `ncview` binary, driven under Xvfb through every `NCVIEW_TEST_DIALOG`/`NCVIEW_TEST_BUTTON` hook** (the same vocabulary `tests/ui_smoke.sh` from Phase 0c uses): 16 of 18 combinations clean (leak detection deliberately off for this pass — `ncview_main()` never frees `variables`/`read_in_state`/etc. before exit, by design, for a long-running interactive app; LeakSanitizer flags all of that as "still reachable" noise that has nothing to do with real bugs). One real, reproducible defect found:
+
+   - **`core/src/view.cc:2481-2495`, `view_data_edit()` — heap-buffer-overflow, off-by-one.** `line_array = malloc(sizeof(char*) * n_entries)` allocates exactly `n_entries` (`= x_size * y_size`) pointers; the fill loop writes indices `0..n_entries-1`, then `line_array[index] = NULL;` (line 2495) writes one pointer *past* the allocation — `x_dataedit()`'s NUL-terminator convention needs `n_entries + 1` slots, not `n_entries`. Confirmed with a full ASan stack trace (`WRITE of size 8 ... 0 bytes after 512-byte region`) via `NCVIEW_TEST_DIALOG=dataedit`, reliably reproducible on every run. Pre-existing in upstream C, carried over verbatim by the M1 port — not something this session's work introduced. **Not fixed here** (Phase 0d's own rule: record, don't fix); real follow-up work is a one-line allocation-size fix (`(n_entries + 1)`) plus a regression test exercising `view_data_edit()`/`x_dataedit()` directly.
+   - `NCVIEW_TEST_DIALOG=print` timed out (no crash, no sanitizer output) rather than exiting — plausibly waiting on `lpr` (not installed in this sandbox); not investigated further as it produced no sanitizer finding.
 
 ## Verification
 

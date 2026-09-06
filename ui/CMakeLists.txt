@@ -12,4 +12,4 @@ target_link_libraries(ncview_ui PUBLIC
     fltk
     fltk_images
 )
-target_link_libraries(ncview_ui PRIVATE ncview_warning_flags)
+target_link_libraries(ncview_ui PRIVATE ncview_warning_flags ncview_sanitize_flags)

@@ -25,6 +25,7 @@ else()
         -Wl,--whole-archive ncview_core -Wl,--no-whole-archive
     )
 endif()
+target_link_libraries(ncview_core_linkcheck PRIVATE ncview_sanitize_flags)
 
 # M1 checkpoint, part 2 (and the general unit test suite): functional
 # behavior of core's logic, from pure functions (stringlist, calcalcs,
@@ -53,7 +54,7 @@ add_executable(ncview_core_tests
 target_include_directories(ncview_core_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/doctest
 )
-target_link_libraries(ncview_core_tests PRIVATE ncview_core)
+target_link_libraries(ncview_core_tests PRIVATE ncview_core ncview_sanitize_flags)
 add_dependencies(ncview_core_tests ncview_core_linkcheck)
 add_test(NAME ncview_core_tests COMMAND ncview_core_tests)
 # Defense in depth against a hang like the HDF5 file-locking one this suite

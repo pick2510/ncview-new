@@ -40,6 +40,19 @@ option(NCVIEW_BUILD_TESTS "Build ncview_core headless tests" ON)
 # platform has.
 option(NCVIEW_BUILD_UI_TESTS "Build the Xvfb screenshot regression test (needs Xvfb, ImageMagick, ncgen)" OFF)
 
+# modernization.md Phase 0d: build with -fsanitize=<value>, e.g.
+# "address,undefined", applied to every target of ours (not the vendored
+# third_party/fltk or third_party/udunits2). PORTING.md's own verification
+# step 5 calls for exactly this pass over the headless tests; empty (the
+# default) means sanitizers are off entirely, matching every build before
+# this option existed.
+set(NCVIEW_SANITIZE "" CACHE STRING "Sanitizer(s) to build with, e.g. address,undefined (empty disables)")
+add_library(ncview_sanitize_flags INTERFACE)
+if(NCVIEW_SANITIZE)
+    target_compile_options(ncview_sanitize_flags INTERFACE -fsanitize=${NCVIEW_SANITIZE} -fno-omit-frame-pointer)
+    target_link_options(ncview_sanitize_flags INTERFACE -fsanitize=${NCVIEW_SANITIZE})
+endif()
+
 # HPC clusters routinely lack (or have mismatched-version) shared libraries
 # for anything outside their own module system -- this pulls netCDF/HDF5 and
 # the C++ runtime in statically so the binary doesn't touch either at
