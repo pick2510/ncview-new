@@ -28,7 +28,7 @@ The intended outcome: `ui/` owns its self-managed state through RAII where FLTK'
 3. **The `core/` seam is out of scope here.** If a genuine improvement would require changing `interface.h`/`protos.h`, it's noted below as a `core/`-side follow-up, not done in this file's phases.
 4. Same verification bar as [[modernization]]: full rebuild, `ctest` 100% (including the Xvfb screenshot test), and an `-DNCVIEW_SANITIZE=address,undefined` Debug build clean, after every phase.
 
-## Phase U1 — Self-managed pointers to RAII
+## Phase U1 — Self-managed pointers to RAII (done)
 
 Sites where `ui/` itself is the sole owner and manages lifetime manually (not FLTK's parent-child tree):
 
@@ -38,7 +38,9 @@ Sites where `ui/` itself is the sole owner and manages lifetime manually (not FL
 
 **Verification**: full rebuild + `ctest` (incl. `ncview_ui_smoke`) + ASan/UBSan Debug build, all clean, byte-identical screenshots.
 
-## Phase U2 — Enable `-Werror` for `ncview_ui`
+**Done.** `g_pending_timer` and `g_plot_windows[]` converted to `std::unique_ptr`/`std::array<std::unique_ptr<...>>`, preserving exact destruction order at each call site (invoke the timer callback before freeing its closure; hide/delete the FLTK window before freeing the `PlotWindow`). `main_window.cc:411`'s Meyers-singleton-shaped `static MainWindow *w = new MainWindow()` left as-is, per the note above. Verified: full rebuild clean, `ctest` 100% (incl. the byte-identical Xvfb `ncview_ui_smoke` screenshot test), `-DNCVIEW_SANITIZE=address,undefined` Debug build clean.
+
+## Phase U2 — Enable `-Werror` for `ncview_ui` (done)
 
 `ncview_ui` already builds with 0 warnings at `-Wall -Wextra` (confirmed before writing this plan). Mirror `core/CMakeLists.txt`'s Phase 9 pattern in `ui/CMakeLists.txt`:
 
@@ -51,6 +53,10 @@ endif()
 ```
 
 No source changes expected; this phase is the CMake change plus a full rebuild to confirm it's still clean immediately before and after.
+
+**Done.** No source changes needed. Verified: full rebuild clean with `-Werror` on for `ncview_ui`, `ctest` 100% (incl. `ncview_ui_smoke`), and an `-DNCVIEW_SANITIZE=address,undefined` Debug build clean with `-Werror` on.
+
+**This completes ui-modernization.md's scoped work.**
 
 ## Follow-up notes (not phases — `core/`-side or out of scope)
 
