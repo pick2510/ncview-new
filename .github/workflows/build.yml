@@ -23,7 +23,13 @@ jobs:
             libx11-dev libxext-dev libxft-dev libxinerama-dev \
             libxcursor-dev libxrender-dev libxfixes-dev \
             flex bison texinfo patchelf \
-            xvfb imagemagick netcdf-bin
+            xvfb imagemagick netcdf-bin fonts-dejavu-core
+          # fonts-dejavu-core: tests/ui_smoke/golden/*.png were captured
+          # against DejaVu Sans (FLTK's resolved default font wherever it's
+          # installed). ui_smoke.sh does an exact-pixel compare, so the
+          # runner needs the identical font available or every text label
+          # renders with different glyph shapes and every case "fails" on
+          # anti-aliasing differences alone, not a real regression.
 
       # -DFLTK_BACKEND_WAYLAND=OFF: this project always forces
       # FLTK_BACKEND=x11 at runtime (see README), and none of the
