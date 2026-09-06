@@ -65,7 +65,7 @@ static void handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_a
 static int  determine_lat_lon( char *s_in, int *is_lat, int *is_lon );
 
 /* Variables local to routines in this file */
-static  char    *month_name[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+static  const char *month_name[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
 /*******************************************************************************
@@ -163,7 +163,7 @@ data_has_mv( float *data, size_t n, float fill_value )
 	int
 data_to_pixels( View *v )
 {
-	long	i, j, j2;
+	size_t	i, j, j2;
 	size_t	x_size, y_size, new_x_size, new_y_size;
 	ncv_pixel pix_val;
 	float	data_range, rawdata, data, fill_value;
@@ -647,7 +647,7 @@ init_min_max( NCVar *var )
 			
 		case MinMaxMethod::Exhaust:
 			verbose = true;
-			for( i=1; i<(n_timesteps-2L); i++ ) {
+			for( i=1; i<(long)(n_timesteps-2L); i++ ) {
 				step = i;
 				get_min_max_onestep( var, n_other, step, data.data(), 
 					&(var->global_min), &(var->global_max), verbose );
@@ -1312,7 +1312,7 @@ util_mode( float *x, size_t n, float fill_value )
 	unique_vals.resize( n );
 
 	n_vals = 0;
-	for( i=0L; i<n; i++ ) {
+	for( i=0L; i<(long)n; i++ ) {
 		if( close_enough( x[i], fill_value )) {
 			return( fill_value );
 			}
@@ -1350,7 +1350,7 @@ util_mode( float *x, size_t n, float fill_value )
 	float
 util_mean( float *x, size_t n, float fill_value )
 {
-	long i;
+	size_t i;
 	double sum;
 
 	sum = 0.0;
@@ -1445,7 +1445,7 @@ calc_dim_minmaxes( void )
 				type = fi_dim_value( v, i, 0L, &temp_double, temp_str, &has_bounds, &bounds_min,
 								&bounds_max, cursor_place );	/* used to get type ONLY */
 				if( type == NC_DOUBLE ) {
-					for( j=0; j<dim_len; j++ ) {
+					for( j=0; j<(int)dim_len; j++ ) {
 						cursor_place[i] = j;
 						type = fi_dim_value( v, i, j, &temp_double, temp_str, &has_bounds, &bounds_min, &bounds_max, cursor_place );
 						d->values[j] = (float)temp_double;
@@ -1459,16 +1459,16 @@ calc_dim_minmaxes( void )
 						printf( "**Note: non-float dim found; i=%d\n", i );
 					d->min  = 1.0;
 					d->max  = (float)dim_len;
-					for( j=0; j<dim_len; j++ )
+					for( j=0; j<(int)dim_len; j++ )
 						d->values[j] = (float)j;
 					}
 				d->have_calc_minmax = 1;
 
 				/* Try to see if the dim is a lat or lon.  Not an exact science by a long shot */
-				name_lat  = strncmp_nocase(const_cast<char *>(d->name.c_str()),  "lat",    3)==0;
-				units_lat = strncmp_nocase(const_cast<char *>(d->units.c_str()), "degree", 6) == 0;
-				name_lon  = strncmp_nocase(const_cast<char *>(d->name.c_str()),  "lon",    3)==0;
-				units_lon = strncmp_nocase(const_cast<char *>(d->units.c_str()), "degree", 6) == 0;
+				name_lat  = strncmp_nocase(d->name.c_str(),  "lat",    3)==0;
+				units_lat = strncmp_nocase(d->units.c_str(), "degree", 6) == 0;
+				name_lon  = strncmp_nocase(d->name.c_str(),  "lon",    3)==0;
+				units_lon = strncmp_nocase(d->units.c_str(), "degree", 6) == 0;
 				d->is_lat = ((name_lat || units_lat) && (d->max <  90.01) && (d->min > -90.01));
 				d->is_lon = ((name_lon || units_lon) && (d->max < 360.01) && (d->min > -180.01));
 
@@ -1496,7 +1496,8 @@ calc_dim_minmaxes( void )
 	void
 contract_data( float *small_data, View *v, float fill_value )
 {
-	long 	i, j, n, nx, ny, ii, jj;
+	long 	n, ii, jj;
+	size_t	i, j, nx, ny;
 	size_t	new_nx, new_ny, idx, ioffset, joffset;
 	float 	*tmpv;
 
@@ -1578,15 +1579,15 @@ expand_data( float *big_data, View *v, size_t array_size )
 
 	fill_val = v->variable->fill_value;
 	
-	if( (nxb < blowup) || (nxb*nyb < blowup) ) {
+	if( (nxb < (size_t)blowup) || (nxb*nyb < (size_t)blowup) ) {
 		fprintf( stderr, "ncview: data_to_pixels: too much magnification\n" );
 		fprintf( stderr, "nxb=%zu\n", nxb );
 		exit( -1 );
 		}
 
 	if( (blowup == 1) || (options.blowup_type == BlowupType::Replicate)) { 
-		for( jl=0; jl<nyl; jl++ ) {
-			for( il=0; il<nxl; il++ )
+		for( jl=0; jl<(long)nyl; jl++ ) {
+			for( il=0; il<(long)nxl; il++ )
 				for( i2b=0; i2b<blowup; i2b++ ) {
 #ifdef CHECK_MEM
 					if( il*blowup + jl*nxb*blowup + i2b >= array_size ) { fprintf( stderr, "mem error 001\n" ); exit(-1); }
@@ -1594,7 +1595,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 					*(big_data + il*blowup + jl*nxb*blowup + i2b) = v->data[il+jl*nxl];
 					}
 			for( line=1; line<blowup; line++ )
-				for( i2b=0; i2b<nxb; i2b++ ) {
+				for( i2b=0; i2b<(long)nxb; i2b++ ) {
 #ifdef CHECK_MEM
 					if( i2b + jl*nxb*blowup + line*nxb >= array_size ) { fprintf( stderr, "mem error 002\n" ); exit(-1); }
 #endif
@@ -1614,8 +1615,8 @@ expand_data( float *big_data, View *v, size_t array_size )
 		offset_yb = offset_xb;
 
 		/* Horizontal base lines */
-		for( jl=0; jl<nyl; jl++ ) {
-			for( il=0; il<nxl-1; il++ ) {
+		for( jl=0; jl<(long)nyl; jl++ ) {
+			for( il=0; il<(long)nxl-1; il++ ) {
 				base_val  = v->data[il   + jl*nxl];
 				right_val = v->data[il+1 + jl*nxl];
 
@@ -1662,8 +1663,8 @@ expand_data( float *big_data, View *v, size_t array_size )
 			}
 
 		/* Vertical base lines */
-		for( jl=0; jl<nyl-1; jl++ ) 
-		for( il=0; il<nxl;   il++ ) {
+		for( jl=0; jl<(long)nyl-1; jl++ ) 
+		for( il=0; il<(long)nxl;   il++ ) {
 			base_val  = v->data[il + jl*nxl];
 			below_val = v->data[il + (jl+1)*nxl];
 
@@ -1704,7 +1705,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 				}
 			}
 		/* Fill in the last center value along the top, which was left unfilled by the above alg */
-		for( il=0; il<nxl; il++ ) {
+		for( il=0; il<(long)nxl; il++ ) {
 #ifdef CHECK_MEM
 			if( il*blowup+offset_xb + (nyl-1)*blowup*nxb + offset_yb*nxb >= array_size ) { fprintf( stderr, "mem error 006\n" ); exit(-1); }
 #endif
@@ -1715,8 +1716,8 @@ expand_data( float *big_data, View *v, size_t array_size )
 		 * interpolating from the horizontal and vertical
 		 * base lines.
 		 */
-		for( jl=0; jl<nyl-1; jl++ )
-		for( il=0; il<nxl-1; il++ ) {
+		for( jl=0; jl<(long)nyl-1; jl++ )
+		for( il=0; il<(long)nxl-1; il++ ) {
 			for( j2b=1; j2b<blowup; j2b++ )
 			for( i2b=1; i2b<blowup; i2b++ ) {
 				frac_x = (float)i2b*bupr;
@@ -1729,13 +1730,13 @@ expand_data( float *big_data, View *v, size_t array_size )
 
 				if( close_enough(base_x,    fill_val) || 
 				    close_enough(right_val, fill_val) || 
-				    (il == nxl-1) )
+				    (il == (long)nxl-1) )
 					del_x = 0.0;
 				else
 					del_x  = right_val - base_x;
 				if( close_enough(base_y,    fill_val) || 
 				    close_enough(below_val, fill_val) || 
-				    (jl == nyl-1) )
+				    (jl == (long)nyl-1) )
 					del_y = 0.0;
 				else
 					del_y  = below_val - base_y;
@@ -1772,7 +1773,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 		 * This goes from y=the first center point to y=the last center point.
 		 */
 		il = nxl-1;
-		for( j2b=0; j2b<=blowup*(nyl-1); j2b++ ) {
+		for( j2b=0; j2b<=blowup*(long)(nyl-1); j2b++ ) {
 			idx = il*blowup+offset_xb + (j2b+offset_yb)*nxb;	
 			step = (*(big_data + idx - 1) - *(big_data + idx - 2));
 			val  = *(big_data + idx) + step;
@@ -1787,7 +1788,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 
 		/* Fill in left hand side */
 		il = 0;
-		for( j2b=0; j2b<=blowup*(nyl-1); j2b++ ) {
+		for( j2b=0; j2b<=blowup*(long)(nyl-1); j2b++ ) {
 			idx = il*blowup+offset_xb + (j2b+offset_yb)*nxb;
 			step = (*(big_data + idx + 2) - *(big_data + idx + 1));
 			val  = *(big_data + idx) - step;
@@ -1802,7 +1803,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 
 		/* Fill in bottom */
 		jl = 0;
-		for( i2b=0; i2b<=blowup*(nxl-1); i2b++ ) {
+		for( i2b=0; i2b<=blowup*(long)(nxl-1); i2b++ ) {
 			idx = i2b+offset_xb + jl*blowup*nxb + offset_yb*nxb;
 			step = (*(big_data + idx + 2*nxb) - *(big_data + idx + nxb));   /* big(,y+2) - big(,y+1) */
 			val  = *(big_data + idx) - step;
@@ -1817,7 +1818,7 @@ expand_data( float *big_data, View *v, size_t array_size )
 
 		/* Fill in top */
 		jl = nyl-1;
-		for( i2b=0; i2b<blowup*(nxl-1); i2b++ ) {
+		for( i2b=0; i2b<blowup*(long)(nxl-1); i2b++ ) {
 			idx = i2b+offset_xb + jl*blowup*nxb + offset_yb*nxb;
 			step = (*(big_data + idx - nxb) - *(big_data + idx - 2*nxb));  /* big(,y-1) - big(,y-2) */
 			val  = *(big_data + idx) + step;
@@ -1896,8 +1897,8 @@ expand_data( float *big_data, View *v, size_t array_size )
 			}
 
 		/* Paint missing value blocks */
-		for( jl=0; jl<nyl; jl++ )
-		for( il=0; il<nxl; il++ ) {
+		for( jl=0; jl<(long)nyl; jl++ )
+		for( il=0; il<(long)nxl; il++ ) {
 			base_val  = v->data[il   + jl*nxl];
 			if( close_enough( base_val, fill_val )) {
 				for( j2b=0; j2b<blowup; j2b++ )
@@ -2089,9 +2090,10 @@ void fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCD
  * like strncmp, but ignoring case
  */
 	int
-strncmp_nocase( char *s1, char *s2, size_t n )
+strncmp_nocase( const char *s1, const char *s2, size_t n )
 {
-	int	i, retval;
+	size_t	i;
+	int	retval;
 
 	if( (s1==NULL) || (s2==NULL))
 		return(-1);
@@ -2175,9 +2177,10 @@ int determine_lat_lon( char *s_in, int *is_lat, int *is_lon )
 /*******************************************************************************************
  * Returns the number of forward slashes in a string
  */
-int count_nslashes( char *s ) 
+int count_nslashes( const char *s ) 
 {
-	int	i, nslash;
+	size_t	i;
+	int	nslash;
 
 	nslash = 0;
 	for( i=0; i<strlen(s); i++ ) 
@@ -2199,7 +2202,7 @@ Stringlist *get_group_list( const std::vector<std::unique_ptr<NCVar>> &vars )
 
 	for( const auto &cursor : vars ) {
 
-		unpack_groupname( const_cast<char *>(cursor->name.c_str()), -1, group_name );	/* -1 means get full group name */
+		unpack_groupname( cursor->name.c_str(), -1, group_name );	/* -1 means get full group name */
 
 		/* Only add to list if not already there */
 		if( stringlist_match_string_exact( retval, group_name ) == nullptr )
@@ -2225,9 +2228,10 @@ Stringlist *get_group_list( const std::vector<std::unique_ptr<NCVar>> &vars )
  *
  * Returns 0 on success, -1 on error
  */
-int unpack_groupname( char *varname, int ig, char *groupname ) 
+int unpack_groupname( const char *varname, int ig, char *groupname ) 
 {
-	int	i, i0, i1, idx_slash[MAX_NC_NAME], nslash;
+	size_t	i;
+	int	i0, i1, idx_slash[MAX_NC_NAME], nslash;
 	char	ts[MAX_NC_NAME];
 
 	/* Get indices of the slashes */
@@ -2289,9 +2293,10 @@ int unpack_groupname( char *varname, int ig, char *groupname )
  * this returns ONLY the trailing varname in "varname_sans_groups", and ONLY the
  * groupname with no leading or trailing slash ( "root/groupa" ) in "groupname"
  */
-void varname_no_groups( char *varname, char *varname_sans_groups, char *groupname )
+void varname_no_groups( const char *varname, char *varname_sans_groups, char *groupname )
 {
-	int	i, idx_slash[MAX_NC_NAME], nslash;
+	size_t	i;
+	int	idx_slash[MAX_NC_NAME], nslash;
 
 	/* Get indices of the slashes */
 	nslash = 0;

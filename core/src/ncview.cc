@@ -782,7 +782,7 @@ create_default_colormap()
 int any_var_in_group( const std::vector<std::unique_ptr<NCVar>> &vars ) {
 
 	for( const auto &cursor : vars )
-		if( count_nslashes( const_cast<char *>(cursor->name.c_str()) ) > 0 )
+		if( count_nslashes( cursor->name.c_str() ) > 0 )
 			return( 1 );
 
 	return( 0 );

@@ -155,7 +155,7 @@ void 	fmt_time	   ( char *temp_string, size_t temp_string_len, double new_dimval
 int	n_vars_in_list	   ( const std::vector<std::unique_ptr<NCVar>> &v );
 void 	set_blowup_type	   ( BlowupType new_type );
 int 	n_strings_in_list  ( Stringlist *s );
-int 	strncmp_nocase     ( char *s1, char *s2, size_t n );
+int 	strncmp_nocase     ( const char *s1, const char *s2, size_t n );
 Message	warn_if_file_exits ( char *fname );
 void 	virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **file );
 void 	calc_dim_minmaxes   ( void );
@@ -164,11 +164,11 @@ int     is_scannable        ( NCVar *v, int i );
 void 	sl_cat		    ( Stringlist **dest, Stringlist **src );
 void 	get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data,
 					float *min, float *max, int verbose );
-int 	unpack_groupname( char *varname, int ig, char *groupname );
+int 	unpack_groupname( const char *varname, int ig, char *groupname );
 void 	cache_scalar_coord_info( const std::vector<std::unique_ptr<NCVar>> &vars );
-int 	count_nslashes	    ( char *s );
+int 	count_nslashes	    ( const char *s );
 Stringlist *get_group_list  ( const std::vector<std::unique_ptr<NCVar>> &vars );
-void 	varname_no_groups   ( char *varname, char *varname_sans_groups, char *groupname );
+void 	varname_no_groups   ( const char *varname, char *varname_sans_groups, char *groupname );
 unsigned char interp( int i, int range_i, unsigned char *mat, int n_entries );
 
 /******************************************************************************

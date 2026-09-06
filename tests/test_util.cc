@@ -32,24 +32,24 @@ TEST_CASE("util: close_enough uses a relative tolerance scaled to fill") {
 }
 
 TEST_CASE("util: strncmp_nocase ignores case") {
-    CHECK(strncmp_nocase((char *)"Longitude", (char *)"longitude", 9) == 0);
-    CHECK(strncmp_nocase((char *)"LONGITUDE", (char *)"longitude", 9) == 0);
-    CHECK(strncmp_nocase((char *)"Longitude", (char *)"latitude", 4) != 0);
+    CHECK(strncmp_nocase("Longitude", "longitude", 9) == 0);
+    CHECK(strncmp_nocase("LONGITUDE", "longitude", 9) == 0);
+    CHECK(strncmp_nocase("Longitude", "latitude", 4) != 0);
     // Only the first n characters matter.
-    CHECK(strncmp_nocase((char *)"LatX", (char *)"LatY", 3) == 0);
-    CHECK(strncmp_nocase((char *)"LatX", (char *)"LatY", 4) != 0);
+    CHECK(strncmp_nocase("LatX", "LatY", 3) == 0);
+    CHECK(strncmp_nocase("LatX", "LatY", 4) != 0);
 }
 
 TEST_CASE("util: strncmp_nocase rejects null arguments") {
-    CHECK(strncmp_nocase(nullptr, (char *)"x", 1) == -1);
-    CHECK(strncmp_nocase((char *)"x", nullptr, 1) == -1);
+    CHECK(strncmp_nocase(nullptr, "x", 1) == -1);
+    CHECK(strncmp_nocase("x", nullptr, 1) == -1);
 }
 
 TEST_CASE("util: unpack_groupname handles a plain varname with no groups") {
     char groupname[1024];
-    CHECK(unpack_groupname((char *)"temperature", -1, groupname) == 0);
+    CHECK(unpack_groupname("temperature", -1, groupname) == 0);
     CHECK(std::strcmp(groupname, "/") == 0);
-    CHECK(unpack_groupname((char *)"temperature", -2, groupname) == 0);
+    CHECK(unpack_groupname("temperature", -2, groupname) == 0);
     CHECK(std::strcmp(groupname, "temperature") == 0);
 }
 
@@ -75,18 +75,18 @@ TEST_CASE("util: unpack_groupname extracts full and individual group levels") {
 TEST_CASE("util: varname_no_groups splits leaf name from group path") {
     char sans_groups[1024], group[1024];
 
-    varname_no_groups((char *)"/forecast/temp", sans_groups, group);
+    varname_no_groups("/forecast/temp", sans_groups, group);
     CHECK(std::strcmp(sans_groups, "temp") == 0);
     CHECK(std::strcmp(group, "/forecast") == 0);
 
     // No groups at all: the whole name is the leaf, and groupname comes
     // back empty (not untouched garbage).
-    varname_no_groups((char *)"temp", sans_groups, group);
+    varname_no_groups("temp", sans_groups, group);
     CHECK(std::strcmp(sans_groups, "temp") == 0);
     CHECK(group[0] == '\0');
 
     // A NULL groupname output pointer must be tolerated (some callers
     // only want the leaf name).
-    varname_no_groups((char *)"forecast/temp", sans_groups, nullptr);
+    varname_no_groups("forecast/temp", sans_groups, nullptr);
     CHECK(std::strcmp(sans_groups, "temp") == 0);
 }
