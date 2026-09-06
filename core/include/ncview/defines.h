@@ -110,10 +110,7 @@ constexpr int OVERLAY_N_OVERLAYS = 5;
 /*****************************************************************************/
 /* Transforming the data before turning it into pixels is supported */
 constexpr int N_TRANSFORMS = 4;
-#define TRANSFORM_NONE		1
-#define TRANSFORM_LOW		2
-#define TRANSFORM_HI		3
-#define TRANSFORM_CENTER	4
+enum class Transform { None = 1, Low = 2, Hi = 3, Center = 4 };
 
 /*****************************************************************************
  * Maximum number of X-Y plot windows which can pop up, and the max
@@ -494,7 +491,6 @@ typedef struct {
 				 * 'forward' or 'backward' button and holding down the Ctrl
 				 * key; if < 0, absolute number of frames to step.
 				 */
-		transform,
 		listsel_max,	/* if # of vars is more than this, auto switch from VARSEL_LIST to VARSEL_MENU */
 		color_by_ndims,	/* if 1, then button is color coded by # of effective dims */
 		beep_on_restart,
@@ -507,6 +503,7 @@ typedef struct {
 		blowup_default_size,
 		display_type;	/* This uses std 'X' defines; PseudoColor, DirectColor, etc */
 
+	Transform	transform;
 	MinMaxMethod	min_max_method;
 	VarselStyle	varsel_style;	/* can be VarselStyle::List or VarselStyle::Menu */
 	ShrinkMethod	shrink_method;

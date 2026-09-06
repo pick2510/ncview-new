@@ -342,19 +342,19 @@ data_to_pixels( View *v )
 				data = (rawdata - v->variable->user_min) / data_range;
 				clip_f( &data, 0.0, .9999 );
 				switch( options.transform ) {
-					case TRANSFORM_NONE:	break;
+					case Transform::None:	break;
 
 					/* This might cause problems.  It is at odds with what
 					 * the manual claims--at least for Ultrix--but works, 
 					 * whereas what the manual claims works, doesn't!
 					 */
-					case TRANSFORM_LOW:	data = sqrt( data );  
+					case Transform::Low:	data = sqrt( data );  
 								data = sqrt( data );
 								break;
 
-					case TRANSFORM_HI:	data = data*data*data*data;     break;
+					case Transform::Hi:	data = data*data*data*data;     break;
 
-					case TRANSFORM_CENTER:	data = atan( (data - 0.5)*8.0 );
+					case Transform::Center:	data = atan( (data - 0.5)*8.0 );
 								data = data/pi + 0.5;
 								break;
 					}		

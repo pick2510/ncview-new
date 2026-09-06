@@ -79,7 +79,7 @@ struct PixelFixture {
     // Runs data_to_pixels() with the given options, sizing the pixel
     // buffer for whatever blowup/shrink they imply, and returns the
     // resulting pixel grid (row-major, new_x_size wide).
-    std::vector<ncv_pixel> run(int transform, BlowupType blowup_type, int blowup,
+    std::vector<ncv_pixel> run(Transform transform, BlowupType blowup_type, int blowup,
                                 bool invert_colors, int n_colors = 80,
                                 int n_extra_colors = 10) {
         options.transform = transform;
@@ -122,7 +122,7 @@ std::vector<ncv_pixel> replicate_grid(const std::vector<ncv_pixel> &src,
 
 } // namespace
 
-TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, exact pixel values with a missing cell") {
+TEST_CASE("data_to_pixels: Transform::None, blowup=1, exact pixel values with a missing cell") {
     // 3x3 grid, row-major (il fastest): the center cell is the fill value.
     // clang-format off
     std::vector<float> grid = {
@@ -143,7 +143,7 @@ TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, exact pixel values with a m
     // its j2 = new_y_size - j - 1) -- upstream's normal "y increases
     // upward" image convention. That's why the expected grid below is the
     // input grid's rows in reverse order, not a straight copy.
-    auto pix = f.run(TRANSFORM_NONE, BlowupType::Replicate, /*blowup=*/1, /*invert_colors=*/false);
+    auto pix = f.run(Transform::None, BlowupType::Replicate, /*blowup=*/1, /*invert_colors=*/false);
     // clang-format off
     std::vector<ncv_pixel> expected = {
         70, 80, 89,   // rawdata 6,7,8 (rawdata=8 clips to 0.9999*80=79 -> +10)
@@ -154,7 +154,7 @@ TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, exact pixel values with a m
     CHECK(pix == expected);
 }
 
-TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, invert_colors flips the ramp") {
+TEST_CASE("data_to_pixels: Transform::None, blowup=1, invert_colors flips the ramp") {
     std::vector<float> grid = {
         0, 1, 2,
         3, -999, 5,
@@ -162,7 +162,7 @@ TEST_CASE("data_to_pixels: TRANSFORM_NONE, blowup=1, invert_colors flips the ram
     };
     PixelFixture f(3, 3, grid, -999, 0, 8);
 
-    auto pix = f.run(TRANSFORM_NONE, BlowupType::Replicate, 1, /*invert_colors=*/true);
+    auto pix = f.run(Transform::None, BlowupType::Replicate, 1, /*invert_colors=*/true);
     // clang-format off
     std::vector<ncv_pixel> expected = {
         30, 20, 10,
@@ -184,8 +184,8 @@ TEST_CASE("data_to_pixels: BlowupType::Replicate at blowup=2 replicates each pix
     };
     PixelFixture f(3, 3, grid, -999, 0, 8);
 
-    auto pix1 = f.run(TRANSFORM_NONE, BlowupType::Replicate, 1, false);
-    auto pix2 = f.run(TRANSFORM_NONE, BlowupType::Replicate, 2, false);
+    auto pix1 = f.run(Transform::None, BlowupType::Replicate, 1, false);
+    auto pix2 = f.run(Transform::None, BlowupType::Replicate, 2, false);
     CHECK(pix2 == replicate_grid(pix1, 3, 3, 2));
 }
 
@@ -199,7 +199,7 @@ TEST_CASE("data_to_pixels: transform functions preserve ordering (monotonic ramp
     std::vector<float> grid = {1, 3, 5, 7}; // 2x2, well clear of the 0/8 clip edges
     PixelFixture f(2, 2, grid, -999, 0, 8);
 
-    for (int transform : {TRANSFORM_NONE, TRANSFORM_LOW, TRANSFORM_HI, TRANSFORM_CENTER}) {
+    for (Transform transform : {Transform::None, Transform::Low, Transform::Hi, Transform::Center}) {
         auto pix = f.run(transform, BlowupType::Replicate, 1, false);
         // Row order is flipped (see the exact-value test above): row 0 of
         // the pixel grid holds rawdata {5,7}, row 1 holds rawdata {1,3}.
@@ -221,7 +221,7 @@ TEST_CASE("data_to_pixels: BlowupType::Bilinear produces a correctly-sized, in-r
     };
     PixelFixture f(2, 2, grid, -999, 0, 12);
 
-    auto pix = f.run(TRANSFORM_NONE, BlowupType::Bilinear, /*blowup=*/4, false);
+    auto pix = f.run(Transform::None, BlowupType::Bilinear, /*blowup=*/4, false);
     CHECK(pix.size() == 4 * 2 * 4 * 2);
     // pix = (uchar)(data_n * n_colors) + 10, with data_n clipped to
     // [0, 0.9999]: 10 at rawdata==user_min, up to (uchar)(0.9999*80)+10==89

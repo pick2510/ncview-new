@@ -3138,20 +3138,21 @@ view_data_has_missing( View *v )
 	void
 view_change_transform( int delta )
 {
-	options.transform += delta;
-	if( options.transform > N_TRANSFORMS )
-		options.transform = 1;
-	if( options.transform < 1 )
-		options.transform = N_TRANSFORMS;
+	int	transform_int = static_cast<int>(options.transform) + delta;
+	if( transform_int > N_TRANSFORMS )
+		transform_int = 1;
+	if( transform_int < 1 )
+		transform_int = N_TRANSFORMS;
+	options.transform = static_cast<Transform>(transform_int);
 
 	switch( options.transform ) {
-		case TRANSFORM_NONE   : in_set_label( LABEL_TRANSFORM, "Linear" ); break;
-		case TRANSFORM_LOW    : in_set_label( LABEL_TRANSFORM, "Low"    ); break;
-		case TRANSFORM_HI     : in_set_label( LABEL_TRANSFORM, "Hi"     ); break;
-		case TRANSFORM_CENTER : in_set_label( LABEL_TRANSFORM, "Center" ); break;
+		case Transform::None   : in_set_label( LABEL_TRANSFORM, "Linear" ); break;
+		case Transform::Low    : in_set_label( LABEL_TRANSFORM, "Low"    ); break;
+		case Transform::Hi     : in_set_label( LABEL_TRANSFORM, "Hi"     ); break;
+		case Transform::Center : in_set_label( LABEL_TRANSFORM, "Center" ); break;
 		default:
 			fprintf( stderr, "ncview: change_transform: unknown transform %d\n",
-				options.transform );
+				transform_int );
 			exit( -1 );
 		}
 
@@ -3172,7 +3173,7 @@ void view_recompute_colorbar( void )
 	if( options.debug ) {
 		fprintf( stderr, "view_recompute_colorbar: entering\n" );
 		fprintf( stderr, "view_recompute_colorbar: about to call x_create_colorbar with user_min=%f user_max=%f transform=%d\n",
-				view->variable->user_min, view->variable->user_max, options.transform );
+				view->variable->user_min, view->variable->user_max, static_cast<int>(options.transform) );
 		}
 
 	x_create_colorbar( view->variable->user_min, view->variable->user_max, options.transform );

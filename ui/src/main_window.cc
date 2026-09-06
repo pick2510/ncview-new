@@ -333,7 +333,7 @@ void Colorbar::setColormap( const unsigned char *r, const unsigned char *g, cons
 	redraw();
 }
 
-void Colorbar::setRange( float user_min, float user_max, int transform )
+void Colorbar::setRange( float user_min, float user_max, Transform transform )
 {
 	user_min_ = user_min;
 	user_max_ = user_max;
@@ -353,9 +353,9 @@ void Colorbar::draw()
 		// the image whenever a transform or "Invert Colormap" is active.
 		double normval = (double)px / (double)width;
 		switch( transform_ ) {
-			case TRANSFORM_HI:     normval = normval*normval*normval*normval; break;
-			case TRANSFORM_LOW:    normval = sqrt( sqrt( normval ) ); break;
-			case TRANSFORM_CENTER: normval = atan( (normval-0.5)*8.0 )/3.1415926536 + 0.5; break;
+			case Transform::Hi:     normval = normval*normval*normval*normval; break;
+			case Transform::Low:    normval = sqrt( sqrt( normval ) ); break;
+			case Transform::Center: normval = atan( (normval-0.5)*8.0 )/3.1415926536 + 0.5; break;
 			default: break;
 		}
 		if( options.invert_colors ) normval = 1.0 - normval;
@@ -928,7 +928,7 @@ char *MainWindow::installColormapByName( const char *name, int do_widgets )
 	return nullptr;
 }
 
-void MainWindow::createColorbar( float user_min, float user_max, int transform )
+void MainWindow::createColorbar( float user_min, float user_max, Transform transform )
 {
 	colorbar_->setRange( user_min, user_max, transform );
 }

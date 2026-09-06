@@ -88,13 +88,13 @@ public:
 	Colorbar( int x, int y, int w, int h );
 
 	void setColormap( const unsigned char *r, const unsigned char *g, const unsigned char *b );
-	void setRange( float user_min, float user_max, int transform );
+	void setRange( float user_min, float user_max, Transform transform );
 	void draw() override;
 
 private:
 	unsigned char colormap_r_[256], colormap_g_[256], colormap_b_[256];
 	float user_min_ = 0.f, user_max_ = 1.f;
-	int transform_ = TRANSFORM_NONE;
+	Transform transform_ = Transform::None;
 };
 
 struct DimRow {
@@ -149,7 +149,7 @@ public:
 	bool  seenColormapName( const char *name ) const;
 
 	void  checkLegalColormapLoaded();
-	void  createColorbar( float user_min, float user_max, int transform );
+	void  createColorbar( float user_min, float user_max, Transform transform );
 	void  drawColorbar();
 	void  populateVarList();
 	void  setCursorBusy( bool busy );

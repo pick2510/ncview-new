@@ -533,7 +533,7 @@ void x_check_legal_colormap_loaded( void )
 	instance()->checkLegalColormapLoaded();
 }
 
-void x_create_colorbar( float user_min, float user_max, int transform )
+void x_create_colorbar( float user_min, float user_max, Transform transform )
 {
 	instance()->createColorbar( user_min, user_max, transform );
 }

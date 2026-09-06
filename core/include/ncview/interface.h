@@ -94,7 +94,7 @@ Message	x_range( float old_min, float old_max, float global_min, float global_ma
 void	x_dataedit( char **text, int nx );
 int	x_seen_colormap_name( char *name );
 void	x_check_legal_colormap_loaded( void );
-void	x_create_colorbar( float user_min, float user_max, int transform );
+void	x_create_colorbar( float user_min, float user_max, Transform transform );
 void	x_draw_colorbar( void );
 void	x_error( char *message );
 void	x_force_set_invert_state( int state );

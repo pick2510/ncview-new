@@ -61,7 +61,7 @@ void x_dataedit(char **text, int nx) {
 }
 int x_seen_colormap_name(char*) { return 0; }
 void x_check_legal_colormap_loaded() {}
-void x_create_colorbar(float, float, int) {}
+void x_create_colorbar(float, float, Transform) {}
 void x_draw_colorbar() {}
 void x_error(char *message) { std::fprintf(stderr, "ncview error: %s\n", message ? message : "(null)"); }
 void x_force_set_invert_state(int) {}

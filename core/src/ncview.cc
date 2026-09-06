@@ -378,7 +378,7 @@ initialize_misc()
 	options.blowup           = DEFAULT_BLOWUP;
 	options.shrink_method    = DEFAULT_SHRINK_METHOD;
 	options.min_max_method   = DEFAULT_MIN_MAX_METHOD;
-	options.transform        = TRANSFORM_NONE;
+	options.transform        = Transform::None;
 	options.n_colors 	 = DEFAULT_N_COLORS;
 	options.n_extra_colors 	 = 10;
 	options.private_colormap = DEFAULT_PRIVATE_CMAP;
