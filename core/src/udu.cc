@@ -30,14 +30,9 @@
 #include "ncview/protos.h"
 #include "math.h"
 
-typedef struct {
-	char	*name;
-	AnyPtr	next;
-} UniqList;
-
 static int		valid_udunits_pkg;
 static int		is_unique( char *units_name );
-static UniqList 	*uniq = NULL;
+static std::vector<std::string> uniq;
 
 /******************************************************************************/
 #ifdef HAVE_UDUNITS2
@@ -137,7 +132,7 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 	cv_converter	*convert_units_to_sec;
 
 	NCDim *d;
-	d = *(v->dim+dimid);
+	d = v->dim[dimid].get();
 
 	/* Not enough data to analyze */
 	if( d->size < 3 )
@@ -150,9 +145,9 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 		 * one of the TGRAN_* values. */
 		return( static_cast<TimeGranularity>(0) );
 
-	if( (unit = ut_parse( unitsys, d->units, UT_ASCII )) == NULL ) {
+	if( (unit = ut_parse( unitsys, d->units.c_str(), UT_ASCII )) == NULL ) {
 		fprintf( stderr, "internal error: udu_calc_tgran with invalid unit string: %s\n",
-			d->units );
+			d->units.c_str() );
 		exit( -1 );
 		}
 
@@ -173,7 +168,7 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 
 	/* Get a delta time to analyze */
 	for( ii=0L; ii<v->n_dims; ii++ )
-		cursor_place[ii] = (int)((*(v->size+ii))/2.0);
+		cursor_place[ii] = (int)((v->size[ii])/2.0);
 	rettype = fi_dim_value( v, dimid, 1L, &tval0_user, cval0, &has_bounds, &bound_min, &bound_max, cursor_place );
 	rettype = fi_dim_value( v, dimid, 2L, &tval1_user, cval1, &has_bounds, &bound_min, &bound_max, cursor_place );
 
@@ -186,8 +181,8 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 
 	delta_sec = fabs(tval1_sec - tval0_sec);
 	
-	if( verbose ) 
-		printf( "units: %s  t1: %lf t2: %lf delta-sec: %lf\n", d->units, tval0_user, tval1_user, delta_sec );
+	if( verbose )
+		printf( "units: %s  t1: %lf t2: %lf delta-sec: %lf\n", d->units.c_str(), tval0_user, tval1_user, delta_sec );
 
 	if( delta_sec < 57. ) {
 		if(verbose)
@@ -237,35 +232,35 @@ void udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval,
 
 	debug = 0;
 	if( debug ) fprintf( stderr, "udu_fmt_time: entering with dim=%s, units=%s, value=%f\n",
-		dim->name, dim->units, new_dimval );
+		dim->name.c_str(), dim->units.c_str(), new_dimval );
 
 	if( ! valid_udunits_pkg ) {
 		snprintf( temp_string, temp_string_len-1, "%lg", new_dimval );
 		return;
 		}
 
-	if( (strlen(dim->units) > 1023) || strcmp(dim->units,last_units) != 0 ) {
+	if( (dim->units.size() > 1023) || strcmp(dim->units.c_str(),last_units) != 0 ) {
 		if( dataunits != NULL )	/* see if left over from previous invocation */
 			ut_free( dataunits );
-		if( (dataunits = ut_parse( unitsys, dim->units, UT_ASCII )) == NULL ) {
+		if( (dataunits = ut_parse( unitsys, dim->units.c_str(), UT_ASCII )) == NULL ) {
 			fprintf( stderr, "internal error: udu_fmt_time can't parse data unit string!\n" );
-			fprintf( stderr, "problematic units: \"%s\"\n", dim->units );
-			fprintf( stderr, "dim->name: %s  dim->timelike: %d\n", dim->name, dim->timelike );
+			fprintf( stderr, "problematic units: \"%s\"\n", dim->units.c_str() );
+			fprintf( stderr, "dim->name: %s  dim->timelike: %d\n", dim->name.c_str(), dim->timelike );
 			exit( -1 );
 			}
-		strncpy( last_units, dim->units, 1023 );
+		strncpy( last_units, dim->units.c_str(), 1023 );
 		}
 
-	if( utCalendar2_cal( new_dimval, dim->units, &year, &month, &day, &hour, 
-				&minute, &second, dim->calendar ) != 0 ) {
+	if( utCalendar2_cal( new_dimval, dim->units.c_str(), &year, &month, &day, &hour,
+				&minute, &second, dim->calendar.c_str() ) != 0 ) {
 		fprintf( stderr, "internal error: udu_fmt_time can't convert to calendar value!\n");
-		fprintf( stderr, "units: >%s<\n", dim->units );
+		fprintf( stderr, "units: >%s<\n", dim->units.c_str() );
 		exit( -1 );
 		}
 
 	if( debug ) {
 		fprintf( stderr, "udu_fmt_time: dimval=%lf units=%s calendar=%s utCalendar2_cal returns: year=%d month=%d day=%d hour=%d minute=%d second=%lf\n",
-			new_dimval, dim->units, dim->calendar, year, month, day, hour, minute, second );
+			new_dimval, dim->units.c_str(), dim->calendar.c_str(), year, month, day, hour, minute, second );
 		}
 	
 	if( include_granularity ) {
@@ -299,30 +294,11 @@ void udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval,
 	static int 
 is_unique( char *units )
 {
-	UniqList	*ul, *ul_new, *prev_ul;
-
-	if( uniq == NULL ) {
-		ul_new = (UniqList *)malloc( sizeof(UniqList) );
-		ul_new->name = (char *)malloc(strlen(units)+1);
-		snprintf( ul_new->name, strlen(units)+1, "%s", units );
-		ul_new->next = NULL;
-		uniq = ul_new;
-		return( true );
-		}
-	
-	ul = uniq;
-	while( ul != NULL ) {
-		if( strcmp( ul->name, units ) == 0 ) 
+	for( const auto &name : uniq )
+		if( name == units )
 			return( false );
-		prev_ul = ul;
-		ul = ul->next;
-		}
 
-	ul_new = (UniqList *)malloc( sizeof(UniqList) );
-	ul_new->name = (char *)malloc(strlen(units)+1);
-	snprintf( ul_new->name, strlen(units)+1, "%s", units );
-	ul_new->next = NULL;
-	prev_ul->next = ul_new;
+	uniq.emplace_back( units );
 	return( true );
 }
 

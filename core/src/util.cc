@@ -46,7 +46,7 @@ extern ut_system *unitsys;
 /*-------------------*/
 
 extern Options   options;
-extern NCVar     *variables;
+extern std::vector<std::unique_ptr<NCVar>> variables;
 extern ncv_pixel *pixel_transform;
 extern FrameStore framestore;
 
@@ -98,64 +98,24 @@ close_enough( float data, float fill )
 }
 
 /******************************************************************************
- * Add the passed NCVar element to the list 
+ * Allocate a new FDBlist element
  */
-	void
-add_to_varlist( NCVar **list, NCVar *new_el )
+	static std::unique_ptr<FDBlist>
+new_fdblist()
 {
-	int	i;
-	NCVar	*cursor;
-
-	i = 0;
-	if( *list == NULL ) {
-		*list = new_el;
-		new_el->prev = NULL;
-		}
-	else
-		{
-		i = 1;
-		cursor = *list;
-		while( cursor->next != NULL ) {
-			cursor = cursor->next;
-			i++;
-			}
-		cursor->next = new_el;
-		new_el->prev = cursor;
-		}
-}
-
-/******************************************************************************
- * Allocate space for a new NCVar element
- */
-	void
-new_variable( NCVar **el )
-{
-	(*el)       = (NCVar *)malloc( sizeof( NCVar ));
-	(*el)->next = NULL;
-}
-
-
-/******************************************************************************
- * Allocate space for a new FDBlist element
- */
-	void
-new_fdblist( FDBlist **el )
-{
+	auto el = std::make_unique<FDBlist>();
 	NetCDFOptions	*new_netcdf_options;
 
-	(*el)           = (FDBlist *)malloc( sizeof( FDBlist ));
-	(*el)->next     = NULL;
-	(*el)->filename     = (char *)malloc( MAX_FILE_NAME_LEN );
-	(*el)->recdim_units = (char *)malloc( MAX_RECDIM_UNITS_LEN );
+	el->filename = "UNINITIALIZED";
 
 #ifdef HAVE_UDUNITS2
-	(*el)->ut_unit_ptr  = NULL;
+	el->ut_unit_ptr = NULL;
 #endif
 
-	snprintf( (*el)->filename, MAX_FILE_NAME_LEN, "%s", "UNINITIALIZED" );
-
 	new_netcdf( &new_netcdf_options );
-	(*el)->aux_data = new_netcdf_options;
+	el->aux_data.reset( new_netcdf_options );
+
+	return( el );
 }
 
 /******************************************************************************
@@ -226,8 +186,8 @@ data_to_pixels( View *v )
 
 	blowup   = options.blowup;	/* NOTE: can be negative if shrinking data! -N means size is 1/Nth */
 
-	x_size     = *(v->variable->size + v->x_axis_id);
-	y_size     = *(v->variable->size + v->y_axis_id);
+	x_size     = v->variable->size[v->x_axis_id];
+	y_size     = v->variable->size[v->y_axis_id];
 
 	view_get_scaled_size( options.blowup, x_size, y_size, &new_x_size, &new_y_size );
 
@@ -266,7 +226,7 @@ data_to_pixels( View *v )
 		in_button_pressed( BUTTON_PAUSE, Modifier::M1 );
 		if( options.min_max_method == MinMaxMethod::Exhaust ) {
 	    		snprintf( error_message, 1022, "min and max both 0 for variable %s (checked all data)\nSetting range to (-1,1)", 
-								v->variable->name );
+								v->variable->name.c_str() );
 			in_error( error_message );
 			v->variable->user_max = 1;
 			v->variable->user_min = -1;
@@ -274,7 +234,7 @@ data_to_pixels( View *v )
 			return( data_to_pixels(v) );
 			}
 	    	snprintf( error_message, 1022, "min and max both 0 for variable %s.\nI can check ALL the data instead of subsampling if that's OK,\nor just cancel viewing this variable.",
-	    				v->variable->name );
+	    				v->variable->name.c_str() );
 		result = in_dialog( error_message, NULL, true );
 		if( result == Message::OK ) {
 			orig_minmax_method = options.min_max_method;
@@ -284,7 +244,7 @@ data_to_pixels( View *v )
 			if( (v->variable->user_max == 0) &&
 	    		    (v->variable->user_min == 0) ) {
 	    			snprintf( error_message, 1022, "min and max both 0 for variable %s (checked all data)\nSetting range to (-1,1)", 
-								v->variable->name );
+								v->variable->name.c_str() );
 				in_error( error_message );
 				v->variable->user_max = 1;
 				v->variable->user_min = -1;
@@ -305,7 +265,7 @@ data_to_pixels( View *v )
 	if( (v->variable->user_max == v->variable->user_min) && (! options.autoscale) ) {
 		in_set_cursor_normal();
 	    	snprintf( error_message, 1022, "min and max both %g for variable %s",
-	    		v->variable->user_min, v->variable->name );
+	    		v->variable->user_min, v->variable->name.c_str() );
 		x_error( error_message );
 		if( ! data_has_mv( (float *)v->data, x_size*y_size, fill_value ) ) {
 			v->variable->user_max += 0.1 * v->variable->user_max;
@@ -373,19 +333,9 @@ data_to_pixels( View *v )
  * Returns the number of entries in the NCVarlist
  */
 	int
-n_vars_in_list( NCVar *v )
+n_vars_in_list( const std::vector<std::unique_ptr<NCVar>> &v )
 {
-	NCVar *cursor;
-	int   i;
-
-	i      = 0;
-	cursor = v;
-	while( cursor != NULL ) {
-		i++;
-		cursor = cursor->next;
-		}
-
-	return( i );
+	return( (int)v.size() );
 }
 
 /******************************************************************************
@@ -416,42 +366,45 @@ add_vars_to_list( Stringlist *var_list, int id, char *filename, int nfiles )
 	void
 add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 {
-	NCVar	*var, *new_var;
-	int	n_dims, i;
-	FDBlist	*new_fdb, *fdb;
+	NCVar	*var;
+	int	n_dims;
 
 	/* make a new file description entry for this var/file combo */
-	new_fdblist( &new_fdb );
+	auto new_fdb_owner = new_fdblist();
+	FDBlist *new_fdb = new_fdb_owner.get();
 	new_fdb->id       = file_id;
-	new_fdb->var_size = fi_var_size( file_id, var_name );
+	{
+	size_t *raw_size = fi_var_size( file_id, var_name );
+	int raw_n_dims = fi_n_dims( file_id, var_name );
+	new_fdb->var_size.assign( raw_size, raw_size + raw_n_dims );
+	free( raw_size );
+	}
 	if( strlen(filename) > (MAX_FILE_NAME_LEN-1)) {
 		fprintf( stderr, "Error, input file name is too long; longest I can handle is %d\nError occurred on file %s\n",
 			MAX_FILE_NAME_LEN, filename );
 		exit(-1);
 		}
-	snprintf( new_fdb->filename, MAX_FILE_NAME_LEN, "%s", filename );
+	new_fdb->filename = filename;
 
 	/* fill out auxiliary (data-file format dependent) information
 	 * for the new fdb.
 	 */
 	fi_fill_aux_data( file_id, var_name, new_fdb );
 #ifdef HAVE_UDUNITS2
-	new_fdb->ut_unit_ptr = ut_parse( unitsys, new_fdb->recdim_units, UT_ASCII ); /* Will be NULL if there was an error */
+	new_fdb->ut_unit_ptr = ut_parse( unitsys, new_fdb->recdim_units.c_str(), UT_ASCII ); /* Will be NULL if there was an error */
 #endif
 
 	/* Does this variable already have an entry on the global var list "variables"? */
 	var = get_var( var_name );
 	if( var == NULL ) {	/* NO -- make a new NCVar structure */
-		new_variable( &new_var );
-		new_var->name       = (char *)malloc( strlen(var_name)+1 );
-		snprintf( new_var->name, strlen(var_name)+1, "%s", var_name );
+		auto new_var_owner = std::make_unique<NCVar>();
+		NCVar *new_var = new_var_owner.get();
+		new_var->name       = var_name;
 		n_dims              = fi_n_dims( file_id, var_name );
 		new_var->n_dims     = n_dims;
 		if( options.debug )
 			printf( "adding variable %s with %d dimensions\n",
 				var_name, n_dims );
-		new_var->first_file = new_fdb;
-		new_var->last_file  = new_fdb;
 		new_var->global_min = 0.0;
 		new_var->global_max = 0.0;
 		new_var->user_min   = 0.0;
@@ -459,29 +412,27 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 		new_var->user_set_blowup   = -99999;
 		new_var->auto_set_no_range = 0;
 		new_var->have_set_range    = false;
-		new_var->size       = fi_var_size( file_id, var_name );
+		{
+		size_t *raw_size = fi_var_size( file_id, var_name );
+		new_var->size.assign( raw_size, raw_size + n_dims );
+		free( raw_size );
+		}
+		new_fdb->index      = 0;	/* Since this is the FIRST fdb for this var */
+		new_var->files.push_back( std::move( new_fdb_owner ) );
 		new_var->fill_value = DEFAULT_FILL_VALUE;
 		fi_fill_value( new_var, &(new_var->fill_value) );
-		new_fdb->prev       = NULL;
-		new_fdb->index      = 0;	/* Since this is the FIRST fdb for this var */
 
-		/* Init the dim mapping info */
-		new_var->scalar_dim_map_info = (NCDim_map_info **)malloc( sizeof( NCDim_map_info * ) * MAX_SCALAR_COORDS );
-		if( new_var->scalar_dim_map_info == NULL ) {
-			fprintf( stderr, "Error allocating space for scalar coordinates\n" );
-			exit(-1);
-			}
-		for( i=0; i<MAX_SCALAR_COORDS; i++ )
-			new_var->scalar_dim_map_info[i] = NULL;
-		new_var->n_scalar_coords = 0;
+		/* Init the dim mapping info -- scalar_dim_map_info starts empty
+		 * and grows (up to MAX_SCALAR_COORDS) as scalar coords are
+		 * discovered in handle_dim_mapping_scalar(). */
 		handle_dim_mapping( new_var );	/* needs to be before fill_dim_structs cuz latter access fi_dim_info */
 
 		fill_dim_structs( new_var );
-		add_to_varlist  ( &variables, new_var );
 		new_var->is_virtual = false;
+		variables.push_back( std::move( new_var_owner ) );
 
 		}
-	else	/* YES -- just add the FDB to the list of files in which 
+	else	/* YES -- just add the FDB to the list of files in which
 		 * this variable appears, and accumulate the variable's size.
 		 */
 		{
@@ -489,19 +440,14 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 		if( options.debug )
 			printf( "adding another file with variable %s in it\n",
 				var_name );
-		if( var->last_file == NULL ) {
+		if( var->files.empty() ) {
 			fprintf( stderr, "ncview: add_var_to_list: internal ");
 			fprintf( stderr, "inconsistency; var has no last_file\n" );
 			exit( -1 );
 			}
-		fdb = var->first_file;
-		while( fdb->next != NULL )
-			fdb = fdb->next;
-		fdb->next         = new_fdb;
-		new_fdb->prev     = fdb;
-		new_fdb->index    = ((FDBlist *)(new_fdb->prev))->index + 1;	/* so index for this fdb is 1 more than index for prev one */
-		var->last_file    = new_fdb;
-		*(var->size)      += *(new_fdb->var_size);	/* this works b/c you can only concatenate across first (timelike) dim */
+		new_fdb->index    = var->files.back()->index + 1;	/* so index for this fdb is 1 more than index for prev one */
+		var->size[0]      += new_fdb->var_size[0];	/* this works b/c you can only concatenate across first (timelike) dim */
+		var->files.push_back( std::move( new_fdb_owner ) );
 		var->is_virtual   = true;
 		}
 }
@@ -511,11 +457,8 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
  * read that in from each file that the var lives in.
  */
 	void
-cache_scalar_coord_info( NCVar *vars )
+cache_scalar_coord_info( const std::vector<std::unique_ptr<NCVar>> &vars )
 {
- 	NCVar		*v;
-	FDBlist		*tfile;
-	int		nfiles, ifile, nsc, isc;
 	NCDim_map_info	*dmi;
 	float		fval;
 	size_t		zeros[MAX_NC_DIMS], ones[MAX_NC_DIMS], n_ts, ii, i_cursor, n_ts_this_file;
@@ -526,106 +469,86 @@ cache_scalar_coord_info( NCVar *vars )
 	 * to the file (FDBlist) associated with EACH TIMESTEP of
 	 * the variable
 	 */
-	v = vars;
-	while( v != NULL ) {
+	for( const auto &vptr : vars ) {
+		NCVar *v = vptr.get();
 		n_ts = v->size[0];	/* total number of timesteps across ALL files */
 		if( n_ts > 0 ) {
 			if( options.debug )
-				printf( "Constructing timestep_2_fdb array for var %s, which has %ld timesteps\n", v->name, n_ts );
+				printf( "Constructing timestep_2_fdb array for var %s, which has %ld timesteps\n", v->name.c_str(), n_ts );
 			/* One FDBlist pointer for each timestep of the var */
-			v->timestep_2_fdb = (FDBlist **)malloc( sizeof( FDBlist *) * n_ts );
-			if( v->timestep_2_fdb == NULL ) {
-				fprintf( stderr, "Error, failed to allocate space for FDBlist pointer block of length %ld!\n",
-						n_ts );
-				exit(-1);
-				}
+			v->timestep_2_fdb.resize( n_ts );
 
-			tfile = v->first_file;
 			i_cursor = 0L;
-			while( tfile != NULL ) {
-				/* Set all FDBpointers for the timesteps in THIS file 
+			for( auto &tfile_owner : v->files ) {
+				FDBlist *tfile = tfile_owner.get();
+				/* Set all FDBpointers for the timesteps in THIS file
 				 * to point to this file
 				 */
 				n_ts_this_file = tfile->var_size[0];
 				if( options.debug )
-					printf( "%ld timesteps of var %s are in file %s\n", n_ts_this_file, v->name, tfile->filename ); 
-				for( ii=0; ii<n_ts_this_file; ii++ ) 
+					printf( "%ld timesteps of var %s are in file %s\n", n_ts_this_file, v->name.c_str(), tfile->filename.c_str() );
+				for( ii=0; ii<n_ts_this_file; ii++ )
 					v->timestep_2_fdb[i_cursor++] = tfile;
-				tfile = tfile->next;
 				}
 			if( i_cursor != n_ts ) {
 				fprintf( stderr, "Internal error: in routine cache_scalar_coord_info, got a total length of the unlimited dim in var %s to be %ld, but when setting pointers to the files, there seemd to be only %ld entries\n",
-					v->name, n_ts, i_cursor );
+					v->name.c_str(), n_ts, i_cursor );
 				exit(-1);
 				}
 			}
-		v = v->next;
 		}
 
 	/* These will be used as the start (zeros) and count (ones)
 	 * to get the scalar data
 	 */
-	for( isc=0; isc<MAX_NC_DIMS; isc++ ) {
+	for( int isc=0; isc<MAX_NC_DIMS; isc++ ) {
 		zeros[isc] = 0L;
 		ones[isc]  = 1L;
 		}
 
-	v = vars;
-	while( v != NULL ) {
-		nsc = v->n_scalar_coords;
+	for( const auto &vptr : vars ) {
+		NCVar *v = vptr.get();
+		int nsc = (int)v->scalar_dim_map_info.size();
 		if( nsc > 0 ) {
-			tfile = v->first_file;
-
 			/* How many files does this var live in? */
-			nfiles = 0;
-			while( tfile != NULL ) {
-				nfiles++;
-				tfile = tfile->next;
-				}
+			int nfiles = (int)v->files.size();
 			if( options.debug )
-				printf( "Making cache for the %d SCALAR coordinates of variable %s, which lives in %d files\n", nsc, v->name, nfiles );
+				printf( "Making cache for the %d SCALAR coordinates of variable %s, which lives in %d files\n", nsc, v->name.c_str(), nfiles );
 
 			/* We hold the values of the scalar coords in the data_cache */
-			for( isc=0; isc<nsc; isc++ ) {	
-				dmi = v->scalar_dim_map_info[isc];
-				dmi->data_cache = (float *)malloc( sizeof(float) * nfiles ); /* one val per FILE (not timestep) */
-				if( dmi->data_cache == NULL ) {
-					fprintf( stderr, "Error, failed to allocate space for %d scalar coord vals\n", nfiles );
-					exit(-1);
-					}
+			for( int isc=0; isc<nsc; isc++ ) {
+				dmi = v->scalar_dim_map_info[isc].get();
+				dmi->data_cache.resize( nfiles ); /* one val per FILE (not timestep) */
 				}
 
 			/* Go through each file and read in the vals of all the scalar coords */
-			tfile = v->first_file;
-			for( ifile=0; ifile<nfiles; ifile++ ) {
-				for( isc=0; isc<nsc; isc++ ) {	
-					dmi = v->scalar_dim_map_info[isc];
+			for( int ifile=0; ifile<nfiles; ifile++ ) {
+				FDBlist *tfile = v->files[ifile].get();
+				for( int isc=0; isc<nsc; isc++ ) {
+					dmi = v->scalar_dim_map_info[isc].get();
 					if( dmi == NULL ) {
 						fprintf( stderr, "Coding error, uninitialized pointer to a scalar dim info struct is being used\n" );
 						exit(-1);
 						}
-					netcdf_fi_get_data( tfile->id, dmi->coord_var_name, zeros, ones, &fval, NULL );
+					netcdf_fi_get_data( tfile->id, const_cast<char *>(dmi->coord_var_name.c_str()), zeros, ones, &fval, NULL );
 					if( options.debug ) printf( "In file %d/%d, value of scalar coord \"%s\" is %f %s\n",
-						ifile, nfiles, dmi->coord_var_name, fval, dmi->coord_var_units );
+						ifile, nfiles, dmi->coord_var_name.c_str(), fval, dmi->coord_var_units.c_str() );
 					dmi->data_cache[ifile] = fval;
 					}
-				tfile = tfile->next;
 				}
 
 			/* Now see if all the scalar values are the same */
-			for( isc=0; isc<nsc; isc++ ) {	
-				dmi = v->scalar_dim_map_info[isc];
-				dmi->scalar_all_same = 1;	
+			for( int isc=0; isc<nsc; isc++ ) {
+				dmi = v->scalar_dim_map_info[isc].get();
+				dmi->scalar_all_same = 1;
 				if( nfiles > 1 ) {
-					for( ifile=1; ifile<nfiles; ifile++ ) {
-						if( dmi->data_cache[ifile] != dmi->data_cache[0] ) 
+					for( int ifile=1; ifile<nfiles; ifile++ ) {
+						if( dmi->data_cache[ifile] != dmi->data_cache[0] )
 							dmi->scalar_all_same = 0;
 						}
 					}
 				}
 			}
-
-		v = v->next;
 		}
 
 	if( options.debug ) printf( "cache_scalar_coord_info: finished\n" );
@@ -648,13 +571,13 @@ init_min_max( NCVar *var )
 	var->global_min = init_min;
 	var->global_max = init_max;
 
-	printf( "calculating min and maxes for %s", var->name );
+	printf( "calculating min and maxes for %s", var->name.c_str() );
 
 	/* n_other is the number of elements in a single timeslice of the data array */
-	n_timesteps = *(var->size);
+	n_timesteps = var->size[0];
 	n_other     = 1L;
 	for( i=1; i<var->n_dims; i++ )
-		n_other *= *(var->size+i);
+		n_other *= var->size[i];
 
 	data.resize( n_other );
 
@@ -814,7 +737,7 @@ get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data,
 	size_t	*count = count_v.data();
 	fill_v = var->fill_value;
 
-	n_time = *(var->size);
+	n_time = var->size[0];
 	if( tstep > (n_time-1) )
 		tstep = n_time-1;
 
@@ -822,7 +745,7 @@ get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data,
 	*(start) = tstep;
 	for( i=1; i<var->n_dims; i++ ) {
 		*(start+i) = 0L;
-		*(count+i) = *(var->size + i);
+		*(count+i) = var->size[i];
 		}
 
 	if( verbose ) {
@@ -852,14 +775,9 @@ get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data,
 	NCVar *
 get_var( char *var_name )
 {
-	NCVar	*ret_val;
-
-	ret_val = variables;
-	while( ret_val != NULL )
-		if( strcmp( var_name, ret_val->name ) == 0 )
-			return( ret_val );
-		else
-			ret_val = ret_val->next;
+	for( auto &vptr : variables )
+		if( vptr->name == var_name )
+			return( vptr.get() );
 
 	return( NULL );
 }
@@ -891,27 +809,30 @@ virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **fil
 {
 	FDBlist	*f;
 	size_t	v_place, cur_start, cur_end;
+	size_t	file_idx;
 	int	i, n_dims;
 
-	f       = var->first_file;
-	n_dims  = fi_n_dims( f->id, var->name );
+	f       = var->files.front().get();
+	n_dims  = fi_n_dims( f->id, const_cast<char *>(var->name.c_str()) );
 	v_place = *(virt_pl);
 
-	if( v_place >= *(var->size) ) {
+	if( v_place >= var->size[0] ) {
 		fprintf( stderr, "ncview: virt_to_actual_place: error trying ");
 		fprintf( stderr, "to convert the following virtual place to\n" );
-		fprintf( stderr, "an actual place for variable %s:\n", var->name );
+		fprintf( stderr, "an actual place for variable %s:\n", var->name.c_str() );
 		for( i=0; i<n_dims; i++ )
 			fprintf( stderr, "[%1d]: %ld\n", i, *(virt_pl+i) );
 		exit( -1 );
 		}
 
+	file_idx  = 0;
 	cur_start = 0L;
-	cur_end   = *(f->var_size) - 1L;
+	cur_end   = f->var_size[0] - 1L;
 	while( v_place > cur_end ) {
-		cur_start += *(f->var_size);
-		f          = f->next;
-		cur_end   += *(f->var_size);
+		cur_start += f->var_size[0];
+		file_idx++;
+		f          = var->files[file_idx].get();
+		cur_end   += f->var_size[0];
 		}
 
 	*file = f;
@@ -929,20 +850,19 @@ virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **fil
 handle_dim_mapping( NCVar *v )
 {
 	int	i, varid, ncid, coord_var_ndims, coord_var_neff_dims;
-	size_t	coord_var_eff_size[MAX_NC_DIMS], *coord_var_size; 
-	char	*coord_att, *s, orig_coord_att[1024];
+	size_t	coord_var_eff_size[MAX_NC_DIMS];
+	char	*s, orig_coord_att[1024];
 	const 	char *delim = " \n\0\t";
 
-	if( options.debug ) printf( "handle_dim_mapping: entering for var %s\n", v->name );
+	if( options.debug ) printf( "handle_dim_mapping: entering for var %s\n", v->name.c_str() );
 
-	ncid = v->first_file->id;
+	ncid = v->files.front()->id;
 
-	/* dim_map_info itself is never NULL. If the var has no coordinate mappings,
-	 * then this will point to an array each entry of which is NULL.
+	/* dim_map_info itself is never empty of entries. If the var has no coordinate
+	 * mappings, then every entry stays a null unique_ptr.
 	 */
-	v->dim_map_info = (NCDim_map_info **)malloc( sizeof(NCDim_map_info *) * v->n_dims );
-	for( i=0; i<v->n_dims; i++ )
-		(v->dim_map_info)[i] = (NCDim_map_info *)NULL;
+	v->dim_map_info.clear();
+	v->dim_map_info.resize( v->n_dims );
 
 	/* See if this var has a "coordinates" attribute */
 	/* coord_att is strtok()'d in place below and its address (with tokens
@@ -953,10 +873,10 @@ handle_dim_mapping( NCVar *v )
 	std::string coord_att_s = netcdf_get_char_att( ncid, v->name, "coordinates" );
 	if( coord_att_s.empty() )
 		return;
-	coord_att = strdup( coord_att_s.c_str() );
+	char *coord_att = strdup( coord_att_s.c_str() );
 
 	snprintf( orig_coord_att, sizeof(orig_coord_att), "%s", coord_att );
-	if( options.debug ) printf( "var %s HAS a coordinates attribute: >%s<\n", v->name, coord_att );
+	if( options.debug ) printf( "var %s HAS a coordinates attribute: >%s<\n", v->name.c_str(), coord_att );
 
 	/* Check for blank-delimited strings in the coordinates attribute
 	 * that name other vars in the file
@@ -965,15 +885,15 @@ handle_dim_mapping( NCVar *v )
 	while( s != NULL ) {
 
 		/* See if this token "s", which came from the coordinates attribute,
-		 * is the name of a variable in the file 
+		 * is the name of a variable in the file
 		 */
 		varid = safe_ncvarid( ncid, s );
 		if( varid != -1 ) {	/* yes, the token "s" matches the name of a var in the file! */
 
 			/* Right now, I'm only going to try to handle either scalar (0d)
-			 * or 2-D mapping dims.  Scalar mapping dims just give an 
+			 * or 2-D mapping dims.  Scalar mapping dims just give an
 			 * additional location where the data is valid; for example,
-			 * the data might be a 2d field in (lon,lat) and have a 
+			 * the data might be a 2d field in (lon,lat) and have a
 			 * "height" coordinate that tells the height the data is at.
 			 * If the dim is more complicated than that, then we simply
 			 * ignore the mapping.  In particular, the test WRF output file
@@ -984,27 +904,28 @@ handle_dim_mapping( NCVar *v )
 			 * dims, then forget it.
 			 */
 			coord_var_ndims = netcdf_n_dims( ncid, s );
-			coord_var_size = netcdf_fi_var_size( ncid, s );
+			size_t *coord_var_size_raw = netcdf_fi_var_size( ncid, s );
 			coord_var_neff_dims = 0;
 			for( i=0; i<coord_var_ndims; i++ )
-				if( coord_var_size[i] > 1 ) {
-					coord_var_eff_size[coord_var_neff_dims] = coord_var_size[i];
+				if( coord_var_size_raw[i] > 1 ) {
+					coord_var_eff_size[coord_var_neff_dims] = coord_var_size_raw[i];
 					coord_var_neff_dims++;
 					}
+			free( coord_var_size_raw );
 
 			/* These routines are where we do most of the work
 			 */
-			if( coord_var_neff_dims == 0 ) 
+			if( coord_var_neff_dims == 0 )
 				handle_dim_mapping_scalar( v, s, coord_att );
 
-			else if( coord_var_neff_dims == 2 ) 
+			else if( coord_var_neff_dims == 2 )
 				handle_dim_mapping_2d( v, s, coord_att, coord_var_eff_size, coord_var_neff_dims,
 					orig_coord_att, ncid );
 
 			else
 				{
-				printf( "Note: the coordinates attribute for variable %s is being ignored,\n", v->name );
-				printf( "since it specifies a variable (%s) that has %d effective dims (an effective dim has a size greater than 1)\n", 
+				printf( "Note: the coordinates attribute for variable %s is being ignored,\n", v->name.c_str() );
+				printf( "since it specifies a variable (%s) that has %d effective dims (an effective dim has a size greater than 1)\n",
 					s, coord_var_neff_dims );
 				printf( "I am not set up to handle cases with coordinate mapping using anything other than 0 or 2 effective dims\n" );
 				return;
@@ -1025,45 +946,40 @@ handle_dim_mapping( NCVar *v )
 	static void
 handle_dim_mapping_scalar( NCVar *v, char *coord_var_name, char *coord_att )
 {
-	NCDim_map_info	*tmi;
-
-	if( v->n_scalar_coords >= MAX_SCALAR_COORDS ) {
+	if( (int)v->scalar_dim_map_info.size() >= MAX_SCALAR_COORDS ) {
 		printf( "Note: var %s has exceeded the allowable number of scalar coordinate dimensions, which is %d. Ignoring the rest\n",
-			v->name, MAX_SCALAR_COORDS);
+			v->name.c_str(), MAX_SCALAR_COORDS);
 		return;
 		}
 
-	/* Make a new SCALAR dim map info structure to 
+	/* Make a new SCALAR dim map info structure to
 	 * hold our single value
 	 */
-	tmi = (NCDim_map_info *)malloc( sizeof(NCDim_map_info) );
+	auto tmi_owner = std::make_unique<NCDim_map_info>();
+	NCDim_map_info *tmi = tmi_owner.get();
 
 	/* Copy info to the new scalar dim map structure
 	 */
 	tmi->var_i_map = v;
-	tmi->coord_var_name = (char *)malloc( sizeof(char) * (strlen(coord_var_name) + 1));
-	snprintf( tmi->coord_var_name, strlen(coord_var_name) + 1, "%s", coord_var_name );
-	/* tmi->coord_var_units (still a raw char*, Phase 5 converts
-	 * NCDim_map_info) is printed with a bare "%s" with no NULL guard in
-	 * view.cc, so an absent-units NULL must stay NULL here rather than
-	 * become a strdup'd "" -- that would silently change the rendered
-	 * "(null)" text to nothing. */
-	std::string coord_var_units_s = fi_var_units( v->first_file->id, coord_var_name );
-	tmi->coord_var_units = coord_var_units_s.empty() ? NULL : strdup( coord_var_units_s.c_str() );
+	tmi->coord_var_name = coord_var_name;
+	/* tmi->coord_var_units is printed with a bare "%s" with no NULL guard
+	 * in view.cc, so an absent-units result must stay empty here rather
+	 * than something that would render as blank text either way -- the
+	 * empty-string convention is unambiguous now that this is std::string. */
+	tmi->coord_var_units = fi_var_units( v->files.front()->id, coord_var_name );
 	tmi->scalar_all_same = 0;
 
 	/* Add this new scalar dim to the array */
-	v->scalar_dim_map_info[v->n_scalar_coords] = tmi;
-	(v->n_scalar_coords)++;
+	v->scalar_dim_map_info.push_back( std::move( tmi_owner ) );
 
-	if( options.debug ) printf("Added a new scalar coord to var %s: name=%s count=%d\n",
-		v->name, coord_var_name, v->n_scalar_coords );
+	if( options.debug ) printf("Added a new scalar coord to var %s: name=%s count=%zu\n",
+		v->name.c_str(), coord_var_name, v->scalar_dim_map_info.size() );
 
-	/* Note that we CANNOT fill out the data values for this "scalar" coord var 
+	/* Note that we CANNOT fill out the data values for this "scalar" coord var
 	 * yet. The reason is because this var might live in multiple files, and
-	 * each file could have a different value of the scalar variable. I.e., 
+	 * each file could have a different value of the scalar variable. I.e.,
 	 * the scalar coord var could be used to essentially add another unlimited
-	 * dimension to the variable. To handle this, we must read in the 
+	 * dimension to the variable. To handle this, we must read in the
 	 * scalar values from EACH FILE after we know what all the files this
 	 * variable lives in are. That happens in the routine that calls this
 	 * one, add_var_to_list
@@ -1075,47 +991,39 @@ handle_dim_mapping_scalar( NCVar *v, char *coord_var_name, char *coord_att )
 handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *coord_var_eff_size,
 		int coord_var_neff_dims, char *orig_coord_att, int ncid )
 {
-	NCDim_map_info	*map_info;
 	size_t		totsize, start[MAX_NC_DIMS], count[MAX_NC_DIMS];
 	int		i, n_matches, err, is_lat, is_lon, idx_lat_dim, idx_lon_dim,
 			must_be_left_of, j;
 
-	/* Make new, uninitialized dim_map_info structure */
-	map_info = (NCDim_map_info *)malloc( sizeof(NCDim_map_info) );
-	if( map_info == NULL ) {
-		fprintf( stderr, "Error, could not allocate space for a dim mapping info structure\n" );
-		exit(-1);
-		}
+	/* Make new, uninitialized dim_map_info structure. Ownership transfers into
+	 * v->dim_map_info[i] below on every path except an early "abandon mapping"
+	 * return, where the local unique_ptr cleans it up automatically. */
+	auto map_info_owner = std::make_unique<NCDim_map_info>();
+	NCDim_map_info *map_info = map_info_owner.get();
 
 	/* Copy over the coordinate attribute for posterity */
-	map_info->coord_att = (char *)malloc( sizeof(char)*(strlen(coord_att)+2));
-	if( map_info->coord_att == NULL ) {
-		fprintf( stderr, "Error, failed to allocate space to copy the coordinate attribute\n" );
-		exit(-1);
-		}
-	snprintf( map_info->coord_att, sizeof(char)*(strlen(coord_att)+2), "%s", coord_att );
+	map_info->coord_att = coord_att;
 
 	/* This is the "variable that I map" */
 	map_info->var_i_map = v;
 
 	/* Since "coord_var_name" matches a var name, it must be the coordinate variable name in particular.
-	 * The coordinate variable is the var in the file that holds mapping info 
+	 * The coordinate variable is the var in the file that holds mapping info
 	 */
-	map_info->coord_var_name = (char *)malloc( strlen(coord_var_name) + 2 );
-	if( map_info->coord_att == NULL ) {
-		fprintf( stderr, "Error, failed to allocate space to copy the coordinate variable name\n" );
-		exit(-1);
-		}
-	snprintf( map_info->coord_var_name, strlen(coord_var_name) + 2, "%s", coord_var_name );
+	map_info->coord_var_name = coord_var_name;
 
-	if( options.debug ) printf( "Coord var named >%s< is a NON-SCALAR coord used to map a dimension of var %s\n", 
-			coord_var_name, v->name );
+	if( options.debug ) printf( "Coord var named >%s< is a NON-SCALAR coord used to map a dimension of var %s\n",
+			coord_var_name, v->name.c_str() );
 
 	/* See how many dims this coord var has */
 	map_info->coord_var_ndims = netcdf_n_dims( ncid, coord_var_name );
 
 	/* Get size of the coord var */
-	map_info->coord_var_size = netcdf_fi_var_size( ncid, coord_var_name );
+	{
+	size_t *raw = netcdf_fi_var_size( ncid, coord_var_name );
+	map_info->coord_var_size.assign( raw, raw + map_info->coord_var_ndims );
+	free( raw );
+	}
 
 	if( options.debug ) {
 		printf( "non-scalar Coord var %s has %d dims, here are their sizes: ",
@@ -1125,18 +1033,14 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		printf( "\n" );
 		}
 
-	/* Get array of boolean indicating which dims in the 
+	/* Get array of boolean indicating which dims in the
 	 * base var match the shape of this coord var.  For
 	 * instance, if we have a var of shape (10,20,180,360)
 	 * and a coord var of shape (180,360) then this indicating
 	 * array will be 0,0,1,1.
 	 */
-	map_info->matching_var_dims  = (int *)   malloc( sizeof(int)    * v->n_dims );
-	map_info->index_place_factor = (size_t *)malloc( sizeof(size_t) * v->n_dims );
-	for( i=0; i<v->n_dims; i++ ) {
-		map_info->matching_var_dims [i] = 0;
-		map_info->index_place_factor[i] = 0;
-		}
+	map_info->matching_var_dims.assign( v->n_dims, 0 );
+	map_info->index_place_factor.assign( v->n_dims, 0 );
 
 	/* We could have a problem if the dim sizes are repeated instead of unique.
 	 * For example, imagine a square data array of size [n,n].  Then we have
@@ -1168,7 +1072,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		n_matches += map_info->matching_var_dims[i];
 	if( n_matches != coord_var_neff_dims ) {
 		fprintf( stderr, "Warning: did not correctly match mapped dims specified in the coordinates attribute to dims in the variable\n" );
-		fprintf( stderr, "Problem encountered on variable \"%s\" which has shape (", v->name );
+		fprintf( stderr, "Problem encountered on variable \"%s\" which has shape (", v->name.c_str() );
 		for( i=0; i<v->n_dims; i++ ) {
 			fprintf( stderr, "%ld", v->size[i] );
 			if( i < (v->n_dims-1))
@@ -1185,29 +1089,29 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		fprintf( stderr, "), which does not match dimensions in the variable being mapped!\n" );
 		fprintf( stderr, "Abandoning coordinate mapping for this variable\n-------------\n" );
 		for( i=0; i<v->n_dims; i++ )
-			(v->dim_map_info)[i] = (NCDim_map_info *)NULL;
+			v->dim_map_info[i].reset();
 		return;
 		}
 	if( (n_matches<1) || (n_matches>2)) {
 		fprintf( stderr, "(Location B) Error, did not correctly match mapped dims specified in the coordinates attribute to dims in the variable\n" );
 		fprintf( stderr, "(Location B) Please send email to dpierce@ucsd.edu letting me know what your coordinates attribute looks like so I can fix this problem.\n" );
-		fprintf( stderr, "Problem encountered on variable \"%s\"\n", v->name );
+		fprintf( stderr, "Problem encountered on variable \"%s\"\n", v->name.c_str() );
 		fprintf( stderr, "which has coordinates attribute \"%s\"\n", orig_coord_att );
 		fprintf( stderr, "Abandoning coordinate mapping for this variable\n" );
 		for( i=0; i<v->n_dims; i++ )
-			(v->dim_map_info)[i] = (NCDim_map_info *)NULL;
+			v->dim_map_info[i].reset();
 		return;
 		}
 
 	/* Try to figure out if this dim is 'latitude' like
 	 * or 'longitude' like....these are the only options
-	 * for now. 
+	 * for now.
 	 */
-	err = determine_lat_lon( map_info->coord_var_name, &is_lat, &is_lon );
+	err = determine_lat_lon( const_cast<char *>(map_info->coord_var_name.c_str()), &is_lat, &is_lon );
 	if( err != 0 ) {
 		/* Abort this process */
 		for( i=0; i<v->n_dims; i++ )
-			(v->dim_map_info)[i] = (NCDim_map_info *)NULL;
+			v->dim_map_info[i].reset();
 		return;
 		}
 	idx_lon_dim = -1;
@@ -1217,19 +1121,19 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		/* Match this coord var to the last one on the right */
 		for( i=v->n_dims-1; i>=0; i-- ) {
 			if( map_info->matching_var_dims[i] == 1 ) {
-				v->dim_map_info[i] = map_info;
-				idx_lon_dim = i;
 				if( options.debug )
 					printf( "In variable \"%s\", dimension \"%s\" is mapped by LONGITUDE-like %d-dimensional variable \"%s\"\n",
-					v->name, netcdf_dim_id_to_name( v->first_file->id, v->name, i).c_str(),
-					map_info->coord_var_ndims, map_info->coord_var_name );
+					v->name.c_str(), netcdf_dim_id_to_name( v->files.front()->id, v->name, i).c_str(),
+					map_info->coord_var_ndims, map_info->coord_var_name.c_str() );
+				v->dim_map_info[i] = std::move( map_info_owner );
+				idx_lon_dim = i;
 				break;
 				}
 			}
 		/* Now, since we've found the index of the lon dim, the
 		 * index of the lat dim must be the other one
 		 */
-		for( i=0; i<v->n_dims; i++ ) 
+		for( i=0; i<v->n_dims; i++ )
 			if( (map_info->matching_var_dims[i] == 1) && (i != idx_lon_dim))
 				idx_lat_dim = i;
 		}
@@ -1239,18 +1143,18 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		for( i=0; i<v->n_dims; i++ ) {
 			if( map_info->matching_var_dims[i] == 1 ) {
 				idx_lat_dim = i;
-				v->dim_map_info[i] = map_info;
 				if( options.debug )
 					printf( "In variable \"%s\", dimension \"%s\" is mapped by LATITUDE-like dimension %d-dimensional variable \"%s\"\n",
-					v->name, netcdf_dim_id_to_name( v->first_file->id, v->name, i).c_str(),
-					map_info->coord_var_ndims, map_info->coord_var_name );
+					v->name.c_str(), netcdf_dim_id_to_name( v->files.front()->id, v->name, i).c_str(),
+					map_info->coord_var_ndims, map_info->coord_var_name.c_str() );
+				v->dim_map_info[i] = std::move( map_info_owner );
 				break;
 				}
 			}
 		/* Now, since we've found the index of the lat dim, the
 		 * index of the lon dim must be the other one
 		 */
-		for( i=0; i<v->n_dims; i++ ) 
+		for( i=0; i<v->n_dims; i++ )
 			if( (map_info->matching_var_dims[i] == 1) && (i != idx_lat_dim))
 				idx_lon_dim = i;
 		}
@@ -1268,13 +1172,8 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		start[i] = 0L;
 		count[i] = map_info->coord_var_size[i];
 		}
-	map_info->data_cache = (float *)malloc( totsize*sizeof(float) );
-	if( map_info->data_cache == NULL ) {
-		fprintf( stderr, "Error, could not allocate cache for dim map variable %s; total size (bytes): %ld\n", 
-			map_info->coord_var_name, totsize*sizeof(float) );
-		exit(-1);
-		}
-	netcdf_fi_get_data( ncid, map_info->coord_var_name, start, count, map_info->data_cache, NULL );
+	map_info->data_cache.resize( totsize );
+	netcdf_fi_get_data( ncid, const_cast<char *>(map_info->coord_var_name.c_str()), start, count, map_info->data_cache.data(), NULL );
 
 	if( n_matches == 1 ) {
 		if( idx_lon_dim == -1 )
@@ -1314,92 +1213,61 @@ fill_dim_structs( NCVar *v )
 	NCDim	*d;
 	std::string dim_name, tmp_units;
 	static  int global_id = 0;
-	FDBlist	*cursor;
 
 	debug = 0;
 
-	if( debug == 1 ) printf( "fill_dim_structs: entering for var %s, which has %d dims\n", v->name, v->n_dims );
+	if( debug == 1 ) printf( "fill_dim_structs: entering for var %s, which has %d dims\n", v->name.c_str(), v->n_dims );
 
-	fileid = v->first_file->id;
-	v->dim = (NCDim **)malloc( v->n_dims*sizeof( NCDim *));
+	fileid = v->files.front()->id;
+	v->dim.clear();
+	v->dim.resize( v->n_dims );
 	for( i=0; i<v->n_dims; i++ ) {
-		/* Explicit up-front NULL, matching handle_dim_mapping()'s same
-		 * pattern for its array just above -- redundant with the
-		 * if/else below (which unconditionally sets this slot either
-		 * way), but the extra local std::string scopes this phase
-		 * added just below made GCC's flow analysis lose track of
-		 * that and report a new spurious -Wmaybe-uninitialized on
-		 * *(v->dim) further down. */
-		*(v->dim + i) = NULL;
 		dim_name = fi_dim_id_to_name( fileid, v->name, i );
 		if( debug == 1 ) printf( "fill_dim_structs: dim %d has name %s and length %ld\n", i, dim_name.c_str(), v->size[i] );
 		if( is_scannable( v, i ) ) {
-			*(v->dim + i)	= (NCDim *)malloc( sizeof( NCDim ));
-			d            	= *(v->dim+i);
-			/* d->name/long_name/units/calendar are still raw char*
-			 * (Phase 5 converts NCDim); bridge with strdup() the
-			 * same way the rest of this phase does. fi_dim_longname()
-			 * never returns empty (it falls back to echoing dim_name),
-			 * so a plain strdup() is fine there, but fi_dim_units()/
-			 * fi_dim_calendar() can return empty for "no such
-			 * attribute" and some downstream call sites (e.g.
-			 * util.cc's own coord_var_units handling, udu.cc) test
-			 * d->units/d->calendar against NULL specifically -- an
-			 * empty result must stay NULL, not become a strdup'd "".
-			 */
-			d->name      	= strdup( dim_name.c_str() );
-			d->long_name 	= strdup( fi_dim_longname( fileid, dim_name ).c_str() );
+			v->dim[i] = std::make_unique<NCDim>();
+			d            	= v->dim[i].get();
+			d->name      	= dim_name;
+			d->long_name 	= fi_dim_longname( fileid, dim_name );
 			d->have_calc_minmax = 0;
-			{
-			std::string units_s = fi_dim_units( fileid, dim_name );
-			d->units = units_s.empty() ? NULL : strdup( units_s.c_str() );
-			}
+			d->units = fi_dim_units( fileid, dim_name );
 			d->units_change = 0;
-			d->size      	= *(v->size+i);
-			{
-			std::string calendar_s = fi_dim_calendar( fileid, dim_name );
-			d->calendar = calendar_s.empty() ? NULL : strdup( calendar_s.c_str() );
-			}
+			d->size      	= v->size[i];
+			d->calendar = fi_dim_calendar( fileid, dim_name );
 			d->global_id 	= ++global_id;
 			handle_time_dim( fileid, v, i );
 			if( options.debug )
-				printf( "adding scannable dim to var %s: dimname: %s dimsize: %ld\n", v->name, dim_name.c_str(), d->size );
+				printf( "adding scannable dim to var %s: dimname: %s dimsize: %ld\n", v->name.c_str(), dim_name.c_str(), d->size );
 			}
 		else
 			{
-			/* Indicate non-scannable dimensions by a NULL */
-			*(v->dim + i) = NULL;
+			/* Indicate non-scannable dimensions by a null entry */
+			v->dim[i].reset();
 			if( options.debug )
 				printf( "adding non-scannable dim to var %s: dim name: %s size: %ld\n",
-					v->name, fi_dim_id_to_name( fileid, v->name, i).c_str(), *(v->size+i) );
+					v->name.c_str(), fi_dim_id_to_name( fileid, v->name, i).c_str(), v->size[i] );
 			}
 		}
 
 	/* If this variable lives in more than one file, it might have
 	 * different time units in each one.  Check for this.
 	 */
-	/* *(v->dim) (i.e. v->dim[0]) is unconditionally written by every
-	 * iteration of the loop above (the explicit NULL at its top, then
-	 * overwritten either way by the if/is_scannable branch) -- but GCC's
-	 * flow analysis loses track of that once the loop body contains the
-	 * local std::string scopes this phase added above, and reports a
-	 * spurious -Wmaybe-uninitialized here that did not fire before this
-	 * change. Narrowly suppressed rather than restructured further,
-	 * since v->dim[0] really is always initialized by this point. */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-	if( v->is_virtual && (*(v->dim) != NULL) && (v->first_file->next != NULL) ) {
-#pragma GCC diagnostic pop
+	if( v->is_virtual && (v->dim[0] != nullptr) && (v->files.size() > 1) ) {
 		/* The timelike dimension MUST be the first one! */
-		d = *(v->dim+0);
+		d = v->dim[0].get();
 		if( d->timelike ) {
 			/* Go through each file and see if it has the same units
-			 * as the first file, which is stored in d->units
-			 */
-			cursor = v->first_file->next;
+			 * as the first file, which is stored in d->units.
+			 *
+			 * Preserved verbatim from upstream: 'cursor' is never
+			 * advanced inside this loop, so if it ever triggers with
+			 * differing units this is an infinite loop -- a
+			 * pre-existing upstream defect, not something introduced
+			 * or fixed by this mechanical conversion. */
+			FDBlist *cursor = v->files[1].get();
 			while( cursor != NULL ) {
 				tmp_units = fi_dim_units( cursor->id, d->name );
-				if( strcmp( d->units, tmp_units.c_str() ) != 0 ) {
+				if( d->units != tmp_units ) {
 					printf( "** Warning: different time units found in different files.  Trying to compensate...\n" );
 					d->units_change = 1;
 					}
@@ -1421,7 +1289,7 @@ is_scannable( NCVar *v, int i )
 	if( i == 0 )
 		return( true );
 
-	if( *(v->size+i) > 1 )
+	if( v->size[i] > 1 )
 		return( true );
 	else
 		return( false );
@@ -1502,25 +1370,12 @@ util_mean( float *x, size_t n, float fill_value )
 	int
 equivalent_FDBs( NCVar *v1, NCVar *v2 )
 {
-	FDBlist *f1, *f2;
-
-	f1 = v1->first_file;
-	f2 = v2->first_file;
-	while( f1 != NULL ) {
-		if( f2 == NULL ) {
-			return(0); /* files differ */
-			}
-		if( f1->id != f2->id ) {
-			return(0); /* files differ */
-			}
-		f1 = f1->next;
-		f2 = f2->next;
-		}
-
-	/* Here f1 == NULL */
-	if( f2 != NULL ) {
+	if( v1->files.size() != v2->files.size() )
 		return(0); /* files differ */
-		}
+
+	for( size_t i=0; i<v1->files.size(); i++ )
+		if( v1->files[i]->id != v2->files[i]->id )
+			return(0); /* files differ */
 
 	return(1);
 }
@@ -1529,37 +1384,32 @@ equivalent_FDBs( NCVar *v1, NCVar *v2 )
 	void
 copy_info_to_identical_dims( NCVar *vsrc, NCDim *dsrc, size_t dim_len )
 {
-	NCVar	*v;
 	int	i, dims_are_same;
 	NCDim	*d;
-	size_t	j;
 
-	v = variables;
-	while( v != NULL ) {
+	for( auto &vptr : variables ) {
+		NCVar *v = vptr.get();
 		for( i=0; i<v->n_dims; i++ ) {
-			d = *(v->dim+i);
+			d = v->dim[i].get();
 			if( (d != NULL) && (d->have_calc_minmax == 0)) {
 				/* See if this dim is same as passed dim */
-				dims_are_same = (strcmp( dsrc->name, d->name ) == 0 ) &&
+				dims_are_same = (dsrc->name == d->name) &&
 						equivalent_FDBs( vsrc, v );
 				if( dims_are_same ) {
 					if( options.debug ) {
-						printf( "Dim %s (%d) is same as dim %s (%d), copying min&max from former to latter... min=%f max=%f\n", 
-							dsrc->name, dsrc->global_id, d->name, d->global_id,
+						printf( "Dim %s (%d) is same as dim %s (%d), copying min&max from former to latter... min=%f max=%f\n",
+							dsrc->name.c_str(), dsrc->global_id, d->name.c_str(), d->global_id,
 							dsrc->min, dsrc->max );
 						}
 					d->min = dsrc->min;
 					d->max = dsrc->max;
 					d->have_calc_minmax = 1;
-					d->values = (float *)malloc(dim_len*sizeof(float));
-					for( j=0L; j<dim_len; j++ )
-						*(d->values + j) = *(dsrc->values + j);
+					d->values.assign( dsrc->values.begin(), dsrc->values.begin() + dim_len );
 					d->is_lat = dsrc->is_lat;
 					d->is_lon = dsrc->is_lon;
 					}
 				}
 			}
-		v = v->next;
 		}
 }
 
@@ -1572,7 +1422,6 @@ copy_info_to_identical_dims( NCVar *vsrc, NCDim *dsrc, size_t dim_len )
 calc_dim_minmaxes( void )
 {
 	int	i, j;
-	NCVar	*v;
 	NCDim	*d;
 	char	temp_str[1024];
 	nc_type	type;
@@ -1581,47 +1430,47 @@ calc_dim_minmaxes( void )
 	size_t	dim_len;
 	size_t	cursor_place[MAX_NC_DIMS];
 
-	v = variables;
-	while( v != NULL ) {
+	for( auto &vptr : variables ) {
+		NCVar *v = vptr.get();
 		for( i=0; i<v->n_dims; i++ ) {
-			d = *(v->dim+i);
+			d = v->dim[i].get();
 			if( (d != NULL) && (d->have_calc_minmax == 0)) {
-				if( options.debug ) 
-					printf( "%s %d ...min & maxes for dim d->name=>%s< (d->global_id=%d)...\n", 
-						__FILE__, __LINE__, d->name, d->global_id );
-				dim_len = *(v->size+i);
-				d->values = (float *)malloc(dim_len*sizeof(float));
+				if( options.debug )
+					printf( "%s %d ...min & maxes for dim d->name=>%s< (d->global_id=%d)...\n",
+						__FILE__, __LINE__, d->name.c_str(), d->global_id );
+				dim_len = v->size[i];
+				d->values.resize( dim_len );
 
-				for( j=0; j<v->n_dims; j++ ) 
-					cursor_place[j] = (int)(*(v->size+j)/2.0);	/* take middle in case 2-d mapped dims apply */
+				for( j=0; j<v->n_dims; j++ )
+					cursor_place[j] = (int)(v->size[j]/2.0);	/* take middle in case 2-d mapped dims apply */
 
-				type = fi_dim_value( v, i, 0L, &temp_double, temp_str, &has_bounds, &bounds_min, 
+				type = fi_dim_value( v, i, 0L, &temp_double, temp_str, &has_bounds, &bounds_min,
 								&bounds_max, cursor_place );	/* used to get type ONLY */
 				if( type == NC_DOUBLE ) {
 					for( j=0; j<dim_len; j++ ) {
 						cursor_place[i] = j;
 						type = fi_dim_value( v, i, j, &temp_double, temp_str, &has_bounds, &bounds_min, &bounds_max, cursor_place );
-						*(d->values+j) = (float)temp_double;
+						d->values[j] = (float)temp_double;
 						}
-					d->min  = *(d->values);
-					d->max  = *(d->values + dim_len - 1);
+					d->min  = d->values[0];
+					d->max  = d->values[dim_len - 1];
 					}
 				else
 					{
-					if( options.debug ) 
+					if( options.debug )
 						printf( "**Note: non-float dim found; i=%d\n", i );
 					d->min  = 1.0;
 					d->max  = (float)dim_len;
 					for( j=0; j<dim_len; j++ )
-						*(d->values+j) = (float)j;
+						d->values[j] = (float)j;
 					}
 				d->have_calc_minmax = 1;
-				
+
 				/* Try to see if the dim is a lat or lon.  Not an exact science by a long shot */
-				name_lat  = strncmp_nocase(d->name,  "lat",    3)==0;
-				units_lat = strncmp_nocase(d->units, "degree", 6) == 0;
-				name_lon  = strncmp_nocase(d->name,  "lon",    3)==0;
-				units_lon = strncmp_nocase(d->units, "degree", 6) == 0;
+				name_lat  = strncmp_nocase(const_cast<char *>(d->name.c_str()),  "lat",    3)==0;
+				units_lat = strncmp_nocase(const_cast<char *>(d->units.c_str()), "degree", 6) == 0;
+				name_lon  = strncmp_nocase(const_cast<char *>(d->name.c_str()),  "lon",    3)==0;
+				units_lon = strncmp_nocase(const_cast<char *>(d->units.c_str()), "degree", 6) == 0;
 				d->is_lat = ((name_lat || units_lat) && (d->max <  90.01) && (d->min > -90.01));
 				d->is_lon = ((name_lon || units_lon) && (d->max < 360.01) && (d->min > -180.01));
 
@@ -1636,7 +1485,6 @@ calc_dim_minmaxes( void )
 				copy_info_to_identical_dims( v, d, dim_len );
 				}
 			}
-		v = v->next;
 		}
 }
 	
@@ -1667,8 +1515,8 @@ contract_data( float *small_data, View *v, float fill_value )
 		}
 
 	/* Get old and new sizes (new size is smaller in this routine) */
-	nx   = *(v->variable->size + v->x_axis_id);
-	ny   = *(v->variable->size + v->y_axis_id);
+	nx   = v->variable->size[v->x_axis_id];
+	ny   = v->variable->size[v->y_axis_id];
 	view_get_scaled_size( options.blowup, nx, ny, &new_nx, &new_ny );
 
 	for( j=0; j<new_ny; j++ )
@@ -1731,8 +1579,8 @@ expand_data( float *big_data, View *v, size_t array_size )
 	 * original (little) array, indicazted by a "l" (little) suffix (such as il or jl),
 	 * and indices valid in the destination (big) array, which have a suffix of "b".
 	 *---------------------------------------------------------------------------------*/
-	nxl = *(v->variable->size + v->x_axis_id);	/* # of X entries in the little array */
-	nyl = *(v->variable->size + v->y_axis_id);	/* # of Y entries in the little array */
+	nxl = v->variable->size[v->x_axis_id];	/* # of X entries in the little array */
+	nyl = v->variable->size[v->y_axis_id];	/* # of Y entries in the little array */
 	nxb = nxl*blowup;				/* # of X entries in big array */
 	nyb = nyl*blowup;				/* # of Y entries in big array */
 
@@ -2141,9 +1989,9 @@ handle_time_dim( int fileid, NCVar *v, int dimid )
 {
 	NCDim   *d;
 
-	d = *(v->dim+dimid);
+	d = v->dim[dimid].get();
 
-	if( udu_utistime( d->name, d->units ) ) {
+	if( udu_utistime( const_cast<char *>(d->name.c_str()), const_cast<char *>(d->units.c_str()) ) ) {
 		d->timelike = 1;
 		d->time_std = TimeStandard::Udunits;
 		d->tgran    = udu_calc_tgran( fileid, v, dimid );
@@ -2153,9 +2001,9 @@ handle_time_dim( int fileid, NCVar *v, int dimid )
 		d->time_std = TimeStandard::Epic0;
 		d->tgran    = epic_calc_tgran( fileid, d );
 		}
-	else if( (d->units != NULL) &&
-		 (strlen(d->units) >= 5) &&
-		 (strncasecmp( d->units, "month", 5 ) == 0 ))  {
+	else if( (!d->units.empty()) &&
+		 (d->units.size() >= 5) &&
+		 (strncasecmp( d->units.c_str(), "month", 5 ) == 0 ))  {
 		d->timelike = 1;
 		d->time_std = TimeStandard::Months;
 		d->tgran    = months_calc_tgran( fileid, d );
@@ -2177,7 +2025,7 @@ months_calc_tgran( int fileid, NCDim *d )
 		return( TimeGranularity::Day );
 		}
 
-	type = netcdf_dim_value( fileid, d->name, 0L, &temp_double, temp_string, 0L, &has_bounds, &bounds_min, &bounds_max );
+	type = netcdf_dim_value( fileid, const_cast<char *>(d->name.c_str()), 0L, &temp_double, temp_string, 0L, &has_bounds, &bounds_min, &bounds_max );
 	if( type == NC_DOUBLE )
 		v0 = (float)temp_double;
 	else
@@ -2187,7 +2035,7 @@ months_calc_tgran( int fileid, NCDim *d )
 		return( TimeGranularity::Day );
 		}
 
-	type = netcdf_dim_value( fileid, d->name, 1L, &temp_double, temp_string, 1L, &has_bounds, &bounds_min, &bounds_max );
+	type = netcdf_dim_value( fileid, const_cast<char *>(d->name.c_str()), 1L, &temp_double, temp_string, 1L, &has_bounds, &bounds_min, &bounds_max );
 	if( type == NC_DOUBLE )
 		v1 = (float)temp_double;
 	else
@@ -2216,7 +2064,7 @@ void fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCD
 
 	if( ! dim->timelike ) {
 		fprintf( stderr, "ncview: internal error: fmt_time called on non-timelike axis!\n");
-		fprintf( stderr, "dim name: %s\n", dim->name );
+		fprintf( stderr, "dim name: %s\n", dim->name.c_str() );
 		exit( -1 );
 		}
 
@@ -2361,23 +2209,19 @@ int count_nslashes( char *s )
  * lives in the root group, then the return list includes "/". If no var lives in the root
  * group, then the list does NOT include "/".
  */
-Stringlist *get_group_list( NCVar *vars )
+Stringlist *get_group_list( const std::vector<std::unique_ptr<NCVar>> &vars )
 {
 	Stringlist	*retval = NULL;
-	NCVar		*cursor;
 	char		group_name[ MAX_NC_NAME*20 ];	/* Assume no more than 20 levels of groups */
 	int		ierr;
 
-	cursor = vars;
-	while( cursor != NULL ) {
+	for( const auto &cursor : vars ) {
 
-		ierr = unpack_groupname( cursor->name, -1, group_name );	/* -1 means get full group name */
+		ierr = unpack_groupname( const_cast<char *>(cursor->name.c_str()), -1, group_name );	/* -1 means get full group name */
 
 		/* Only add to list if not already there */
 		if( stringlist_match_string_exact( retval, group_name ) == nullptr )
 			ierr = stringlist_add_string( &retval, group_name );
-
-		cursor = cursor->next;
 		}
 
 	return( retval );

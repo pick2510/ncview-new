@@ -191,11 +191,11 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, int *overlay )
 	char	cval[1024];
 	int	has_bnds;
 
-	dim_x = *(v->variable->dim + v->x_axis_id);
-	dim_y = *(v->variable->dim + v->y_axis_id);
+	dim_x = v->variable->dim[v->x_axis_id].get();
+	dim_y = v->variable->dim[v->y_axis_id].get();
 
-	x_size = *(v->variable->size + v->x_axis_id);
-	y_size = *(v->variable->size + v->y_axis_id);
+	x_size = v->variable->size[v->x_axis_id];
+	y_size = v->variable->size[v->y_axis_id];
 
 	/* Allocate space for 2d arrays that hold mapped X and Y coord vals */
 	dimval_x_2d = (float *)malloc( x_size*y_size*sizeof(float) );
@@ -263,11 +263,11 @@ gen_overlay_internal( View *v, float *data, long nvals )
 	float	x, y;
 	long	i, j;
 
-	dim_x = *(v->variable->dim + v->x_axis_id);
-	dim_y = *(v->variable->dim + v->y_axis_id);
+	dim_x = v->variable->dim[v->x_axis_id].get();
+	dim_y = v->variable->dim[v->y_axis_id].get();
 
-	x_size = *(v->variable->size + v->x_axis_id);
-	y_size = *(v->variable->size + v->y_axis_id);
+	x_size = v->variable->size[v->x_axis_id];
+	y_size = v->variable->size[v->y_axis_id];
 
 	overlay = (int *)malloc( x_size*y_size*sizeof(int) );
 	if( overlay == NULL ) {
@@ -289,10 +289,10 @@ gen_overlay_internal( View *v, float *data, long nvals )
 			x = data[ii];
 			y = data[ii+1];
 
-			i = gen_xform( x, x_size, dim_x->values );
+			i = gen_xform( x, x_size, dim_x->values.data() );
 			if( i == -2 ) 
 				return( NULL );
-			j = gen_xform( y, y_size, dim_y->values );
+			j = gen_xform( y, y_size, dim_y->values.data() );
 			if( j == -2 ) 
 				return( NULL );
 			if( (i > 0) && (j > 0)) 
@@ -347,11 +347,11 @@ gen_overlay( View *v, char *overlay_fname )
 		return( NULL );
 		}
 
-	dim_x = *(v->variable->dim + v->x_axis_id);
-	dim_y = *(v->variable->dim + v->y_axis_id);
+	dim_x = v->variable->dim[v->x_axis_id].get();
+	dim_y = v->variable->dim[v->y_axis_id].get();
 
-	x_size = *(v->variable->size + v->x_axis_id);
-	y_size = *(v->variable->size + v->y_axis_id);
+	x_size = v->variable->size[v->x_axis_id];
+	y_size = v->variable->size[v->y_axis_id];
 
 	overlay = (int *)malloc( x_size*y_size*sizeof(int) );
 	if( overlay == NULL ) {
@@ -367,10 +367,10 @@ gen_overlay( View *v, char *overlay_fname )
 	while( fgets(line, 80, f) != NULL ) 
 		if( line[0] != '#' ) {
 			sscanf( line, "%f %f", &x, &y );
-			i = gen_xform( x, x_size, dim_x->values );
+			i = gen_xform( x, x_size, dim_x->values.data() );
 			if( i == -2 ) 
 				return( NULL );
-			j = gen_xform( y, y_size, dim_y->values );
+			j = gen_xform( y, y_size, dim_y->values.data() );
 			if( j == -2 ) 
 				return( NULL );
 			if( (i > 0) && (j > 0)) 

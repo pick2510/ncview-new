@@ -31,7 +31,9 @@
 #include <udunits2.h>
 #endif
 
-#include "ncview/anyptr.h"
+#include <memory>
+#include <string>
+#include <vector>
 
 /* X11's <X11/X.h> visual-class constant, value 3, used by util.cc's
  * data_to_pixels() to decide whether to run pixel values through the
@@ -253,32 +255,8 @@ typedef unsigned char ncv_pixel;/* If you change this, make sure to change
 				 * X routines do also.
 				 */
 
-/*****************************************************************************/
-/* This describes the file which the relevant variable lives in */
-typedef struct {
-	AnyPtr	next, prev;
-	int	id;		/* internally used ID number */
-	int	index;		/* starts at 0, increments by 1 for each file associated
-				 * with this variable */
-	char	*filename;
-	void	*aux_data;	/* For specific datafile implementations */
-	size_t	*var_size;	/* Multi-dimensional size of variables which live in this file */
-	float	data_min, data_max; /* for a specific variable in the file */
-
-	/* Following is an ugly hack for an ugly problem.  Basically, different files can have
-	 * different units for the unlimited dimension, and some people actually do this.  So
-	 * we must store the recdim units for each file.  In a way this is a property more of
-	 * the dimensions, so maybe should be in the NCDim structure somehow, but the units live
-	 * in each file and have a 1-1 association with each file, so I'm putting them here.
-	 */
-	char	*recdim_units;
-#ifdef HAVE_UDUNITS2
-	ut_unit	*ut_unit_ptr;	/* only non-null if ut_parse worked on these units */
-#endif
-} FDBlist;	
-
 /*****************************************************************************
- * A specific set of data for netCDF-type files.  These won't necessarily 
+ * A specific set of data for netCDF-type files.  These won't necessarily
  * be applicable to different types of data file formats.
  */
 typedef struct {
@@ -295,25 +273,53 @@ typedef struct {
 		add_offset;
 
 } NetCDFOptions;
-	
+
+struct NCVar;	/* forward declaration -- NCDim_map_info::var_i_map is a non-owning back-pointer to
+		 * the NCVar it maps; NCVar itself is defined below since it owns FDBlist/NCDim/
+		 * NCDim_map_info via std::vector<std::unique_ptr<...>>. */
+
+/*****************************************************************************/
+/* This describes the file which the relevant variable lives in */
+struct FDBlist {
+	int	id = 0;		/* internally used ID number */
+	int	index = 0;	/* starts at 0, increments by 1 for each file associated
+				 * with this variable */
+	std::string	filename;
+	std::unique_ptr<NetCDFOptions>	aux_data;	/* For specific datafile implementations */
+	std::vector<size_t>	var_size;	/* Multi-dimensional size of variables which live in this file */
+	float	data_min = 0, data_max = 0; /* for a specific variable in the file */
+
+	/* Following is an ugly hack for an ugly problem.  Basically, different files can have
+	 * different units for the unlimited dimension, and some people actually do this.  So
+	 * we must store the recdim units for each file.  In a way this is a property more of
+	 * the dimensions, so maybe should be in the NCDim structure somehow, but the units live
+	 * in each file and have a 1-1 association with each file, so I'm putting them here.
+	 */
+	std::string	recdim_units;
+#ifdef HAVE_UDUNITS2
+	ut_unit	*ut_unit_ptr = nullptr;	/* only non-null if ut_parse worked on these units; owned by udunits2, not us */
+#endif
+};
+
 /*****************************************************************************/
 /* The dimension structure.  This is more for convienence and efficiency
  * than because dimensions are so fundamental; actually, it's the variables
  * which are more important.
  */
 typedef struct {
-	char	*name, *long_name, *units;
-	int	units_change;	/* if 1, then a virtully concatenated timelike dimension has different units in different input files */
-	float	min, max, *values;
-	int	have_calc_minmax;  /* 0 initially, 1 after min & max have been calculated */
-	size_t	size;
-	int	timelike;	/* 0 if NOT timelike, 1 if is.  If is, MUST */
+	std::string	name, long_name, units;
+	int	units_change = 0;	/* if 1, then a virtully concatenated timelike dimension has different units in different input files */
+	float	min = 0, max = 0;
+	std::vector<float> values;
+	int	have_calc_minmax = 0;  /* 0 initially, 1 after min & max have been calculated */
+	size_t	size = 0;
+	int	timelike = 0;	/* 0 if NOT timelike, 1 if is.  If is, MUST */
 				/* have an identified time standard (below). */
 	TimeStandard	time_std;	/* TimeStandard::Udunits, Epic0, Months */
-	char	*calendar;	/* ONLY applicable if time_std==TimeStandard::Udunits; can be any CF-1.0 value. Defaults to "standard" */
+	std::string	calendar;	/* ONLY applicable if time_std==TimeStandard::Udunits; can be any CF-1.0 value. Defaults to "standard" */
 	TimeGranularity	tgran; 		/* time granularity; i.e., frequency of entries (daily, hourly, etc) */
-	int	global_id;	/* Used internally, goes from 1..total number of dims we know about */
-	int	is_lat, is_lon; /* Just a guess if these are lat/lon. Used to put on coastlines automatically */
+	int	global_id = 0;	/* Used internally, goes from 1..total number of dims we know about */
+	int	is_lat = 0, is_lon = 0; /* Just a guess if these are lat/lon. Used to put on coastlines automatically */
 } NCDim;
 
 /*****************************************************************************/
@@ -323,88 +329,84 @@ typedef struct {
  */
 typedef struct {
 
-	void	*var_i_map;		/* this is a NCVar * ; it gives the "var that I map".  */
-	char	*coord_att;		/* Contents of the "coordinates" attribute */
-	char	*coord_var_name;	/* Name of the VAR in the file that holds mapping info */
-	int	coord_var_ndims;	/* # of dims in the mapping var */
-	char	*coord_var_units;	/* if the coord var has a units att, this records it */
-	size_t	*coord_var_size;	/* size of the mapping var (MULTIDIMENSIONAL) */
-	int	*matching_var_dims;	/* This has n_dims equal to the DATA VARIABLE, NOT the coord var! */
-	float	*data_cache;		/* Cached info from the mapping var */
-	size_t	*index_place_factor;	/* Array of size var_i_map->n_dims, is 0 or factor to mult loc by */
-	int	scalar_all_same;	/* ==1 iff is a scalar coord var AND all vals are identical; ==0 otherwise */
-	
+	NCVar	*var_i_map = nullptr;	/* the "var that I map"; non-owning back-pointer */
+	std::string	coord_att;		/* Contents of the "coordinates" attribute */
+	std::string	coord_var_name;	/* Name of the VAR in the file that holds mapping info */
+	int	coord_var_ndims = 0;	/* # of dims in the mapping var */
+	std::string	coord_var_units;	/* if the coord var has a units att, this records it */
+	std::vector<size_t> coord_var_size;	/* size of the mapping var (MULTIDIMENSIONAL) */
+	std::vector<int> matching_var_dims;	/* This has n_dims equal to the DATA VARIABLE, NOT the coord var! */
+	std::vector<float> data_cache;		/* Cached info from the mapping var */
+	std::vector<size_t> index_place_factor;	/* Array of size var_i_map->n_dims, is 0 or factor to mult loc by */
+	int	scalar_all_same = 0;	/* ==1 iff is a scalar coord var AND all vals are identical; ==0 otherwise */
+
 } NCDim_map_info;
 
 /*****************************************************************************/
 /* Here it is: the variable structure.  Aspects of the variable which are
- * different from file to file are kept in the pointed-to file descriptor 
+ * different from file to file are kept in the pointed-to file descriptor
  * blocks (FDBs).
  */
-typedef struct {
-	char	*name;
-	AnyPtr	next, prev;			/* for global list of variables */
-	float	fill_value;			/* Any data with this special
+struct NCVar {
+	std::string	name;
+	float	fill_value = 0;			/* Any data with this special
 						 * value will be IGNORED. It
-						 * is assumed to indicate 
+						 * is assumed to indicate
 						 * out-of-range or out-of-domain
 						 * data.
 						 */
-	int	have_set_range;			/* boolean -- have we set the
-						 * valid range for this var yet?
-						 */
-	int	n_dims;				/* how many dimensions this var has */
-	FDBlist	*first_file, *last_file;	/* What files this variable lives in */
-	int	is_virtual;			/* Boolean -- true if this var lives
+	bool	have_set_range = false;	/* have we set the valid range for this var yet? */
+	int	n_dims = 0;				/* how many dimensions this var has */
+	std::vector<std::unique_ptr<FDBlist>> files;	/* What files this variable lives in */
+	int	is_virtual = 0;			/* Boolean -- true if this var lives
 						 * in more than one input file, false
 						 * otherwise.
 						 */
-	FDBlist **timestep_2_fdb;		/* Files can only be virtually concatenated
+	std::vector<FDBlist*> timestep_2_fdb;	/* Files can only be virtually concatenated
 	  					 * along the first (timelike) dimension.
-						 * This gives pointers to the FDBlist 
-						 * elements that each individual timestep
-						 * of the var lives in. So it is dimension
-						 * size[0]. Note that many entries can 
-						 * point to the same target. For example,
-						 * if a sequency of data files with a year's
-						 * worth of monthly data is given, then
-						 * the first 12 entries of this will all
-						 * point to the first file's FDBlist.
+						 * This gives pointers (non-owning; owned by
+						 * 'files' above) to the FDBlist element that
+						 * each individual timestep of the var lives
+						 * in. So it is dimension size[0]. Note that
+						 * many entries can point to the same target.
+						 * For example, if a sequency of data files
+						 * with a year's worth of monthly data is
+						 * given, then the first 12 entries of this
+						 * will all point to the first file's FDBlist.
 						 * Because this can only be filled out
 						 * AFTER we have processed all the files,
 						 * it is done in a slighly strange place...
 						 * in routine cache_scalar_coord_info.
 						 */
-	float	global_min, global_max,		/* These are diffferent from the */
-	        user_min, user_max;	 	/* min & max in the FDBs because these
+	float	global_min = 0, global_max = 0,		/* These are diffferent from the */
+	        user_min = 0, user_max = 0;	 	/* min & max in the FDBs because these
 					 	* are global, rather than local to
 					 	* a file.
 					 	*/
-	int	user_set_blowup;		/* Initializes to -99999, then saves user-specified
+	int	user_set_blowup = 0;		/* Initializes to -99999, then saves user-specified
 	  					 * value of 'blowup' for this var so it can be
 						 * used again if we leave this var & then come back
 						 */
-	int	auto_set_no_range;		/* '1' if we autoset a range of -1,1 based
+	int	auto_set_no_range = 0;		/* '1' if we autoset a range of -1,1 based
 						 * on not having a valid range for this var
 						 */
-	size_t	*size;				/* The accumulated size of
-						 * this variable, from all 
+	std::vector<size_t> size;			/* The accumulated size of
+						 * this variable, from all
 						 * the files which hold it.
 						 */
-	int  	effective_dimensionality;	/* # of entries in 'size' array > 1 */
-	NCDim	**dim;				/* An array of 'n_dim' pointers to
-	 					 * Dimension structures.  This
-	 					 * is only filled out for 
+	int  	effective_dimensionality = 0;	/* # of entries in 'size' array > 1 */
+	std::vector<std::unique_ptr<NCDim>> dim;	/* An array of 'n_dim' entries.  This
+	 					 * is only filled out for
 	 					 * scannable dimensions!! If
 	 					 * the dim is not scannable,
-	 					 * a NULL is inserted instead.
+	 					 * a null entry is inserted instead.
 	 					 */
-	NCDim_map_info	**dim_map_info;		/* Pointer to the first entry in an
-						   array of ndims NCDim_map_info pointers
+	std::vector<std::unique_ptr<NCDim_map_info>> dim_map_info;	/* array of ndims entries
 						   that hold information describing
-						   the 2-D mapping for this dim. 
-						   This itself should never be null,
-						   but the entries CAN BE NULL, 
+						   the 2-D mapping for this dim.
+						   This vector itself should never be
+						   empty of entries (it always has ndims
+						   slots), but the entries CAN BE NULL,
 						   in which event that dim has
 						   no mapping.  Note that the
 						   dim mapping is a function of
@@ -412,15 +414,15 @@ typedef struct {
 						   dim, which is an oddity of the
 						   way CF conventions handle mapping.
 						 */
-	NCDim_map_info **scalar_dim_map_info; 	/* A variable can also
+	std::vector<std::unique_ptr<NCDim_map_info>> scalar_dim_map_info; 	/* A variable can also
 						   specify SCALAR coordinate "vars",
 						   for example, "height" for a 2d
 						   field in (lon,lat). This holds
 						   the scalar info. The reason this
 						   is not part of athe dim_map_info
 						   array is that array has exactly
-						   ndims entries, describing how 
-						   each dim in the var is mapped. 
+						   ndims entries, describing how
+						   each dim in the var is mapped.
 						   This array can have many more
 						   scalar "dims", locating the field
 						   in space or time. They are really
@@ -428,11 +430,7 @@ typedef struct {
 						   convention puts them both in
 						   the "coordinates" attribute.
 						   */
-	int	n_scalar_coords;		/* Number of valid entries in the
-						   'scalar_dim_map_info' array for
-						   this var.
-						*/
-} NCVar;
+};
 
 /*****************************************************************************/
 /* Our current view--the view is the 2D field which is being color-contoured.

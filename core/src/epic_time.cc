@@ -57,7 +57,7 @@ ep_time_to_mdyhms(long *time, int *mon, int *day, int *yr, int *hour, int *min, 
 	int
 epic_istime0( int fileid, NCVar *v, NCDim *d )
 {
-	if( (d->units != NULL) && strncmp( d->units, "True Julian Day", 15 ) == 0 ) {
+	if( (!d->units.empty()) && strncmp( d->units.c_str(), "True Julian Day", 15 ) == 0 ) {
 		return( 1 );
 		}
 	

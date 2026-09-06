@@ -631,14 +631,14 @@ void MainWindow::populateVarList()
 	// buckets upstream's x_sort_vars_by_ndims() uses for "menu" var-selection
 	// style (1d, 2d, 3d, 4d, 5-or-more), alpha-sorted within each bucket.
 	std::vector<NCVar*> buckets[5];
-	for( NCVar *v = variables; v != nullptr; v = (NCVar *)v->next ) {
+	for( auto &v : variables ) {
 		int d = v->effective_dimensionality;
 		int idx = ( d >= 1 && d <= 4 ) ? d - 1 : 4;
-		buckets[idx].push_back( v );
+		buckets[idx].push_back( v.get() );
 	}
 	for( auto &b : buckets )
 		std::sort( b.begin(), b.end(),
-			[]( const NCVar *a, const NCVar *c ) { return std::strcmp( a->name, c->name ) < 0; } );
+			[]( const NCVar *a, const NCVar *c ) { return a->name < c->name; } );
 
 	static const char *kBucketSuffix[5] = { "1d", "2d", "3d", "4d", "5d" };
 	for( int i = 0; i < 5; i++ ) {
@@ -649,8 +649,8 @@ void MainWindow::populateVarList()
 		std::snprintf( header, sizeof(header), "(%zu) %s vars", buckets[i].size(), kBucketSuffix[i] );
 		choice->add( header, 0, nullptr, nullptr, FL_MENU_INACTIVE );
 		for( NCVar *v : buckets[i] ) {
-			std::string label = escapeMenuLabel( v->name );
-			choice->add( label.c_str(), 0, &MainWindow::varChoiceCallback, (void *)v->name );
+			std::string label = escapeMenuLabel( v->name.c_str() );
+			choice->add( label.c_str(), 0, &MainWindow::varChoiceCallback, (void *)v->name.c_str() );
 		}
 		choice->value( 0 );
 		var_pack_->add( choice );
@@ -817,7 +817,7 @@ void MainWindow::fillDimInfo( NCDim *d, int /*please_flip*/ )
 	if( d == nullptr ) return;
 	for( auto &row : dim_rows_ ) {
 		if( row.name == d->name ) {
-			row.name_box->copy_label( d->long_name && d->long_name[0] ? d->long_name : d->name );
+			row.name_box->copy_label( !d->long_name.empty() ? d->long_name.c_str() : d->name.c_str() );
 			row.name_box->redraw();
 			break;
 		}

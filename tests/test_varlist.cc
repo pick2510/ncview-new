@@ -1,9 +1,9 @@
 // Characterization tests for the variable-list machinery in
-// core/src/util.cc: add_var_to_list() (and the add_to_varlist()/
-// new_variable()/new_fdblist() helpers it calls), get_var(), is_scannable(),
-// and n_vars_in_list(). This is the code Phase 5 of modernization.md
-// replaces wholesale (NCVar/FDBlist's void*/AnyPtr-based intrusive linked
-// lists become std::vector<std::unique_ptr<...>>), and it had no test
+// core/src/util.cc: add_var_to_list() (and the internal new_fdblist()
+// helper it calls), get_var(), is_scannable(), and n_vars_in_list(). This
+// is the code Phase 5 of modernization.md replaces wholesale (NCVar/
+// FDBlist's void*/AnyPtr-based intrusive linked lists become
+// std::vector<std::unique_ptr<...>>), and it had no test
 // before this file -- test_file_netcdf.cc only exercises the netcdf_*()
 // dispatch layer below it, never the NCVar-building logic on top.
 //
@@ -87,23 +87,23 @@ int open_for_core(const std::string &path) {
 } // namespace
 
 TEST_CASE("is_scannable: dim 0 (the record dim) is always scannable, others need size>1") {
-    size_t size[3] = {1, 1, 4};
     NCVar var{};
-    var.size = size;
+    var.size = { 1, 1, 4 };
 
     CHECK(is_scannable(&var, 0) != 0);  // dim 0 is special-cased true regardless of size
     CHECK(is_scannable(&var, 1) == 0);  // size 1, not dim 0 -> not scannable
     CHECK(is_scannable(&var, 2) != 0);  // size 4 -> scannable
 }
 
-TEST_CASE("n_vars_in_list: counts a NULL list as zero and walks ->next") {
-    CHECK(n_vars_in_list(nullptr) == 0);
+TEST_CASE("n_vars_in_list: counts entries in the vector") {
+    std::vector<std::unique_ptr<NCVar>> empty_list;
+    CHECK(n_vars_in_list(empty_list) == 0);
 
-    NCVar a{}, b{}, c{};
-    a.next = &b;
-    b.next = &c;
-    c.next = nullptr;
-    CHECK(n_vars_in_list(&a) == 3);
+    std::vector<std::unique_ptr<NCVar>> three;
+    three.push_back(std::make_unique<NCVar>());
+    three.push_back(std::make_unique<NCVar>());
+    three.push_back(std::make_unique<NCVar>());
+    CHECK(n_vars_in_list(three) == 3);
 }
 
 TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
@@ -142,22 +142,19 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
     CHECK(var->size[0] == 5); // 3 + 2, accumulated across both files
     CHECK(n_vars_in_list(variables) == nvars_before + 1); // still exactly one NCVar
 
-    // The two FDBlist entries are a real doubly-linked (AnyPtr-based) list,
-    // each keeping its OWN file's size, not the accumulated total.
-    FDBlist *f0 = var->first_file;
+    // The two FDBlist entries live in var->files, each keeping its OWN
+    // file's size, not the accumulated total.
+    REQUIRE(var->files.size() == 2);
+    FDBlist *f0 = var->files[0].get();
     REQUIRE(f0 != nullptr);
     CHECK(f0->index == 0);
     CHECK(f0->var_size[0] == 3);
-    CHECK(f0->prev == nullptr);
 
-    FDBlist *f1 = f0->next; // AnyPtr -- no chained ->, see anyptr.h
+    FDBlist *f1 = var->files[1].get();
     REQUIRE(f1 != nullptr);
     CHECK(f1->index == 1);
     CHECK(f1->var_size[0] == 2);
-    CHECK(f1 == var->last_file);
-    FDBlist *f1_prev = f1->prev;
-    CHECK(f1_prev == f0);
-    CHECK(static_cast<FDBlist *>(f1->next) == nullptr);
+    CHECK(f1 == var->files.back().get());
 
     // var->dim[] is only ever populated from the FIRST file's
     // fill_dim_structs() call (see util.cc:add_var_to_list()'s "already
@@ -166,7 +163,7 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
     // accumulated 5 that var->size[0] now holds. This asymmetry is exactly
     // the kind of detail Phase 5's NCVar/FDBlist rewrite must preserve.
     REQUIRE(var->dim[0] != nullptr);
-    CHECK(std::strcmp(var->dim[0]->name, "time") == 0);
+    CHECK(var->dim[0]->name == "time");
     CHECK(var->dim[0]->size == 3);
     CHECK(var->dim[0]->timelike == 1); // handle_time_dim() recognized the udunits time axis
 

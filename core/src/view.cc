@@ -37,7 +37,6 @@
 
 /* External variables */
 extern	Options options;
-extern  NCVar *variables;
 extern  FrameStore framestore;
 
 View  *view = NULL;
@@ -110,10 +109,10 @@ set_scan_variable( NCVar *var )
 	NCDim	*xdim, *ydim, *xdim_old, *xdim_new, *ydim_old, *ydim_new;
 
 	if( options.debug ) {
-		fprintf( stderr, "\n\n******************************************\nentering set_scan_variable with var=%s\n", var->name );
+		fprintf( stderr, "\n\n******************************************\nentering set_scan_variable with var=%s\n", var->name.c_str() );
 		fprintf( stderr, "var nims:%d\n", var->n_dims );
 		for( i=0; i<var->n_dims; i++ )
-			fprintf( stderr, "dim=%ld size=%ld\n", i, *(var->size + i) );
+			fprintf( stderr, "dim=%ld size=%ld\n", i, var->size[i] );
 		}
 
 	in_set_cursor_busy();
@@ -144,7 +143,7 @@ set_scan_variable( NCVar *var )
 				*(start+i) = *(view->var_place+i);
 				*(count+i) = 1L;
 				}
-			*(count+view->x_axis_id) = *(view->variable->size + view->x_axis_id);
+			*(count+view->x_axis_id) = view->variable->size[view->x_axis_id];
 			if( options.debug ) 
 				fprintf( stderr, "set_scan_variable (A): about to call plot_XY_sc\n" );
 			plot_XY_sc( start, count );
@@ -204,7 +203,7 @@ set_scan_variable( NCVar *var )
 				*(start+i) = *(view->var_place+i);
 				*(count+i) = 1L;
 				}
-			*(count+view->x_axis_id) = *(view->variable->size + view->x_axis_id);
+			*(count+view->x_axis_id) = view->variable->size[view->x_axis_id];
 			if( options.debug ) 
 				fprintf( stderr, "set_scan_variable (B): about to call plot_XY_sc\n" );
 			plot_XY_sc( start, count );
@@ -226,16 +225,16 @@ set_scan_variable( NCVar *var )
 		 * standard.  (I.e., if two variables are using the "Longitude" dimension, you
 		 * can know that it's the SAME Longitude dimension.)
 		 */
-		xdim_old = *(old_view->variable->dim + old_view->x_axis_id); 
-		ydim_old = *(old_view->variable->dim + old_view->y_axis_id); 
-		xdim_new = *(new_view->variable->dim + new_view->x_axis_id); 
-		ydim_new = *(new_view->variable->dim + new_view->y_axis_id); 
+		xdim_old = old_view->variable->dim[old_view->x_axis_id].get(); 
+		ydim_old = old_view->variable->dim[old_view->y_axis_id].get(); 
+		xdim_new = new_view->variable->dim[new_view->x_axis_id].get(); 
+		ydim_new = new_view->variable->dim[new_view->y_axis_id].get(); 
 		if( (xdim_old==NULL) || (ydim_old==NULL) || (xdim_new==NULL) || (ydim_new==NULL) ||
-		    (strcmp(xdim_old->name, xdim_new->name) != 0) ||
-		    (strcmp(ydim_old->name, ydim_new->name) != 0)) {
+		    (xdim_old->name != xdim_new->name) ||
+		    (ydim_old->name != ydim_new->name)) {
 			if( options.debug )
 				fprintf( stderr, "...axis change, recalculating blowup; old, new X dim=%s, %s; old, new Y dim=%s, %s\n",
-					xdim_old->name, xdim_new->name, ydim_old->name, ydim_new->name );
+					xdim_old->name.c_str(), xdim_new->name.c_str(), ydim_old->name.c_str(), ydim_new->name.c_str() );
 			calculate_blowup( new_view, var, var->user_set_blowup );
 			/* Save the blowup we are using in the var structure so we can
 			 * return to it later if we want
@@ -283,8 +282,8 @@ set_scan_variable( NCVar *var )
 		init_min_max( var );
 
 	/* If we are automatically putting on overlays, do so now */
-	xdim = *(view->variable->dim + view->x_axis_id);
-	ydim = *(view->variable->dim + view->y_axis_id);
+	xdim = view->variable->dim[view->x_axis_id].get();
+	ydim = view->variable->dim[view->y_axis_id].get();
 	if( options.auto_overlay && in_report_auto_overlay() && xdim->is_lon && ydim->is_lat ) {
 		/* Only put overlay on automatically if range is big enough that
 		 * the coastlines can be recognized. 
@@ -334,8 +333,8 @@ set_scan_variable( NCVar *var )
 	/* Actually draw the color contour map of the data! */
 	if( options.debug )
 		fprintf( stderr, "...drawing color contour field\n" );
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 	changed_size = in_set_2d_size( scaled_x_size, scaled_y_size );
 	/* If we increased in size then we don't need to redraw,
@@ -409,10 +408,10 @@ view_current_nt()
 	if( view->variable == NULL )
 		return( 0 );
 
-	if( view->variable->size == NULL )
+	if( view->variable->size.empty() )
 		return( 0 );
 
-	size = *(view->variable->size  + view->scan_axis_id);
+	size = view->variable->size[view->scan_axis_id];
 
 	return( size );
 }
@@ -459,7 +458,7 @@ change_view( int delta, int interpretation )
 
 	if( interpretation == PERCENT ) {
 		/* Delta is in percent of total size */
-		size              = *(view->variable->size  + view->scan_axis_id);
+		size              = view->variable->size[view->scan_axis_id];
 		provisional_delta = (float)size * (float)delta/100.0;
 		if( (int)provisional_delta == 0 ) {
 			if( delta < 0 )
@@ -472,7 +471,7 @@ change_view( int delta, int interpretation )
 		}
 
 	place = *(view->var_place + view->scan_axis_id) + delta;
-	size  = *(view->variable->size  + view->scan_axis_id);
+	size  = view->variable->size[view->scan_axis_id];
 
 	/* Have we incremented past the maximum allowed value?
 	 * If we have, then reset to ZERO, not just (size modulo
@@ -519,7 +518,7 @@ set_scan_view( size_t scan_place )
 	if( view->scan_axis_id == -1 )
 		return;
 
-	size = *(view->variable->size + view->scan_axis_id);
+	size = view->variable->size[view->scan_axis_id];
 	if( scan_place >= size ) {
 		fprintf( stderr, "ncview: set_scan_view: internal error; trying to " );
 		fprintf( stderr, "set to a place larger than exists\n" );
@@ -528,8 +527,8 @@ set_scan_view( size_t scan_place )
 		scan_place = 0;
 		}
 		
-	dim = *(view->variable->dim + view->scan_axis_id);
-	dim_name = dim->name;
+	dim = view->variable->dim[view->scan_axis_id].get();
+	dim_name = const_cast<char *>(dim->name.c_str());
 	*(view->var_place + view->scan_axis_id) = scan_place;
 	snprintf( view_place, 1023, "frame %1ld/%1ld ", scan_place+1, size );
 
@@ -626,8 +625,8 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		return(0);
 		}
 
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 
 	/* If we need to adjust the range to the current frame, then do so */
 	must_recalc_range = force_range_to_frame || options.autoscale;
@@ -683,7 +682,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 			lockout_view_changes = false;
 
 			if( view->scan_axis_id != -1 ) {
-				scan_size  = *(view->variable->size  + view->scan_axis_id);
+				scan_size  = view->variable->size[view->scan_axis_id];
 				if( (frameno == (scan_size-1)) && (which_button_pressed() == BUTTON_PAUSE)) {
 					in_timer_set( [](){ view_check_new_data(0); }, 1000L );
 					}
@@ -735,7 +734,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	 * the var having new data in it.
 	 */
 	if( view->scan_axis_id != -1 ) {
-		scan_size  = *(view->variable->size  + view->scan_axis_id);
+		scan_size  = view->variable->size[view->scan_axis_id];
 		if( (frameno == (scan_size-1)) && (which_button_pressed() == BUTTON_PAUSE)) {
 			in_timer_set( [](){ view_check_new_data(0); }, 1000L );
 			}
@@ -772,15 +771,15 @@ view_check_new_data( int unused )
 		return;
 
 	/* Get size of the var in the last file */
-	t_ncid = netcdf_fi_initialize( view->variable->last_file->filename );
-	t = netcdf_fi_var_size( t_ncid, view->variable->name );
+	t_ncid = netcdf_fi_initialize( const_cast<char *>(view->variable->files.back()->filename.c_str()) );
+	t = netcdf_fi_var_size( t_ncid, const_cast<char *>(view->variable->name.c_str()) );
 	for( i=0; i<view->variable->n_dims; i++ )
 		file_var_size[i] = t[i];
 	free( t );
 	ierr = nc_close( t_ncid );
 
 	has_grown = 0;
-	if( file_var_size[ timelike_index ] > view->variable->last_file->var_size[ timelike_index ] ) {
+	if( file_var_size[ timelike_index ] > view->variable->files.back().get()->var_size[ timelike_index ] ) {
 		has_grown = 1;
 		}
 
@@ -789,7 +788,7 @@ view_check_new_data( int unused )
 		return;
 		}
 
-	dt = file_var_size[timelike_index] - view->variable->last_file->var_size[timelike_index];
+	dt = file_var_size[timelike_index] - view->variable->files.back().get()->var_size[timelike_index];
 	nt_new = view->variable->size[timelike_index] + dt;
 
 	/* Make our informative label */
@@ -845,7 +844,7 @@ view_check_new_data( int unused )
 	/* See if we need to reallocate the framestore */
 	if( nt_new >= framestore.nt ) {
 		old_nt = framestore.nt;
-		n_scan_entries = *(view->variable->size + view->scan_axis_id);
+		n_scan_entries = view->variable->size[view->scan_axis_id];
 		n_extra_frames = floor( n_scan_entries * 0.2 ) + 1;
 		if( n_extra_frames < 25 )
 			n_extra_frames = 25;
@@ -873,10 +872,10 @@ view_check_new_data( int unused )
 		}
 
 	view->variable->size[ timelike_index ] = nt_new;
-	view->variable->last_file->var_size[ timelike_index ] += dt;
+	view->variable->files.back().get()->var_size[ timelike_index ] += dt;
 
 	/* Resync so we will read the last time entry */
-	ierr = nc_sync( view->variable->last_file->id );
+	ierr = nc_sync( view->variable->files.back().get()->id );
 
 	/* Special check: if we were started with no range in the variable,
 	 * but now we have one, then reset the displayed range
@@ -972,17 +971,17 @@ determine_scan_axes( View *view, NCVar *var, View *old_view )
 	/* We can't do an XY plot of dimensions that have a count
 	 * of one.  In that case, try to set it to something else.
 	 */
-	if( *(view->variable->size + view->plot_XY_axis) == 1 ) {
+	if( view->variable->size[view->plot_XY_axis] == 1 ) {
 		if( (view->scan_axis_id != -1) &&  
-		    (*(view->variable->size + view->scan_axis_id) > 1))
+		    (view->variable->size[view->scan_axis_id] > 1))
 			view->plot_XY_axis = view->scan_axis_id;
 
 		else if( (view->x_axis_id != -1) &&  
-		    (*(view->variable->size + view->x_axis_id) > 1))
+		    (view->variable->size[view->x_axis_id] > 1))
 			view->plot_XY_axis = view->x_axis_id;
 
 		else if( (view->y_axis_id != -1) &&  
-		    (*(view->variable->size + view->y_axis_id) > 1))
+		    (view->variable->size[view->y_axis_id] > 1))
 			view->plot_XY_axis = view->y_axis_id;
 		}
 
@@ -1021,10 +1020,10 @@ initial_determine_scan_axes( View *view, NCVar *var )
 	Stringlist	*dimlist;
 	int		n_dims;
 
-	if( options.debug ) fprintf( stderr, "initial_determine_scan_axes: entering for var %s\n", var->name );
+	if( options.debug ) fprintf( stderr, "initial_determine_scan_axes: entering for var %s\n", const_cast<char *>(var->name.c_str()) );
 
 	/* Get a list of all possible scannable dimensions */
-	dimlist = fi_scannable_dims( var->first_file->id, var->name );
+	dimlist = fi_scannable_dims( var->files.front().get()->id, const_cast<char *>(var->name.c_str()) );
 
 	if( options.debug ) {
 		fprintf( stderr, "initial_determine_scan_axes: scannable dims:\n" );
@@ -1039,29 +1038,29 @@ initial_determine_scan_axes( View *view, NCVar *var )
 			view->scan_axis_id = -1;
 			view->y_axis_id    = -1;
 			view->x_axis_id    = fi_dim_name_to_id(
-					var->first_file->id,
-					var->name,
+					var->files.front().get()->id,
+					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[0].string.c_str() );
 			break;
 
 		case 2:
 			view->scan_axis_id = -1;
 			view->y_axis_id    = fi_dim_name_to_id(
-					var->first_file->id,
-					var->name,
+					var->files.front().get()->id,
+					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[0].string.c_str() );
 			if( view->y_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					(*dimlist)[0].string.c_str(), var->name );
+					(*dimlist)[0].string.c_str(), const_cast<char *>(var->name.c_str()) );
 				exit(-1);
 				}
 			view->x_axis_id    = fi_dim_name_to_id(
-					var->first_file->id,
-					var->name,
+					var->files.front().get()->id,
+					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[1].string.c_str() );
 			if( view->x_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					(*dimlist)[1].string.c_str(), var->name );
+					(*dimlist)[1].string.c_str(), const_cast<char *>(var->name.c_str()) );
 				exit(-1);
 				}
 			break;
@@ -1072,31 +1071,31 @@ initial_determine_scan_axes( View *view, NCVar *var )
 	 		* standards. Y/X axes are the last two entries.
 	 		*/
 			view->scan_axis_id = fi_dim_name_to_id(
-					var->first_file->id,
-					var->name,
+					var->files.front().get()->id,
+					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[0].string.c_str() );
 			if( view->scan_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					(*dimlist)[0].string.c_str(), var->name );
+					(*dimlist)[0].string.c_str(), const_cast<char *>(var->name.c_str()) );
 				exit(-1);
 				}
 
 			view->y_axis_id    = fi_dim_name_to_id(
-					var->first_file->id,
-					var->name,
+					var->files.front().get()->id,
+					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[n_dims-2].string.c_str() );
 			if( view->y_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					(*dimlist)[n_dims-2].string.c_str(), var->name );
+					(*dimlist)[n_dims-2].string.c_str(), const_cast<char *>(var->name.c_str()) );
 				exit(-1);
 				}
 			view->x_axis_id    = fi_dim_name_to_id(
-					var->first_file->id,
-					var->name,
+					var->files.front().get()->id,
+					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[n_dims-1].string.c_str() );
 			if( view->x_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
-					(*dimlist)[n_dims-1].string.c_str(), var->name );
+					(*dimlist)[n_dims-1].string.c_str(), const_cast<char *>(var->name.c_str()) );
 				exit(-1);
 				}
 			break;
@@ -1126,11 +1125,11 @@ fill_view_data( View *v )
 		*(count+i) = 1;
 
 	/* Do full count of the X and Y axes so we can display the whole 2D field */
-	*(count+v->x_axis_id) = *(v->variable->size + v->x_axis_id);
-	*(count+v->y_axis_id) = *(v->variable->size + v->y_axis_id);
+	*(count+v->x_axis_id) = v->variable->size[v->x_axis_id];
+	*(count+v->y_axis_id) = v->variable->size[v->y_axis_id];
 
 	if( options.debug || options.show_sel ) {
-		printf( "-var %s -start \\(", v->variable->name );
+		printf( "-var %s -start \\(", v->variable->name.c_str() );
 		for( i=v->variable->n_dims-1; i >= 0; i-- ) {
 			printf( "%1ld", 1 + (*(v->var_place+i)) );
 			if( i != 0 )
@@ -1142,7 +1141,7 @@ fill_view_data( View *v )
 			if( i != 0 )
 				printf( "," );
 			}
-		printf( "\\) %s\n", v->variable->first_file->filename );
+		printf( "\\) %s\n", v->variable->files.front()->filename.c_str() );
 		}
 
 	fi_get_data( v->variable, v->var_place, count, v->data );
@@ -1194,8 +1193,8 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 
 	free( view->pixels );
 
-	x_size       = *(view->variable->size + view->x_axis_id);
-	y_size       = *(view->variable->size + view->y_axis_id);
+	x_size       = view->variable->size[view->x_axis_id];
+	y_size       = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
 	view->pixels = (unsigned char *)malloc( scaled_x_size*scaled_y_size*sizeof(ncv_pixel) );
@@ -1250,27 +1249,27 @@ view_change_cur_dim( char *dim_name, Modifier modifier )
 	if( view->data_status == ViewDataStatus::Edited ) 
 		view_data_edit_warn();
 
-	fileid = view->variable->first_file->id;
+	fileid = view->variable->files.front().get()->id;
 	dimid  = fi_dim_name_to_id( fileid,
-				view->variable->name, dim_name );
+				const_cast<char *>(view->variable->name.c_str()), dim_name );
 	if( (dimid == view->x_axis_id) ||
 	    (dimid == view->y_axis_id) )
 		return;
 
-	dim = *(view->variable->dim + dimid);
+	dim = view->variable->dim[dimid].get();
 
 	/* Modifier 1 is the standard action */
 	if( modifier == Modifier::M1 ) {
 		*(view->var_place+dimid) = *(view->var_place+dimid)+1L;
-		if( *(view->var_place+dimid) > *(view->variable->size+dimid)-1L )
+		if( *(view->var_place+dimid) > view->variable->size[dimid]-1L )
 			*(view->var_place+dimid) = 0L;
 		}
 	else if( modifier == Modifier::M2 ) {
 		/* Modifier 2 means "do it faster" */
-		size  = *(view->variable->size+dimid);
+		size  = view->variable->size[dimid];
 		delta = (int)(0.1*(float)size);
 		*(view->var_place+dimid) = *(view->var_place+dimid)+(long)delta;
-		if( *(view->var_place+dimid) > *(view->variable->size+dimid)-1L )
+		if( *(view->var_place+dimid) > view->variable->size[dimid]-1L )
 			*(view->var_place+dimid) = 0L;
 		}
 	else
@@ -1278,7 +1277,7 @@ view_change_cur_dim( char *dim_name, Modifier modifier )
 		/* Modifier 3 means to go backwards */
 		prov_place = *(view->var_place+dimid)-1L;
 		if( prov_place < 0L )
-			*(view->var_place+dimid) = *(view->variable->size+dimid) -1L;
+			*(view->var_place+dimid) = view->variable->size[dimid] -1L;
 		else
 			*(view->var_place+dimid) = prov_place;
 		}
@@ -1324,10 +1323,10 @@ view_set_scan_dims( void )
 	Message    message;
 
 	v          = view->variable;
-	cur_x_name = (*(v->dim+view->x_axis_id))->name;
-	cur_y_name = (*(v->dim+view->y_axis_id))->name;
+	cur_x_name = const_cast<char *>(v->dim[view->x_axis_id]->name.c_str());
+	cur_y_name = const_cast<char *>(v->dim[view->y_axis_id]->name.c_str());
 
-	dim_list = fi_scannable_dims( v->first_file->id, v->name );
+	dim_list = fi_scannable_dims( v->files.front().get()->id, const_cast<char *>(v->name.c_str()) );
 	snprintf( scan_dim, sizeof(scan_dim), "%s", (*dim_list)[0].string.c_str() );
 
 	/* Pop up the dialog box which asks for the user's selection */
@@ -1348,8 +1347,8 @@ view_set_scan_dims( void )
 	 * new_dim_list is Y-axis first, then X-axis (see in_set_scan_dims's
 	 * own contract).
 	 */
-	new_y_id = fi_dim_name_to_id( v->first_file->id, v->name, (char *)(*new_dim_list)[0].string.c_str() );
-	new_x_id = fi_dim_name_to_id( v->first_file->id, v->name, (char *)(*new_dim_list)[1].string.c_str() );
+	new_y_id = fi_dim_name_to_id( v->files.front().get()->id, const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[0].string.c_str() );
+	new_x_id = fi_dim_name_to_id( v->files.front().get()->id, const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[1].string.c_str() );
 	if( new_x_id < new_y_id ) {
 		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", NULL, true );
 		if( message == Message::Cancel )
@@ -1408,8 +1407,8 @@ view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 
 	switch( dimension ) {
 		case Dimension::X:
-			new_id = fi_dim_name_to_id( v->first_file->id, 
-						v->name, new_dim_name );
+			new_id = fi_dim_name_to_id( v->files.front().get()->id, 
+						const_cast<char *>(v->name.c_str()), new_dim_name );
 			if( options.debug ) 
 				fprintf( stderr, "setting dim X to %s\n", 
 						new_dim_name );
@@ -1419,8 +1418,8 @@ view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 			break;
 
 		case Dimension::Y:
-			new_id = fi_dim_name_to_id( v->first_file->id, 
-						v->name, new_dim_name );
+			new_id = fi_dim_name_to_id( v->files.front().get()->id, 
+						const_cast<char *>(v->name.c_str()), new_dim_name );
 			if( options.debug ) 
 				fprintf( stderr, "setting dim Y to %s\n", 
 						new_dim_name );
@@ -1436,8 +1435,8 @@ view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 				return;
 				}
 			set_buttons( BUTTONS_ALL_ON );
-			new_id = fi_dim_name_to_id( v->first_file->id, 
-						v->name, new_dim_name );
+			new_id = fi_dim_name_to_id( v->files.front().get()->id, 
+						const_cast<char *>(v->name.c_str()), new_dim_name );
 			old_id = local_view->scan_axis_id;
 			local_view->scan_axis_id = new_id;
 			if( options.debug ) 
@@ -1446,8 +1445,8 @@ view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 			break;
 
 		case Dimension::None:
-			new_id = fi_dim_name_to_id( v->first_file->id, 
-						v->name, new_dim_name );
+			new_id = fi_dim_name_to_id( v->files.front().get()->id, 
+						const_cast<char *>(v->name.c_str()), new_dim_name );
 			if( options.debug ) 
 				fprintf( stderr, "setting dim NONE to %s\n", 
 						new_dim_name );
@@ -1477,23 +1476,23 @@ alloc_view_storage( View *view )
 		free( view->data   );
 	if( view->pixels != NULL )
 		free( view->pixels );
-	x_size       = *(view->variable->size + view->x_axis_id);
-	y_size       = *(view->variable->size + view->y_axis_id);
+	x_size       = view->variable->size[view->x_axis_id];
+	y_size       = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
 	tot_size     = x_size*y_size*sizeof(float);
 	view->data   = (void *)malloc( tot_size );
 	if( view->data == NULL ) {
 		fprintf( stderr, "ncview: can't allocate data array\n" );
-		fprintf( stderr, "variable name: %s\n", view->variable->name );
+		fprintf( stderr, "variable name: %s\n", view->variable->name.c_str() );
 		fprintf( stderr, "requested size: %ldx%ld\n", x_size, y_size );
 		fprintf( stderr, "x axis id:%d  y axis id:%d\n",
 			view->x_axis_id, view->y_axis_id );
 		fprintf( stderr, "x axis name:%s  y axis name:%s\n",
-			fi_dim_id_to_name( view->variable->first_file->id,
+			fi_dim_id_to_name( view->variable->files.front().get()->id,
 					   view->variable->name,
 					   view->x_axis_id ).c_str(),
-			fi_dim_id_to_name( view->variable->first_file->id,
+			fi_dim_id_to_name( view->variable->files.front().get()->id,
 					   view->variable->name,
 					   view->y_axis_id ).c_str() );
 		exit( -1 );
@@ -1501,17 +1500,17 @@ alloc_view_storage( View *view )
 	view->pixels = (ncv_pixel *)malloc( scaled_x_size*scaled_y_size*sizeof(ncv_pixel) );
 	if( view->pixels == NULL ) {
 		fprintf( stderr, "ncview: can't allocate pixel array\n" );
-		fprintf( stderr, "variable name: %s\n", view->variable->name );
+		fprintf( stderr, "variable name: %s\n", view->variable->name.c_str() );
 		fprintf( stderr, "requested size: %ld x %ld\n", 
 				scaled_x_size, 
 				scaled_y_size );
 		fprintf( stderr, "x axis id:%d  y axis id:%d\n",
 			view->x_axis_id, view->y_axis_id );
 		fprintf( stderr, "x axis name:%s  y axis name:%s\n",
-			fi_dim_id_to_name( view->variable->first_file->id,
+			fi_dim_id_to_name( view->variable->files.front().get()->id,
 					   view->variable->name,
 					   view->x_axis_id ).c_str(),
-			fi_dim_id_to_name( view->variable->first_file->id,
+			fi_dim_id_to_name( view->variable->files.front().get()->id,
 					   view->variable->name,
 					   view->y_axis_id ).c_str() );
 		exit( -1 );
@@ -1529,9 +1528,8 @@ view_set_range( void )
 	float	new_min, new_max;
 	int	allvars;
 	Message	message;
-	NCVar	*cursor;
 
-	message = x_range( view->variable->user_min, view->variable->user_max, 
+	message = x_range( view->variable->user_min, view->variable->user_max,
 		view->variable->global_min, view->variable->global_max, 
 		&new_min, &new_max, &allvars );
 	if( message == Message::Cancel )
@@ -1545,12 +1543,10 @@ view_set_range( void )
 	view_draw( true, false ); /* 'true' because we just invalidated all saveframes */
 
 	if( allvars == true ) {
-		cursor = variables;
-		while( cursor != NULL ) {
+		for( auto &cursor : variables ) {
 			cursor->user_min = new_min;
 			cursor->user_max = new_max;
 			cursor->have_set_range = true;
-			cursor = cursor->next;
 			}
 		}
 
@@ -1564,9 +1560,9 @@ set_range_labels( float min, float max )
 	std::string units, var_long_name;
 	char	temp_label[4096], extra_label[4096];
 
-	units = fi_var_units( view->variable->first_file->id,
+	units = fi_var_units( view->variable->files.front().get()->id,
 				view->variable->name );
-	var_long_name = fi_long_var_name( view->variable->first_file->id,
+	var_long_name = fi_long_var_name( view->variable->files.front().get()->id,
 					view->variable->name );
 	if( units.empty() ) {
 		snprintf( temp_label, 4095, "displayed range: %g to %g (%g to %g shown)",
@@ -1655,15 +1651,15 @@ init_saveframes()
 		}
 	else
 		{
-		n_scan_entries = *(view->variable->size + view->scan_axis_id);
+		n_scan_entries = view->variable->size[view->scan_axis_id];
 		n_extra_frames = floor( n_scan_entries * 0.1 ) + 1;
 		if( n_extra_frames < 10 )
 			n_extra_frames = 10;
 		}
 	framestore.nt = n_scan_entries + n_extra_frames;
 
-	xsize = *(view->variable->size + view->x_axis_id);
-	ysize = *(view->variable->size + view->y_axis_id);
+	xsize = view->variable->size[view->x_axis_id];
+	ysize = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, xsize, ysize, &(framestore.nx), &(framestore.ny) );
 
 	storage_size =  framestore.nx * framestore.ny * framestore.nt;
@@ -1673,8 +1669,8 @@ init_saveframes()
 		fprintf( stderr, "	n_scan_entries: %ld\n", n_scan_entries );
 		fprintf( stderr, "	n_extra_frames: %ld\n", n_extra_frames );
 		fprintf( stderr, "	frame size: %ld\n", 
-				*(view->variable->size + view->x_axis_id) *
-				*(view->variable->size + view->y_axis_id) );
+				view->variable->size[view->x_axis_id] *
+				view->variable->size[view->y_axis_id] );
 		fprintf( stderr, "	total storage size:%ld\n", storage_size );
 		}
 
@@ -1810,11 +1806,11 @@ re_determine_scan_axes( View *new_view, NCVar *new_var, View *old_view )
 	NCDim	*old_dim;
 
 	old_var = old_view->variable;
-	old_n_scannable_dims = stringlist_len( 
-		fi_scannable_dims( old_var->first_file->id, old_var->name) );
+	old_n_scannable_dims = stringlist_len(
+		fi_scannable_dims( old_var->files.front().get()->id, const_cast<char *>(old_var->name.c_str())) );
 
 	for( i=0; i<old_n_scannable_dims; i++ ) {
-		old_dim = *(old_var->dim+i);
+		old_dim = old_var->dim[i].get();
 
 		/* the dim is set to NULL if it is not scannable */
 		if( old_dim != NULL ) {
@@ -1822,8 +1818,8 @@ re_determine_scan_axes( View *new_view, NCVar *new_var, View *old_view )
 			/* dim_index is the index in the *new* variable of
 		 	 * the *old* dimension
 		 	 */
-			dim_index = fi_dim_name_to_id( new_var->first_file->id,
-					new_var->name, old_dim->name );
+			dim_index = fi_dim_name_to_id( new_var->files.front().get()->id,
+					const_cast<char *>(new_var->name.c_str()), const_cast<char *>(old_dim->name.c_str()) );
 			if( dim_index != -1 ) {
 				/* This dimension is in the new variable. 
 				 * Set to be the same dimension as it used to
@@ -1896,13 +1892,13 @@ re_set_scan_place( View *new_view, NCVar *new_var, View *old_view )
 		 * in the OLD variable.  -1 if the new dimension does
 		 * not exist in the old variable.
 		 */
-		new_dim   = *(new_var->dim+i);
+		new_dim   = new_var->dim[i].get();
 		if( new_dim != NULL ) {
-			dim_index = fi_dim_name_to_id( old_var->first_file->id,
-					old_var->name, new_dim->name );
+			dim_index = fi_dim_name_to_id( old_var->files.front().get()->id,
+					const_cast<char *>(old_var->name.c_str()), const_cast<char *>(new_dim->name.c_str()) );
 			if( dim_index != -1 ) {
 				old_place = *(old_view->var_place+dim_index);
-				if( old_place < *(new_var->size+i) )
+				if( old_place < new_var->size[i] )
 					*(new_view->var_place+i) = old_place;
 				}
 			}
@@ -1936,8 +1932,8 @@ calculate_blowup( View *view, NCVar *var, int val_to_set_to )
 		}
 
 	/* If the picture is too small, start out by blowing it up some */
-	x_size = *(var->size + view->x_axis_id);
-	y_size = *(var->size + view->y_axis_id);
+	x_size = var->size[view->x_axis_id];
+	y_size = var->size[view->y_axis_id];
 	while( (options.blowup*x_size < options.blowup_default_size) && 
 	       (options.blowup*y_size < options.blowup_default_size) ) {
 		view_change_blowup( 1, false, view_var_is_valid );
@@ -1963,7 +1959,7 @@ draw_file_info( NCVar *var )
 	std::string title, units, var_long_name;
 	char	range_label[256], temp_label[600];
 
-	title = fi_title( var->first_file->id );
+	title = fi_title( var->files.front().get()->id );
 	if( title.empty() )
 		in_set_label( LABEL_TITLE, PROGRAM_ID );
 	else
@@ -1971,7 +1967,7 @@ draw_file_info( NCVar *var )
 		 * seam sweep; it only reads/copies the string, never mutates it. */
 		in_set_label( LABEL_TITLE, const_cast<char *>( title.c_str() ));
 
-	units = fi_var_units( var->first_file->id, var->name );
+	units = fi_var_units( var->files.front().get()->id, var->name );
 	if( units.empty() ) {
 		if( (var->global_min != var->user_min) || (var->global_max != var->user_max))
 			snprintf( range_label, 255, "%g to %g (%g to %g shown)",
@@ -2002,7 +1998,7 @@ draw_file_info( NCVar *var )
 	snprintf( temp_label, 599, "displayed range: %s", range_label );
 	in_set_label( LABEL_DATA_EXTREMA, temp_label );
 
-	var_long_name = fi_long_var_name( view->variable->first_file->id,
+	var_long_name = fi_long_var_name( view->variable->files.front().get()->id,
 					view->variable->name );
 	if( var_long_name.empty() ) {
 		snprintf( temp_label, 255, "variable=%s", limit_string(view->variable->name).c_str() );
@@ -2035,16 +2031,16 @@ redraw_dimension_info()
 	char	*cur_y_name;
 
 	var     = view->variable;
-	dimlist = fi_scannable_dims( var->first_file->id, var->name );
+	dimlist = fi_scannable_dims( var->files.front().get()->id, const_cast<char *>(var->name.c_str()) );
 
-	y_dim      = *(var->dim+view->y_axis_id);
-	cur_y_name = y_dim->name;
+	y_dim      = var->dim[view->y_axis_id].get();
+	cur_y_name = const_cast<char *>(y_dim->name.c_str());
 
 	x_init_dim_info( dimlist );
 
 	for( i=0; i<var->n_dims; i++ )
-		if( (d = *(var->dim+i)) != NULL ) {
-			please_flip = ((strcmp(d->name, cur_y_name)==0) && 
+		if( (d = var->dim[i].get()) != NULL ) {
+			please_flip = ((d->name == cur_y_name) &&
 						options.invert_physical);
 			in_fill_dim_info( d, please_flip ); 
 			}
@@ -2066,14 +2062,14 @@ show_current_dim_values( View *view )
 	nc_type	type;
 
 	var = view->variable;
-	scannable_dims   = fi_scannable_dims( var->first_file->id, var->name );
+	scannable_dims   = fi_scannable_dims( var->files.front().get()->id, const_cast<char *>(var->name.c_str()) );
 
 	if( scannable_dims != NULL )
 	for( auto &e : *scannable_dims ) {
 		dim_name   = (char *)e.string.c_str();
 		dimid      = fi_dim_name_to_id(
-					var->first_file->id,
-					var->name,
+					var->files.front().get()->id,
+					const_cast<char *>(var->name.c_str()),
 					dim_name );
 
 		place = *(view->var_place+dimid);
@@ -2094,22 +2090,22 @@ label_dimensions( View *view )
 	char	*dim_name;
 
 	if( view->x_axis_id != -1 ) {
-		dim      = *(view->variable->dim+view->x_axis_id);
-		dim_name = dim->name;
+		dim      = view->variable->dim[view->x_axis_id].get();
+		dim_name = const_cast<char *>(dim->name.c_str());
 		in_indicate_active_dim( Dimension::X, dim_name );
 		in_set_cur_dim_value  ( dim_name, "-X-" );
 		}
 	
 	if( view->y_axis_id != -1 ) {
-		dim      = *(view->variable->dim+view->y_axis_id);
-		dim_name = dim->name;
+		dim      = view->variable->dim[view->y_axis_id].get();
+		dim_name = const_cast<char *>(dim->name.c_str());
 		in_indicate_active_dim( Dimension::Y, dim_name );
 		in_set_cur_dim_value  ( dim_name, "-Y-" );
 		}
 
 	if( view->scan_axis_id != -1 ) {
-		dim      = *(view->variable->dim+view->scan_axis_id);
-		dim_name = dim->name;
+		dim      = view->variable->dim[view->scan_axis_id].get();
+		dim_name = const_cast<char *>(dim->name.c_str());
 		in_indicate_active_dim( Dimension::Scan, dim_name );
 		}
 }
@@ -2126,7 +2122,7 @@ flip_if_inverted( View *view )
 	if( view->y_axis_id == -1 )
 		return;
 
-	y_dim = *(view->variable->dim+view->y_axis_id);
+	y_dim = view->variable->dim[view->y_axis_id].get();
 	if( y_dim->min > y_dim->max )
 		options.invert_physical = true;
 	else
@@ -2170,8 +2166,8 @@ view_report_position( int x, int y, unsigned int button_mask )
 
 	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
 
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 
 	/* Make sure we don't go outside the limits */
 	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
@@ -2191,8 +2187,8 @@ view_report_position( int x, int y, unsigned int button_mask )
 	/* Get the values of the X and Y indices. 
 	* 'type' is the data type of the dimension--can be float or character 
 	*/
-	xdim = *(view->variable->dim + view->x_axis_id);
-	ydim = *(view->variable->dim + view->y_axis_id);
+	xdim = view->variable->dim[view->x_axis_id].get();
+	ydim = view->variable->dim[view->y_axis_id].get();
 
 	x_is_mapped = (view->variable->dim_map_info[ view->x_axis_id ] != NULL);
 	y_is_mapped = (view->variable->dim_map_info[ view->y_axis_id ] != NULL);
@@ -2245,7 +2241,7 @@ view_construct_scalar_coord_str( char *str, int slen )
 
 	str[0] = '\0';
 
-	if( (view == NULL) || (view->variable == NULL) || (view->variable->n_scalar_coords == 0) 
+	if( (view == NULL) || (view->variable == NULL) || (view->variable->scalar_dim_map_info.empty())
 				|| (view->var_place == NULL)) {
 		return;
 		}
@@ -2272,26 +2268,26 @@ view_construct_scalar_coord_str( char *str, int slen )
 	displaying_along_time_dim = ((view->x_axis_id == 0) || (view->y_axis_id == 0));
 
 	/* Get all scalar dims associated with this var and this file */
-	nsc = view->variable->n_scalar_coords;
+	nsc = (int)view->variable->scalar_dim_map_info.size();
 	for( isc=0; isc<nsc; isc++ ) {
-		sdmi   = view->variable->scalar_dim_map_info[isc];
+		sdmi   = view->variable->scalar_dim_map_info[isc].get();
 		fval   = sdmi->data_cache[fdb_index];	/* NOTE! this is NOT [timtestep], it's [fdb_number] */
 		snprintf( v1, 95, "%f", fval );
 		strip_trailing_zeros( v1 );
-		funits = sdmi->coord_var_units;
+		funits = const_cast<char *>(sdmi->coord_var_units.c_str());
 
 		if( displaying_along_time_dim && (! sdmi->scalar_all_same)) {
-			nfiles = view->variable->last_file->index + 1;	/* number of files this var lives in */
-			fmin = view_calc_minval_float( sdmi->data_cache, nfiles );
-			fmax = view_calc_maxval_float( sdmi->data_cache, nfiles );
+			nfiles = view->variable->files.back()->index + 1;	/* number of files this var lives in */
+			fmin = view_calc_minval_float( sdmi->data_cache.data(), nfiles );
+			fmax = view_calc_maxval_float( sdmi->data_cache.data(), nfiles );
 			snprintf( v1, 95, "%f", fmin );
 			strip_trailing_zeros( v1 );
 			snprintf( v2, 95, "%f", fmax );
 			strip_trailing_zeros( v2 );
-			snprintf( tstr, 1020, "%s=%s -> %s %s", sdmi->coord_var_name, v1, v2, funits );
+			snprintf( tstr, 1020, "%s=%s -> %s %s", sdmi->coord_var_name.c_str(), v1, v2, funits );
 			}
 		else
-			snprintf( tstr, 1020, "%s=%s %s", sdmi->coord_var_name, v1, funits );
+			snprintf( tstr, 1020, "%s=%s %s", sdmi->coord_var_name.c_str(), v1, funits );
 
 		if( isc != (nsc-1)) 
 			strncat( tstr, "; ", sizeof(tstr) - strlen(tstr) - 1 );
@@ -2351,8 +2347,8 @@ set_dataedit_place()
 
 	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
 
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 
 	/* Make sure we don't go outside the limits */
 	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
@@ -2393,8 +2389,8 @@ set_min_from_curdata()
 	in_query_pointer_position( &x, &y );
 	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
 
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 
 	/* Make sure we don't go outside the limits */
 	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
@@ -2440,8 +2436,8 @@ set_max_from_curdata()
 	in_query_pointer_position( &x, &y );
 	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
 
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 
 	/* Make sure we don't go outside the limits */
 	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
@@ -2476,8 +2472,8 @@ view_data_edit( void )
 	size_t	index, n_entries;
 	float	val;
 
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 
 	n_entries  = x_size * y_size;
 	/* +1 for the NULL terminator written after the loop below */
@@ -2508,8 +2504,8 @@ view_change_dat( size_t index, float new_val )
 
 	view->data_status = ViewDataStatus::Edited;
 
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
 	y = index / x_size;
@@ -2554,15 +2550,15 @@ view_data_edit_dump( void )
 	if( message == Message::OK ) {
 		ncid = nccreate( filename, NC_CLOBBER );
 
-		x_size = *(view->variable->size + view->x_axis_id);
-		y_size = *(view->variable->size + view->y_axis_id);
+		x_size = view->variable->size[view->x_axis_id];
+		y_size = view->variable->size[view->y_axis_id];
 
-		dim_name = (*(view->variable->dim + view->x_axis_id))->name;
+		dim_name = const_cast<char *>(view->variable->dim[view->x_axis_id]->name.c_str());
 		x_dimid = ncdimdef( ncid, dim_name, x_size );
-		dim_name = (*(view->variable->dim + view->y_axis_id))->name;
+		dim_name = const_cast<char *>(view->variable->dim[view->y_axis_id]->name.c_str());
 		y_dimid = ncdimdef( ncid, dim_name, y_size );
 
-		var_name = view->variable->name;
+		var_name = const_cast<char *>(view->variable->name.c_str());
 		dims[0] = y_dimid;
 		dims[1] = x_dimid;
 		varid = ncvardef( ncid, var_name, NC_FLOAT, 2, dims );
@@ -2635,8 +2631,8 @@ plot_XY()
 
 	mouse_xy_to_data_xy( x_window, y_window, options.blowup, &data_x, &data_y );
 
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 
 	/* Make sure we don't go outside the limits */
 	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
@@ -2659,7 +2655,7 @@ plot_XY()
 	 * in the window that was clicked upon.  We then set the X
 	 * axis to have a full count of all elements be plotted.
 	 */
-        n = *(view->variable->size + X_axis);
+        n = view->variable->size[X_axis];
 	for( i=0; i<view->variable->n_dims; i++ ) {
 		*(start+i) = *(view->var_place+i);
 		*(count+i) = 1L;
@@ -2708,13 +2704,13 @@ view_set_XY_plot_axis( char *label )
 
 	dim_to_plot = -1;
 	for( i=0; i<view->variable->n_dims; i++ )
-		if( (*(view->variable->dim + i) != NULL) &&
-		    (strcmp( (*(view->variable->dim + i))->name, label) == 0) )
+		if( (view->variable->dim[i] != nullptr) &&
+		    (view->variable->dim[i]->name == label) )
 			dim_to_plot = i;
-	
+
 	if( dim_to_plot == -1 ) {
 		snprintf( message, 1023, "Error: I can't find dimension %s in variable %s!\n",
-			label, view->variable->name );
+			label, view->variable->name.c_str() );
 		in_error( message );
 		return;
 		}
@@ -2736,7 +2732,7 @@ view_set_XY_plot_axis( char *label )
 			*(count+j) = 1L;
 			}
 		*(start+view->plot_XY_axis) = 0L;
-		*(count+view->plot_XY_axis) = *(view->variable->size + view->plot_XY_axis);
+		*(count+view->plot_XY_axis) = view->variable->size[view->plot_XY_axis];
 		if( options.debug ) 
 			fprintf( stderr, "view_set_XY_plot_axis: about to call plot_XY_sc\n" );
 		plot_XY_sc( start, count );
@@ -2772,7 +2768,7 @@ plot_XY_sc( size_t *start, size_t *count )
 		}
 
 	if( options.show_sel ) {
-		printf( "-var %s -start \\(", view->variable->name );
+		printf( "-var %s -start \\(", view->variable->name.c_str() );
 		for( i=view->variable->n_dims-1; i >= 0; i-- ) {
 			printf( "%1ld", 1 + (*(start+i)) );
 			if( i != 0 )
@@ -2784,7 +2780,7 @@ plot_XY_sc( size_t *start, size_t *count )
 			if( i != 0 )
 				printf( "," );
 			}
-		printf( "\\) %s\n", view->variable->first_file->filename );
+		printf( "\\) %s\n", view->variable->files.front()->filename.c_str() );
 		}
 
 	/* The axis we want to plot must be the one with more
@@ -2803,9 +2799,9 @@ plot_XY_sc( size_t *start, size_t *count )
 		in_error( "Error!  I found no dimension to plot!\n" );
 		return;
 		}
-	dim_name = (*(view->variable->dim + dim_to_plot))->name;
+	dim_name = const_cast<char *>(view->variable->dim[dim_to_plot]->name.c_str());
 		
-        n = *(view->variable->size + dim_to_plot);
+        n = view->variable->size[dim_to_plot];
 
 	if( plot_XY_xvals != NULL ) 
 		free( plot_XY_xvals );
@@ -2901,8 +2897,8 @@ plot_XY_sc( size_t *start, size_t *count )
 		}
 
 	/* Get the X axis title */
-	snprintf( x_axis_title, sizeof(x_axis_title), "%s", (*(view->variable->dim + dim_to_plot))->name );
-	units    = fi_dim_units( view->variable->first_file->id, dim_name );
+	snprintf( x_axis_title, sizeof(x_axis_title), "%s", view->variable->dim[dim_to_plot]->name.c_str() );
+	units    = fi_dim_units( view->variable->files.front().get()->id, dim_name );
 	if( !units.empty() ) {
 		strncat( x_axis_title, " (", sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
 		strncat( x_axis_title, units.c_str(), sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
@@ -2931,8 +2927,8 @@ plot_XY_sc( size_t *start, size_t *count )
 		}
 
 	/* Get the Y (which is the active variable) axis title */
-	snprintf( y_axis_title, sizeof(y_axis_title), "%s", view->variable->name );
-	units = fi_var_units( view->variable->first_file->id, view->variable->name );
+	snprintf( y_axis_title, sizeof(y_axis_title), "%s", view->variable->name.c_str() );
+	units = fi_var_units( view->variable->files.front().get()->id, view->variable->name );
 	if( !units.empty() ) {
 		strncat( y_axis_title, " (", sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
 		strncat( y_axis_title, units.c_str(), sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
@@ -2940,13 +2936,13 @@ plot_XY_sc( size_t *start, size_t *count )
 		}
 
 	/* Get the overall plot title */
-	long_name = fi_long_var_name( view->variable->first_file->id,
+	long_name = fi_long_var_name( view->variable->files.front().get()->id,
 				view->variable->name );
 	if( !long_name.empty() )
 		snprintf( title, sizeof(title), "%s", long_name.c_str() );
 	else
-		snprintf( title, sizeof(title), "%s", view->variable->name );
-	file_title = fi_title( view->variable->first_file->id );
+		snprintf( title, sizeof(title), "%s", view->variable->name.c_str() );
+	file_title = fi_title( view->variable->files.front().get()->id );
 	if( !file_title.empty() ) {
 		strncat( title, " from ", sizeof(title) - strlen(title) - 1 );
 		strncat( title, file_title.c_str(), sizeof(title) - strlen(title) - 1 );
@@ -2958,16 +2954,16 @@ plot_XY_sc( size_t *start, size_t *count )
 	have_done_one = false;
 	for( i=0; i<view->variable->n_dims; i++ ) 
 		/* if( (i != dim_to_plot) && ((*(start+i) != 0) || (*(count+i) != 1))) { */
-		if( (i != dim_to_plot) && (*(view->variable->dim+i) != NULL)) {
+		if( (i != dim_to_plot) && (view->variable->dim[i].get() != NULL)) {
 			if( have_done_one )
 				strncat( legend, ", ", sizeof(legend) - strlen(legend) - 1 );
-			strncat( legend, (*(view->variable->dim + i))->name, sizeof(legend) - strlen(legend) - 1 );
+			strncat( legend, view->variable->dim[i]->name.c_str(), sizeof(legend) - strlen(legend) - 1 );
 			have_done_one = true;
 			}
 	strncat( legend, ") = (", sizeof(legend) - strlen(legend) - 1 );
 	have_done_one = false;
 	for( i=0; i<view->variable->n_dims; i++ ) 
-		if( (i != dim_to_plot) && (*(view->variable->dim+i) != NULL)) {
+		if( (i != dim_to_plot) && (view->variable->dim[i].get() != NULL)) {
 			if( have_done_one )
 				strncat( legend, ", ", sizeof(legend) - strlen(legend) - 1 );
 			type = fi_dim_value( view->variable, i, *(start+i), &temp_double, temp_string,
@@ -2989,7 +2985,7 @@ plot_XY_sc( size_t *start, size_t *count )
 	 */
 	dimlist = NULL;
 	/* Put the current dim first on the list */
-	stringlist_add_string( &dimlist, (*(view->variable->dim + dim_to_plot))->name );
+	stringlist_add_string( &dimlist, view->variable->dim[dim_to_plot]->name.c_str() );
 	for( i=0; i<view->variable->n_dims; i++ )
 		/* We are using here the fact that view->variable->dim was initialized
 		 * so that non-scannable dims were set to NULL.  However, this can still
@@ -2997,9 +2993,9 @@ plot_XY_sc( size_t *start, size_t *count )
 		 * even if there is a count of only 1 along it.  Get rid of that case
 		 * by making sure the size > 1.
 		 */
-		if( (*(view->variable->dim+i) != NULL) && (i != dim_to_plot)
-		    && (*(view->variable->size+i) > 1)) 
-			stringlist_add_string( &dimlist, (*(view->variable->dim + i))->name );
+		if( (view->variable->dim[i] != nullptr) && (i != dim_to_plot)
+		    && (view->variable->size[i] > 1))
+			stringlist_add_string( &dimlist, view->variable->dim[i]->name.c_str() );
 
 	if( options.debug ) {
 		fprintf( stderr, "about to call in_popup_XY_graph...\n" );
@@ -3018,7 +3014,7 @@ plot_XY_sc( size_t *start, size_t *count )
 	 * that plot's window).
 	 */
 	if( plot_index != -1 ) 
-		plot_XY_dim[plot_index] = *(view->variable->dim + dim_to_plot);
+		plot_XY_dim[plot_index] = view->variable->dim[dim_to_plot].get();
 
 	in_set_cursor_normal();
 	if( options.debug ) 
@@ -3031,7 +3027,7 @@ view_plot_XY_fmt_x_val( float val, int dimindex, char *s, size_t s_len )
 {
 	NCDim	*dim;
 
-	dim = *(view->variable->dim + dimindex);
+	dim = view->variable->dim[dimindex].get();
 	if( dim->timelike && options.t_conv )
 		fmt_time( s, s_len-1, val, dim, 1 );
 	else
@@ -3046,16 +3042,16 @@ view_information( void )
 	 * seam sweep; it copies the string into a widget synchronously, so
 	 * the temporary from netcdf_att_string() -- alive for this whole
 	 * full-expression -- is safe to hand it. */
-	in_display_stuff( const_cast<char *>( netcdf_att_string( view->variable->first_file->id,
+	in_display_stuff( const_cast<char *>( netcdf_att_string( view->variable->files.front().get()->id,
 						view->variable->name ).c_str() ),
-			view->variable->name );
+			const_cast<char *>( view->variable->name.c_str() ) );
 }
 
 /**************************************************************************************/
 	static void
 invalidate_variable( NCVar *var )
 {
-	x_set_var_sensitivity( view->variable->name, false );
+	x_set_var_sensitivity( const_cast<char *>(view->variable->name.c_str()), false );
 	set_buttons( BUTTONS_ALL_OFF );
 	view = NULL;
 	options.blowup = 1;
@@ -3118,12 +3114,12 @@ view_data_has_missing( View *v )
 
 	if( v->x_axis_id < 0 ) 
 		return(true);
-	nx = *(v->variable->size + v->x_axis_id);
+	nx = v->variable->size[v->x_axis_id];
 
 	if( v->y_axis_id < 0 ) 
 		ny = 1;
 	else
-		ny = *(v->variable->size + v->y_axis_id);
+		ny = v->variable->size[v->y_axis_id];
 
 	for( i=0; i<nx*ny; i++ ) {
 		dat = *((float *)(v->data) + i);

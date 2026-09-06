@@ -50,15 +50,3 @@ target_compile_definitions(ncview_core PRIVATE
 target_compile_definitions(ncview_core PRIVATE
     NCVIEW_LIB_DIR="${CMAKE_INSTALL_FULL_DATADIR}/ncview/colormaps"
 )
-
-# Upstream's linked lists type their next/prev pointers as `void *` and rely
-# on C's implicit void*->T* conversion at every traversal site (hundreds of
-# them across core/) -- legal in C, ill-formed in C++. Previously handled
-# with -fpermissive, which downgrades this to a warning under GCC but has
-# no equivalent effect on Clang (macOS's default compiler), making it a
-# hard portability blocker there. Fixed properly instead: the four
-# structs' next/prev fields (Stringlist, NCVar, FDBlist, Cmaplist) are
-# AnyPtr (ncview/anyptr.h), a tiny wrapper with a templated implicit
-# conversion operator that restores the same "converts to any pointer
-# type" behavior at the four declaration sites, without needing every
-# call site cast or a compiler-specific flag.

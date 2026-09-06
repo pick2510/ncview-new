@@ -38,7 +38,6 @@
 #endif
 
 static int   file_type;
-extern NCVar *variables;
 extern Options options;
 
 static void fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data );
@@ -325,8 +324,8 @@ fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 	virt_to_actual_place( var, virt_start_pos, act_start_pos, &file );
 
 	if( file_type == FILE_TYPE_NETCDF )
-		netcdf_fi_get_data( file->id, var->name, act_start_pos,
-			  count, (float *)data, (NetCDFOptions *)var->first_file->aux_data );
+		netcdf_fi_get_data( file->id, const_cast<char *>(var->name.c_str()), act_start_pos,
+			  count, (float *)data, var->files.front()->aux_data.get() );
 	else
 		{
 		fprintf( stderr, "?unknown file_type passed to fi_get_data: %d\n",
@@ -367,9 +366,9 @@ fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *da
 		start2[0] = it;
 		virt_to_actual_place( var, start2, act_start_pos, &file );
 		if( file_type == FILE_TYPE_NETCDF )
-			netcdf_fi_get_data( file->id, var->name, act_start_pos, 
-				  count2, ((float *)data)+it*prod_lower_dims, 
-				  	(NetCDFOptions *)var->first_file->aux_data );
+			netcdf_fi_get_data( file->id, const_cast<char *>(var->name.c_str()), act_start_pos,
+				  count2, ((float *)data)+it*prod_lower_dims,
+				  	var->files.front()->aux_data.get() );
 		else
 			{
 			fprintf( stderr, "?unknown file_type passed to fi_get_data: %d\n",
@@ -422,24 +421,25 @@ void fi_dim_value_convert( double *dimval, FDBlist *file, NCVar *var, NCDim *d )
 	int	year0, month0, hour0, min0, day0, err;
 	double	sec0;
 
-	if( (file->recdim_units 	   == NULL) ||
-	    (var->first_file->recdim_units == NULL) ||
-	    (var->first_file->ut_unit_ptr  == NULL) ||
+	FDBlist *first_file = var->files.front().get();
+	if( (file->recdim_units.empty()) ||
+	    (first_file->recdim_units.empty()) ||
+	    (first_file->ut_unit_ptr  == NULL) ||
 	    (file->ut_unit_ptr 		   == NULL) ||
 	    (! d->timelike )                        ||
-	    (strcmp(file->recdim_units,var->first_file->recdim_units) == 0) ) 
+	    (file->recdim_units == first_file->recdim_units) )
 	    	return;
 
-	/* Convert the dim value to a date using the units given 
+	/* Convert the dim value to a date using the units given
 	 * in the file that this dim value came from
 	 */
-	err = utCalendar2_cal( *dimval, file->recdim_units, 
-		&year0, &month0, &day0, &hour0, &min0, &sec0, d->calendar );
+	err = utCalendar2_cal( *dimval, file->recdim_units.c_str(),
+		&year0, &month0, &day0, &hour0, &min0, &sec0, d->calendar.c_str() );
 	if( err == 0 ) {
-		err = utInvCalendar2_cal( year0, month0, day0, hour0, min0, sec0, 
-			var->first_file->recdim_units, &converted_dimval,
-			d->calendar );
-		if( err == 0 ) 
+		err = utInvCalendar2_cal( year0, month0, day0, hour0, min0, sec0,
+			first_file->recdim_units.c_str(), &converted_dimval,
+			d->calendar.c_str() );
+		if( err == 0 )
 			*dimval = converted_dimval;
 		}
 #endif
@@ -460,28 +460,28 @@ fi_dim_value( NCVar *var, int dim_id, size_t virt_place, double *return_val_doub
 	size_t	actual_place, *virt_start_pos, *act_start_pos;
 	FDBlist	*file;
 	int	i;
-	char	*dim_name;
+	std::string	dim_name;
 	nc_type	ret_val;
 	NCDim	*d;
 	size_t	idx_map;
 	NCDim_map_info	*dmi;
 
 if(1==0){
-printf( "Data cache vals for var %s:\n", var->name );
+printf( "Data cache vals for var %s:\n", var->name.c_str() );
 for( i=0; i<var->n_dims; i++ ) {
-	printf( "Dim %d (%s): ", i, var->dim[i]->name );
-	if( var->dim_map_info[i] == NULL ) 
+	printf( "Dim %d (%s): ", i, var->dim[i]->name.c_str() );
+	if( var->dim_map_info[i] == NULL )
 		printf( "NULL\n" );
 	else
-		printf( "(%s) %f %f %f\n", 
-			var->dim_map_info[i]->coord_var_name,
+		printf( "(%s) %f %f %f\n",
+			var->dim_map_info[i]->coord_var_name.c_str(),
 			var->dim_map_info[i]->data_cache[0], var->dim_map_info[i]->data_cache[10],
 			var->dim_map_info[i]->data_cache[100] );
 	}
 }
 
 	/* See if this dim value is actually 2-d mapped */
-	dmi = var->dim_map_info[dim_id];
+	dmi = var->dim_map_info[dim_id].get();
 	if( dmi != NULL ) {
 		/* It IS 2-d mapped, calculate entry in data cache where val is */
 		idx_map = 0L;
@@ -515,10 +515,10 @@ for( i=0; i<var->n_dims; i++ ) {
 
 	actual_place = *(act_start_pos+dim_id);
 
-	d = (*(var->dim+dim_id));
+	d = (var->dim[dim_id].get());
 	dim_name  = d->name;
 	if( file_type == FILE_TYPE_NETCDF )
-		ret_val = netcdf_dim_value( file->id, dim_name, actual_place, 
+		ret_val = netcdf_dim_value( file->id, const_cast<char *>(dim_name.c_str()), actual_place,
 				return_val_double, return_val_char, virt_place,
 				return_has_bounds, return_bounds_min, return_bounds_max );
 	else
@@ -625,8 +625,8 @@ fi_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 fi_fill_value( NCVar *var, float *fill_value )
 {
 	if( file_type == FILE_TYPE_NETCDF )
-		netcdf_fill_value( var->first_file->id, var->name, 
-				fill_value, (NetCDFOptions *)var->first_file->aux_data );
+		netcdf_fill_value( var->files.front()->id, const_cast<char *>(var->name.c_str()),
+				fill_value, var->files.front()->aux_data.get() );
 	else
 		{
 		fprintf( stderr, "?unknown file_type passed to fi_fill_value: %d\n",

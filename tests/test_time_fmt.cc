@@ -30,9 +30,9 @@ namespace {
 // epic_fmt_time() actually read.
 NCDim make_time_dim(char *units, char *calendar, TimeStandard time_std, TimeGranularity tgran) {
     NCDim d{};
-    d.name = (char *)"time";
-    d.units = units;
-    d.calendar = calendar;
+    d.name = "time";
+    d.units = units ? units : "";
+    d.calendar = calendar ? calendar : "";
     d.timelike = 1;
     d.time_std = time_std;
     d.tgran = tgran;

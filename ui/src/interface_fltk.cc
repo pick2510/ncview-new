@@ -58,15 +58,15 @@ void in_initialize( void )
 	instance()->populateVarList();
 	instance()->window()->show();
 	if( const char *sel = getenv( "NCVIEW_TEST_AUTOSELECT" ) ) {
-		NCVar *v = variables;
+		NCVar *v = variables.empty() ? nullptr : variables[0].get();
 		// A specific variable name may be given (besides "1", meaning "just
 		// pick the first one"); useful for driving a chosen 2-D field in
 		// headless/manual testing without a real mouse.
 		if( std::strcmp( sel, "1" ) != 0 )
-			for( NCVar *c = variables; c != nullptr; c = (NCVar *)c->next )
-				if( std::strcmp( c->name, sel ) == 0 ) { v = c; break; }
+			for( auto &c : variables )
+				if( c->name == sel ) { v = c.get(); break; }
 		if( v != nullptr )
-			in_variable_selected( v->name );
+			in_variable_selected( const_cast<char *>(v->name.c_str()) );
 	}
 	if( const char *d = getenv( "NCVIEW_TEST_DIALOG" ) ) {
 		if( std::strcmp( d, "range" ) == 0 ) do_range( Modifier::M1 );

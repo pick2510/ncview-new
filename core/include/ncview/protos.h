@@ -34,6 +34,9 @@
 
 #pragma once
 
+#include <memory>
+#include <vector>
+
 #include "ncview/stringlist.h"
 #include "ncview/interface.h"
 
@@ -41,7 +44,7 @@
  * needed these declare its own local `extern`; this is the one canonical
  * declaration ncview_ui can use too. */
 extern Options options;
-extern NCVar   *variables;
+extern std::vector<std::unique_ptr<NCVar>> variables;
 
 /******************************************************************************
  * in ncview.c
@@ -137,12 +140,10 @@ int 	safe_ncvarid( int fileid, char *varname );
  * in util.c, general utility routines
  */
 int 	close_enough	   ( float data, float fill );
-void 	new_fdblist        ( FDBlist **el );
 void 	new_netcdf         ( NetCDFOptions **n );
 int	data_to_pixels     ( View *v );
 void	add_var_to_list    ( char *var_name, int file_id, char *filename, int nfiles );
 NCVar	*get_var	   ( char *var_name );
-void	add_to_varlist     ( NCVar **list, NCVar *new_var );
 void	init_min_max	   ( NCVar *var );
 void	clip_f		   ( float *val, float min, float max );
 void	clip_i		   ( int   *val, int   min, int   max );
@@ -152,7 +153,7 @@ void 	check_ranges       ( NCVar *var );
 std::string limit_string   ( std::string_view s );
 int 	*gen_overlay       ( View *v, char *overlay_fname );
 void 	fmt_time	   ( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity );
-int	n_vars_in_list	   ( NCVar *v );
+int	n_vars_in_list	   ( const std::vector<std::unique_ptr<NCVar>> &v );
 void 	set_blowup_type	   ( BlowupType new_type );
 int 	n_strings_in_list  ( Stringlist *s );
 int 	strncmp_nocase     ( char *s1, char *s2, size_t n );
@@ -165,9 +166,9 @@ void 	sl_cat		    ( Stringlist **dest, Stringlist **src );
 void 	get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data,
 					float *min, float *max, int verbose );
 int 	unpack_groupname( char *varname, int ig, char *groupname );
-void 	cache_scalar_coord_info( NCVar *vars );
+void 	cache_scalar_coord_info( const std::vector<std::unique_ptr<NCVar>> &vars );
 int 	count_nslashes	    ( char *s );
-Stringlist *get_group_list  ( NCVar *vars );
+Stringlist *get_group_list  ( const std::vector<std::unique_ptr<NCVar>> &vars );
 void 	varname_no_groups   ( char *varname, char *varname_sans_groups, char *groupname );
 unsigned char interp( int i, int range_i, unsigned char *mat, int n_entries );
 

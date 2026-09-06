@@ -31,7 +31,6 @@
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 
-extern	NCVar   *variables;
 extern  Options options;
 
 void 	warn_about_char_dims();
@@ -1374,7 +1373,7 @@ void netcdf_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 	nc_type	type;
 	NetCDFOptions *netcdf;
 
-	netcdf = (NetCDFOptions *)(fdb->aux_data);
+	netcdf = fdb->aux_data.get();
 
 	err = nc_inq_varid_grp( id, var_name, &varid, &gid );
 	if( err != NC_NOERR ) {
@@ -1389,7 +1388,7 @@ void netcdf_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 	 */
 	recdim_id = netcdf_fi_recdim_id( gid );
 	if( recdim_id == -1 ) {
-		fdb->recdim_units = NULL;
+		fdb->recdim_units.clear();
 		}
 	else
 		{
@@ -1402,18 +1401,15 @@ void netcdf_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 			}
 		/* See if there is a variable with the same name */
 		err = nc_inq_varid( gid, unlimdim_name, &unlimdimvar_id );
-		if( err != 0 ) 
-			fdb->recdim_units = NULL;
+		if( err != 0 )
+			fdb->recdim_units.clear();
 		else
 			{
-			/* Get the units for the dimvar. Note: can be NULL --
-			 * fdb->recdim_units is still a raw char* (Phase 5
-			 * converts FDBlist), and callers elsewhere test it
-			 * against NULL specifically, not just emptiness, so
-			 * an empty netcdf_var_units() result must become
-			 * NULL here rather than a strdup'd "". */
-			std::string recdim_units_s = netcdf_var_units( gid, unlimdim_name );
-			fdb->recdim_units = recdim_units_s.empty() ? NULL : strdup( recdim_units_s.c_str() );
+			/* Get the units for the dimvar. Empty means "no units
+			 * attribute" -- callers now test fdb->recdim_units.empty()
+			 * rather than comparing to NULL (see file.cc's
+			 * fi_dim_value_convert()). */
+			fdb->recdim_units = netcdf_var_units( gid, unlimdim_name );
 			}
 		}
 
@@ -1584,7 +1580,6 @@ int netcdf_get_att_util( int id, int varid, char *var_name, char *att_name, int 
 /*******************************************************************************************/
 int netcdf_min_max_option_set( NCVar *var, float *ret_min, float *ret_max )
 {
-	FDBlist		*f;
 	NetCDFOptions 	*netcdf;
 	int		range_set = false;
 	float		min, max, t_min, t_max;
@@ -1592,9 +1587,8 @@ int netcdf_min_max_option_set( NCVar *var, float *ret_min, float *ret_max )
 	min =  9.9e30;
 	max = -9.9e30;
 
-	f = var->first_file;
-	while( f != NULL ) {
-		netcdf = (NetCDFOptions *)(f->aux_data);
+	for( auto &f : var->files ) {
+		netcdf = f->aux_data.get();
 		if( netcdf->valid_range_set ) {
 			range_set = true;
 			if( netcdf->valid_range[0] <  netcdf->valid_range[1] ) {
@@ -1609,7 +1603,6 @@ int netcdf_min_max_option_set( NCVar *var, float *ret_min, float *ret_max )
 			min = (t_min < min) ? t_min : min;
 			max = (t_max > max) ? t_max : max;
 			}
-		f = f->next;
 		}
 
 	if( range_set ) {
@@ -1623,22 +1616,19 @@ int netcdf_min_max_option_set( NCVar *var, float *ret_min, float *ret_max )
 /*******************************************************************************************/
 int netcdf_min_option_set( NCVar *var, float *ret_min )
 {
-	FDBlist		*f;
 	NetCDFOptions 	*netcdf;
 	int		min_set = false;
 	float		min, t_min;
 
 	min =  9.9e30;
 
-	f = var->first_file;
-	while( f != NULL ) {
-		netcdf = (NetCDFOptions *)(f->aux_data);
+	for( auto &f : var->files ) {
+		netcdf = f->aux_data.get();
 		if( netcdf->valid_min_set ) {
 			min_set = true;
 			t_min   = netcdf->valid_min;
 			min     = (t_min < min) ? t_min : min;
 			}
-		f = f->next;
 		}
 
 	if( min_set )
@@ -1650,22 +1640,19 @@ int netcdf_min_option_set( NCVar *var, float *ret_min )
 /*******************************************************************************************/
 int netcdf_max_option_set( NCVar *var, float *ret_max )
 {
-	FDBlist		*f;
 	NetCDFOptions 	*netcdf;
 	int		max_set = false;
 	float		max, t_max;
 
 	max =  -9.9e30;
 
-	f = var->first_file;
-	while( f != NULL ) {
-		netcdf = (NetCDFOptions *)(f->aux_data);
+	for( auto &f : var->files ) {
+		netcdf = f->aux_data.get();
 		if( netcdf->valid_max_set ) {
 			max_set = true;
 			t_max   = netcdf->valid_max;
 			max     = (t_max > max) ? t_max : max;
 			}
-		f = f->next;
 		}
 
 	if( max_set )

@@ -48,7 +48,6 @@ void setup_identity_pixel_transform(int n_colors, int n_extra_colors) {
 struct PixelFixture {
     NCVar var{};
     View view{};
-    size_t size[2];
     std::vector<float> data;
     std::vector<ncv_pixel> pixels;
     size_t nx, ny;
@@ -58,14 +57,12 @@ struct PixelFixture {
         : nx(nx_), ny(ny_) {
         ensure_ncview_misc_initialized();
 
-        size[0] = ny; // y axis
-        size[1] = nx; // x axis
-        var.size = size;
+        var.size = { ny, nx }; // [0]=y axis, [1]=x axis
         var.fill_value = fill_value;
         var.user_min = user_min;
         var.user_max = user_max;
         var.have_set_range = true;
-        var.name = (char *)"test_var";
+        var.name = "test_var";
 
         data = std::move(values);
         REQUIRE(data.size() == nx * ny);

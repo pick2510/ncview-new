@@ -65,7 +65,7 @@
 #define DEFAULT_AUTO_OVERLAY	true
 
 Options	  options;
-NCVar	  *variables;
+std::vector<std::unique_ptr<NCVar>> variables;
 ncv_pixel *pixel_transform;
 FrameStore framestore;
 Stringlist *read_in_state;
@@ -74,7 +74,7 @@ static void init_cmaps_from_data();
 static void init_cmap_from_data( char *colormap_name, int *data );
 static int get_cmaps_from_dir( char *dir_name );
 static int ncview_cmap_suffix( char *s, int *n_suffix );
-static int any_var_in_group( NCVar *var );
+static int any_var_in_group( const std::vector<std::unique_ptr<NCVar>> &vars );
 
 /***********************************************************************************************/
 	int
@@ -131,7 +131,7 @@ ncview_main( int argc, char **argv )
 	/* If there is only one variable, make it the active one */
 	if( n_vars_in_list( variables ) == 1 ) {
 		/* set_scan_variable     ( variables       ); */
-		in_indicate_active_var( variables->name );
+		in_indicate_active_var( const_cast<char *>(variables[0]->name.c_str()) );
 		}
 
 	/* If we didn't find a state file (".ncviewrc") when we started up, then
@@ -668,10 +668,9 @@ init_cmap_from_file( char *dir_name, char *file_name, int n_suffix )
 	void
 initialize_file_interface( Stringlist *input_files )
 {
-	int	i, idim, nvars, nfiles;
-	NCVar	*var;
+	int	idim, nvars, nfiles;
 
-	if( options.debug ) 
+	if( options.debug )
 		printf( "Initializing file interface...\n" );
 
 	nfiles = stringlist_len( input_files );
@@ -679,7 +678,7 @@ initialize_file_interface( Stringlist *input_files )
 	if( input_files != NULL )
 		for( auto &f : *input_files )
 			fi_initialize( (char *)f.string.c_str(), nfiles );
-	if( options.debug ) 
+	if( options.debug )
 		printf( "...calculating dim min & maxes...\n" );
 	calc_dim_minmaxes();
 
@@ -688,23 +687,22 @@ initialize_file_interface( Stringlist *input_files )
 	 * input file.
 	 */
 	nvars = 0;
-	var = variables;
-	while( var != NULL ) {
+	for( auto &var_owner : variables ) {
+		NCVar *var = var_owner.get();
 		nvars++;
 		var->effective_dimensionality = 0;
 		for( idim=0; idim<var->n_dims; idim++ ) {
-			if( *(var->size + idim) > 1 )
+			if( var->size[idim] > 1 )
 				var->effective_dimensionality++;
-			if( options.debug ) 
+			if( options.debug )
 				printf( "var %s has %d dims, dim %d: >%s< len %ld\n",
-					var->name, var->n_dims, idim, 
-					var->dim[idim]->name, var->dim[idim]->size );
+					var->name.c_str(), var->n_dims, idim,
+					var->dim[idim]->name.c_str(), var->dim[idim]->size );
 			}
 		if( options.debug ) {
 			printf( "variable %s had effective_dimensionality of %d\n",
-				var->name, var->effective_dimensionality );
+				var->name.c_str(), var->effective_dimensionality );
 			}
-		var = var->next;
 		}
 
 	/* Now that we have read in all the files, we can
@@ -792,16 +790,11 @@ create_default_colormap()
 }
 
 /***********************************************************************************************/
-int any_var_in_group( NCVar *var ) {
+int any_var_in_group( const std::vector<std::unique_ptr<NCVar>> &vars ) {
 
-	NCVar	*cursor;
-
-	cursor = var;
-	while( cursor != NULL ) {
-		if( count_nslashes( cursor->name ) > 0 ) 
+	for( const auto &cursor : vars )
+		if( count_nslashes( const_cast<char *>(cursor->name.c_str()) ) > 0 )
 			return( 1 );
-		cursor = cursor->next;
-		}
 
 	return( 0 );
 }

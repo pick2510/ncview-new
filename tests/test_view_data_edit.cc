@@ -24,7 +24,6 @@ TEST_CASE("view_data_edit: allocates exactly n_entries+1 slots and fills them co
     ensure_ncview_misc_initialized();
 
     const size_t nx = 4, ny = 3;
-    size_t size[2] = {ny, nx}; // dim 0 = y, dim 1 = x -- see PixelFixture in test_pixels.cc
     std::vector<float> data = {
         0.f,  1.f,  2.f,  3.f,
         10.f, 11.f, 12.f, 13.f,
@@ -32,8 +31,8 @@ TEST_CASE("view_data_edit: allocates exactly n_entries+1 slots and fills them co
     };
 
     NCVar var{};
-    var.size = size;
-    var.name = (char *)"test_var";
+    var.size = { ny, nx }; // dim 0 = y, dim 1 = x -- see PixelFixture in test_pixels.cc
+    var.name = "test_var";
 
     View v{};
     v.variable   = &var;

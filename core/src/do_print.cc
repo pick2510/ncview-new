@@ -123,11 +123,11 @@ do_print( void )
 #ifdef DEBUG
 	fprintf( stderr, "entering do_print()\n" );
 #endif
-	x_size = *(view->variable->size + view->x_axis_id);
-	y_size = *(view->variable->size + view->y_axis_id);
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
-	snprintf( printopts.out_file_name, 1024, "ncview.%s.ps", view->variable->name ); 
+	snprintf( printopts.out_file_name, 1024, "ncview.%s.ps", view->variable->name.c_str() );
 	if( printer_options( &printopts ) == Message::Cancel )
 		return;
 
@@ -228,19 +228,19 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 #ifdef DEBUG
 	fprintf( stderr, "print_other_info: entering\n" );
 #endif
-	x_dim_name     = (*(view->variable->dim + view->x_axis_id))->name;
-	x_dim_longname = fi_dim_longname( view->variable->first_file->id, x_dim_name );
-	x_units        = fi_dim_units( view->variable->first_file->id, x_dim_name );
+	x_dim_name     = const_cast<char *>(view->variable->dim[view->x_axis_id]->name.c_str());
+	x_dim_longname = fi_dim_longname( view->variable->files.front().get()->id, x_dim_name );
+	x_units        = fi_dim_units( view->variable->files.front().get()->id, x_dim_name );
 
-	y_dim_name     = (*(view->variable->dim + view->y_axis_id))->name;
-	y_dim_longname = fi_dim_longname( view->variable->first_file->id, y_dim_name );
-	y_units        = fi_dim_units( view->variable->first_file->id, y_dim_name );
+	y_dim_name     = const_cast<char *>(view->variable->dim[view->y_axis_id]->name.c_str());
+	y_dim_longname = fi_dim_longname( view->variable->files.front().get()->id, y_dim_name );
+	y_units        = fi_dim_units( view->variable->files.front().get()->id, y_dim_name );
 
-	main_long_name = fi_long_var_name( view->variable->first_file->id,
+	main_long_name = fi_long_var_name( view->variable->files.front().get()->id,
 			view->variable->name );
 	if( main_long_name.empty() )
 		main_long_name = view->variable->name;
-	main_units     = fi_var_units( view->variable->first_file->id, view->variable->name );
+	main_units     = fi_var_units( view->variable->files.front().get()->id, view->variable->name );
 
 	/***** Main variable name and units ******/
 	if( printopts.include_title ) {
@@ -298,7 +298,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 			bot_of_image - 4*printopts.font_size );
 
 		/**** File title ***/
-		file_title = fi_title( view->variable->first_file->id );
+		file_title = fi_title( view->variable->files.front().get()->id );
 		if( !file_title.empty() ) {
 			fprintf( outf, "gsave (%s) show grestore\n",
 				file_title.c_str() );
@@ -313,7 +313,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
 
 		/*** Range of X axis ***/
-		d = *(view->variable->dim + view->x_axis_id);
+		d = view->variable->dim[view->x_axis_id].get();
 		if( x_units.empty() )
 			snprintf( tstr, 1499, "Range of %s: %g to %g",
 				x_dim_longname.c_str(), d->min, d->max);
@@ -324,7 +324,7 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
 
 		/*** Range of Y axis ***/
-		d = *(view->variable->dim + view->y_axis_id);
+		d = view->variable->dim[view->y_axis_id].get();
 		if( options.invert_physical )
 			snprintf( tstr, 1499, "Range of %s: %g to %g",
 				y_dim_longname.c_str(), d->max, d->min );
@@ -342,10 +342,10 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		for(i=0; i<view->variable->n_dims; i++)
 			if( (i != view->x_axis_id) &&
 			    (i != view->y_axis_id) &&
-			    (*(view->variable->dim+i) != NULL)) {
-				dim_name     = (*(view->variable->dim + i))->name;
-				dim_longname = fi_dim_longname( view->variable->first_file->id, dim_name );
-				units        = fi_dim_units( view->variable->first_file->id, dim_name );
+			    (view->variable->dim[i].get() != NULL)) {
+				dim_name     = const_cast<char *>(view->variable->dim[i]->name.c_str());
+				dim_longname = fi_dim_longname( view->variable->files.front().get()->id, dim_name );
+				units        = fi_dim_units( view->variable->files.front().get()->id, dim_name );
 				type         = fi_dim_value( view->variable, i, *(view->var_place+i),
 							&temp_double, tstr2, &has_bounds, &bound_min, &bound_max, view->var_place );
 				if( type == NC_DOUBLE )
@@ -365,12 +365,12 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		tstr[0] = '\0';
 		actual_place = (size_t *)malloc( sizeof(size_t)*20 );
 		virt_to_actual_place( view->variable, view->var_place, actual_place, &fdb );
-		if( (fi_recdim_id( view->variable->first_file->id ) != view->x_axis_id ) &&
-		    (fi_recdim_id( view->variable->first_file->id ) != view->y_axis_id)) 
+		if( (fi_recdim_id( view->variable->files.front().get()->id ) != view->x_axis_id ) &&
+		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->y_axis_id)) 
 			snprintf( tstr, 1499, "Frame %ld in ", 
 				*(actual_place + view->scan_axis_id)+1 );
 		strncat( tstr, "File ", sizeof(tstr) - strlen(tstr) - 1 );
-		strncat( tstr, fdb->filename, sizeof(tstr) - strlen(tstr) - 1 );
+		strncat( tstr, fdb->filename.c_str(), sizeof(tstr) - strlen(tstr) - 1 );
 		fprintf( outf, "gsave (%s) show grestore\n", tstr );
 		fprintf( outf, "0 %d rmoveto\n", -(printopts.leading+printopts.font_size) );
 		}
