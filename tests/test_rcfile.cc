@@ -12,6 +12,7 @@
 // -- there is no way to point them at an arbitrary path -- so every test
 // here redirects $HOME to a scratch directory for its duration and restores
 // it afterward. Never runs against the real developer's ~/.ncviewrc.
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -77,12 +78,18 @@ struct ScratchHome {
     std::string rc_path() const { return (dir / ".ncviewrc").string(); }
 };
 
+// handle_rc_file.cc writes via fopen(..., "a") in text mode, so on Windows
+// each '\n' comes out as "\r\n"; normalize that away so the hardcoded
+// `expected` strings below (and the round-trip comparisons) don't have to
+// care which platform wrote the file.
 std::string read_file(const std::string &path) {
     std::ifstream in(path, std::ios::binary);
     REQUIRE(in.good());
     std::ostringstream ss;
     ss << in.rdbuf();
-    return ss.str();
+    std::string contents = ss.str();
+    contents.erase(std::remove(contents.begin(), contents.end(), '\r'), contents.end());
+    return contents;
 }
 
 // Builds the kind of state list colormap_funcs.c's colormap_options_to_

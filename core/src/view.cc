@@ -504,7 +504,8 @@ change_view( int delta, int interpretation )
 	void
 set_scan_view( size_t scan_place )
 {
-	char	temp_string[1024], view_place[1024], scalar_coord_str[1024];
+	char	temp_string[1024], scalar_coord_str[1024];
+	std::string view_place;
 	size_t	size;
 	char	*dim_name;
 	double	new_dimval, bound_min, bound_max;
@@ -531,7 +532,7 @@ set_scan_view( size_t scan_place )
 	dim = view->variable->dim[view->scan_axis_id].get();
 	dim_name = const_cast<char *>(dim->name.c_str());
 	view->var_place[view->scan_axis_id] = scan_place;
-	snprintf( view_place, 1023, "frame %1zu/%1zu ", scan_place+1, size );
+	view_place = "frame " + std::to_string(scan_place+1) + "/" + std::to_string(size) + " ";
 
 	/* type is the data type of the dimension--can be float or character */
 	type = fi_dim_value( view->variable, view->scan_axis_id, scan_place, &new_dimval,
@@ -539,20 +540,20 @@ set_scan_view( size_t scan_place )
 	if( type == NC_DOUBLE ) {
 		if( dim->timelike && options.t_conv ) {
 			fmt_time( temp_string, 1024, new_dimval, dim, 1 );
-			strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
+			view_place += temp_string;
 			if( has_bounds ) {
 				snprintf( temp_string, 1023, " (%d bnds:", has_bounds );
-				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += temp_string;
 
 				fmt_time( temp_string, 1024, bound_min, dim, 0 );
-				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += temp_string;
 
-				strncat( view_place, " -> ", sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += " -> ";
 
 				fmt_time( temp_string, 1024, bound_max, dim, 0 );
-				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += temp_string;
 
-				strncat( view_place, ")", sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += ")";
 				}
 			}
 		else
@@ -560,17 +561,17 @@ set_scan_view( size_t scan_place )
 			snprintf( temp_string, 1023, "%lg", new_dimval );
 			if( has_bounds ) {
 				snprintf( temp_string, 1023, " (%d bnds:", has_bounds );
-				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += temp_string;
 
 				snprintf( temp_string, 1023, "%lg", bound_min );
-				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += temp_string;
 
-				strncat( view_place, " -> ", sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += " -> ";
 
 				snprintf( temp_string, 1023, "%lg", bound_max );
-				strncat( view_place, temp_string, sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += temp_string;
 
-				strncat( view_place, ")", sizeof(view_place) - strlen(view_place) - 1 );
+				view_place += ")";
 				}
 			}
 		}
@@ -579,7 +580,7 @@ set_scan_view( size_t scan_place )
 		   * is already in variable "temp_string"
 		   */
 		}
-	in_set_label( Label::ScanPlace, view_place );
+	in_set_label( Label::ScanPlace, view_place.c_str() );
 	in_set_cur_dim_value( dim_name, temp_string );
 	view->data_status = ViewDataStatus::Invalid;
 	if( options.want_extra_info ) {
