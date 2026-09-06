@@ -4,12 +4,12 @@
 #include <cstddef>
 
 /*
- * Upstream's linked-list nodes (Stringlist, NCVar, FDBlist, Cmaplist) type
+ * Upstream's linked-list nodes (Stringlist, NCVar, FDBlist) type
  * their next/prev fields as `void *`, relying on C's implicit void*->T*
  * conversion at every traversal site -- legal in C, ill-formed in C++, and
  * used at hundreds of call sites across core/. AnyPtr is a minimal wrapper
  * with a templated implicit conversion operator that restores exactly that
- * "converts to any pointer type" behavior, so only the four struct
+ * "converts to any pointer type" behavior, so only the three struct
  * declarations need to change, not every call site (and not a compiler-
  * specific flag: GCC's -fpermissive downgrades this to a warning, but
  * Clang -- macOS's default compiler -- has no equivalent, making it a hard
