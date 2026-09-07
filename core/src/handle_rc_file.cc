@@ -112,6 +112,8 @@ write_state_to_file( Stringlist *state_to_save )
 	/* Open it as a file stream */
 	if( (outf = fopen( tmp_fname, "a" )) == NULL ) {
 		fprintf( stderr, "Error opening temporary file \"%s\" for output!\n", tmp_fname );
+		close( outfid );
+		unlink( tmp_fname );
 		return( -1 );
 		}
 
