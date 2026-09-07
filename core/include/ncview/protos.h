@@ -204,6 +204,8 @@ void 	set_scan_view        ( size_t scan_place );
 int 	change_view          ( int delta, int interpretation );
 int	view_draw            ( int allow_saveframes_useage, int force_range_to_frame );
 void 	view_change_cur_dim  ( char *dim_name, Modifier modifier );
+void	view_set_cur_dim_index( const char *dim_name, long place );
+size_t	view_get_cur_dim_index( const char *dim_name );
 void	view_forward         ( void );
 void	view_backward        ( void );
 void	view_change_blowup   ( int delta, int redraw_flag, int view_var_is_valid );

@@ -1215,23 +1215,73 @@ redraw_ccontour()
  * which has the current dimension value, indicating that they want
  * it to change.
  */
+/**********************************************************************
+ * Shared tail of view_change_cur_dim() (relative step) and
+ * view_set_cur_dim_index() (absolute jump, e.g. from a UI slider): given
+ * a dimid/dim already resolved and a new place already computed and
+ * clamped, push it into view->var_place, refresh whatever UI reflects it
+ * (the scan axis's title label if this dim IS the scan axis, or just this
+ * dim's own row otherwise), and redraw.
+ */
+	static void
+view_apply_cur_dim_place( int dimid, NCDim *dim, size_t place )
+{
+	int	has_bounds;
+	nc_type	type;
+	double	new_dimval, bound_min, bound_max;
+	char	temp_string[1024];
+
+	view->var_place[dimid] = place;
+
+	if( dimid == view->scan_axis_id ) {
+		/* This dim's own row is stepping the scan axis itself (e.g.
+		 * "time" shown both as its own dimension row and as the frame
+		 * the animation buttons step through) -- go through
+		 * set_scan_view() so the "frame N/M <date>" title label
+		 * (Label::ScanPlace) stays in sync, not just this row's own
+		 * display. change_view() (the play/rewind/forward path)
+		 * already does this; the other paths here used to skip it,
+		 * so stepping the scan dimension any other way silently went
+		 * stale.
+		 */
+		set_scan_view( place );
+		}
+	else {
+		type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
+			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
+		if( type == NC_DOUBLE ) {
+			if( dim->timelike && options.t_conv ) {
+				fmt_time( temp_string, 1024, new_dimval, dim, 1 );
+				}
+			else
+				snprintf( temp_string, 1023, "%lg", new_dimval );
+			}
+		in_set_cur_dim_value( dim->name.c_str(), temp_string );
+		}
+
+	if( options.debug )
+		fprintf( stderr, "calling init_saveframes from view_apply_cur_dim_place\n" );
+
+	view->data_status = ViewDataStatus::Invalid;
+	init_saveframes();
+
+	view_draw( true, false ); /* 'true' because we initialized saveframes above */
+}
+
 	void
 view_change_cur_dim( char *dim_name, Modifier modifier )
 {
-	int	dimid, fileid, has_bounds;
-	nc_type	type;
-	double	new_dimval, bound_min, bound_max;
+	int	dimid, fileid;
 	size_t	place, size;
 	long	delta, prov_place;
 	NCDim	*dim;
-	char	temp_string[1024];
 
 	if( view == NULL ) {
 		in_error( "Please select a variable first" );
 		return;
 		}
 
-	if( view->data_status == ViewDataStatus::Edited ) 
+	if( view->data_status == ViewDataStatus::Edited )
 		view_data_edit_warn();
 
 	fileid = view->variable->files.front().get()->id;
@@ -1268,39 +1318,68 @@ view_change_cur_dim( char *dim_name, Modifier modifier )
 		}
 
 	place = view->var_place[dimid];
+	view_apply_cur_dim_place( dimid, dim, place );
+}
 
-	if( dimid == view->scan_axis_id ) {
-		/* This dim's own row arrows are stepping the scan axis itself
-		 * (e.g. "time" shown both as its own dimension row and as the
-		 * frame the animation buttons step through) -- go through
-		 * set_scan_view() so the "frame N/M <date>" title label
-		 * (Label::ScanPlace) stays in sync, not just this row's value
-		 * box. change_view() (the play/rewind/forward path) already
-		 * does this; this path was missing it, so stepping the scan
-		 * dimension via its own arrows silently went stale.
-		 */
-		set_scan_view( place );
-		}
-	else {
-		type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
-			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
-		if( type == NC_DOUBLE ) {
-			if( dim->timelike && options.t_conv ) {
-				fmt_time( temp_string, 1024, new_dimval, dim, 1 );
-				}
-			else
-				snprintf( temp_string, 1023, "%lg", new_dimval );
-			}
-		in_set_cur_dim_value( dim_name, temp_string );
+/**********************************************************************
+ * Jump a non-scan dimension directly to an absolute index -- the
+ * counterpart to view_change_cur_dim()'s relative +1/-1/+10% stepping,
+ * for a UI control (a slider) that lets the user pick a place directly
+ * instead of clicking through it one step at a time.
+ */
+	void
+view_set_cur_dim_index( const char *dim_name, long place )
+{
+	int	dimid, fileid;
+	NCDim	*dim;
+
+	if( view == NULL ) {
+		in_error( "Please select a variable first" );
+		return;
 		}
 
-	if( options.debug )
-		fprintf( stderr, "calling init_saveframes from view_change_cur_dim\n" );
+	if( view->data_status == ViewDataStatus::Edited )
+		view_data_edit_warn();
 
-	view->data_status = ViewDataStatus::Invalid;
-	init_saveframes();
+	fileid = view->variable->files.front().get()->id;
+	dimid  = fi_dim_name_to_id( fileid,
+				const_cast<char *>(view->variable->name.c_str()),
+				const_cast<char *>(dim_name) );
+	if( (dimid == view->x_axis_id) ||
+	    (dimid == view->y_axis_id) )
+		return;
 
-	view_draw( true, false ); /* 'true' because we initialized saveframes above */
+	if( place < 0 )
+		place = 0;
+	if( (size_t)place > view->variable->size[dimid]-1L )
+		place = (long)(view->variable->size[dimid]-1L);
+
+	dim = view->variable->dim[dimid].get();
+	view_apply_cur_dim_place( dimid, dim, (size_t)place );
+}
+
+/**********************************************************************
+ * Current index of a non-scan dimension -- lets a UI control (a slider)
+ * keep its on-screen position in sync with the actual view state after
+ * a change made some other way (the row's own prev/next buttons, or
+ * initial variable selection). Returns 0 if there's no current view or
+ * the name doesn't resolve, both of which are benign no-ops for a caller
+ * just trying to (re)draw a slider.
+ */
+	size_t
+view_get_cur_dim_index( const char *dim_name )
+{
+	if( view == NULL )
+		return 0;
+
+	int fileid = view->variable->files.front().get()->id;
+	int dimid  = fi_dim_name_to_id( fileid,
+				const_cast<char *>(view->variable->name.c_str()),
+				const_cast<char *>(dim_name) );
+	if( dimid < 0 )
+		return 0;
+
+	return view->var_place[dimid];
 }
 
 /**********************************************************************

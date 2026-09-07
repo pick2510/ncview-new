@@ -19,8 +19,10 @@
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Group.H>
 #include <FL/Fl_Pack.H>
 #include <FL/Fl_RGB_Image.H>
+#include <FL/Fl_Slider.H>
 #include <FL/Fl_Widget.H>
 
 // This whole project is C++ throughout (core included), so these are
@@ -99,10 +101,17 @@ private:
 
 struct DimRow {
 	std::string name;
-	Fl_Box     *name_box   = nullptr;
-	Fl_Box     *value_box  = nullptr;
-	Fl_Button  *prev_btn   = nullptr;
-	Fl_Button  *next_btn   = nullptr;
+	Fl_Group   *group        = nullptr;  // see MainWindow::recenterDimRow()
+	Fl_Box     *name_box     = nullptr;
+	// A slider so the user can drag straight to a place instead of only
+	// stepping one frame at a time with prev_btn/next_btn (which stay,
+	// flanking it, for that single-step case) -- its label is the current
+	// value's formatted text (a date, a coordinate, ...), not a number, so
+	// it's drawn centered inside the slider itself rather than off to the
+	// side the way Fl_Value_Slider's numeric readout would be.
+	Fl_Slider  *value_slider = nullptr;
+	Fl_Button  *prev_btn     = nullptr;
+	Fl_Button  *next_btn     = nullptr;
 };
 
 struct NamedColormap {
@@ -172,10 +181,12 @@ private:
 	void layout( int w, int h );
 	int  rebuildButtonBar( int available_width );  // returns total bar height (may be several rows)
 	void rebuildDimRow( DimRow &row );
+	void recenterDimRow( DimRow &row );
 	void rebuildColormapChoice();
 	static void buttonCallback( Fl_Widget *w, void *data );
 	static void varChoiceCallback( Fl_Widget *w, void *data );
 	static void dimStepCallback( Fl_Widget *w, void *data );
+	static void dimSliderCallback( Fl_Widget *w, void *data );
 	static void colormapChoiceCallback( Fl_Widget *w, void *data );
 
 	NcviewWindow     *win_ = nullptr;

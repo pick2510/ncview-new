@@ -417,46 +417,51 @@ MainWindow::MainWindow()
 	const int W = 900, H = 760;
 	win_ = new NcviewWindow( W, H, "ncview" );
 
-	// Five info rows above the image, each column sized (and, where the
-	// content is genuinely unbounded -- a variable name, a frame's date
-	// string with bounds, a mouse-position readout -- kept in sync with the
-	// window width in layout() below) so neighboring labels can't run into
-	// each other. FL_ALIGN_CLIP is a belt-and-suspenders backstop: if some
-	// future content still ends up wider than its column, it gets clipped
-	// to that column's box instead of silently drawing over the next label
-	// (which is exactly what used to happen here -- e.g. a longish variable
-	// name in Label::ScanvarName visibly ran into Label::ScanPlace's "frame
-	// N/M" text right after it, and Label::ScalarDims's fixed 280px width
-	// physically overlapped Label::CcInfo2's column).
+	// Info rows above the image. Packing unrelated fields side-by-side in
+	// fixed-width columns (the previous layout, and upstream's before it)
+	// looks fine only when every field happens to be near its column's
+	// worst-case width -- with typical short content (a two-letter variable
+	// name, "Linear", an empty optional field) it instead reads as a
+	// scattered mix of isolated words with big dead gaps around them. So
+	// each independent, potentially-long field (name, frame/date, range,
+	// position, per-variable extra info, scalar coords, extra time info)
+	// gets its own full-width row and stacks vertically -- consistent left
+	// margin, no visual "randomness" regardless of how much of any one row
+	// is actually filled in. The one exception is the colormap/transform/
+	// interpolation trio: always present, always short (a colormap name, one
+	// of 4 transform words, "Repl"/"Bi-lin"), so they're packed tightly on
+	// one row instead of each claiming a full line for a couple of words.
+	// FL_ALIGN_CLIP is a belt-and-suspenders backstop: if some future
+	// content still ends up wider than its column, it gets clipped instead
+	// of silently drawing over whatever comes after it.
 	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, 5, W-20, 20 );
-	// "displaying <var>" -- var names are unbounded, so this gets a wide
-	// fixed column and Label::ScanPlace (the rest of the row) is resized to
-	// track the window edge in layout(), same as Label::DataValue below.
-	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, 25, 400, 18 );
-	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 420, 25, W-430, 18 );
-	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, 43, 300, 18 );
+	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, 25, W-20, 18 );
+	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 10, 43, W-20, 18 );
+	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, 61, 300, 18 );
 	// Wide enough to actually show the full "Current: (i=.., j=..) val
 	// (x=.., y=..)" string view_report_position() builds -- the old fixed
 	// 200px width clipped it right after "(x=", silently hiding the x/y
 	// coordinate values even though they were always part of the label
 	// text and updating on every mouse move. Resized to track the window
 	// edge in layout() below, same as Label::Title.
-	labels_[static_cast<int>(Label::DataValue)]   = new Fl_Box( 320, 43, W-330, 18 );
-	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 10, 61, 150, 18 );
+	labels_[static_cast<int>(Label::DataValue)]   = new Fl_Box( 320, 61, W-330, 18 );
+	// A bordered box behind the trio below ties them together visually as
+	// one "display settings" unit, distinct from the free-form info lines
+	// around it -- created (and so drawn) before the labels it sits behind.
+	auto *display_settings_box = new Fl_Box( 6, 76, 280, 24 );
+	display_settings_box->box( FL_ENGRAVED_BOX );
+	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 10, 79, 120, 18 );
 	// No Label::Blowup ("M X<n>") box -- it showed core's discrete
 	// pre-zoom pixel-buffer scale factor, which upstream's now-removed
 	// Button::Blowup let you cycle. With that gone (replaced by ImageView's
 	// continuous scroll/drag zoom, which this label never reflected anyway)
 	// it was a static, unexplained number nobody could act on.
-	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 170, 61, 90, 18 );
-	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 270, 61, 90, 18 );
-	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 370, 61, W-380, 18 );
-	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, 79, 150, 18 );
-	// 170 + 190 = 360, a full 10px short of Label::CcInfo2's column at 370
-	// -- previously 280px wide (up to x=450), which physically overlapped
-	// CcInfo2 starting at x=370.
-	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, 79, 190, 18 );
-	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 370, 79, W-380, 18 );
+	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 135, 79, 70, 18 );
+	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 210, 79, 70, 18 );
+	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 10, 97, W-20, 18 );
+	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, 115, 150, 18 );
+	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, 115, W-180, 18 );
+	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 10, 133, W-20, 18 );
 	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP ); }
 
 	var_pack_ = new Fl_Pack( 10, 100, 180, H-220 );
@@ -490,7 +495,10 @@ void MainWindow::layout( int w, int h )
 {
 	const int kSideMargin = 10;
 	const int kImageX = 200;
-	const int kTopY = 100;
+	// 8 info rows (5,25,43,61,79,97,115,133), each 18px (20 for the title)
+	// -- see the row layout comment in the constructor -- plus a small gap
+	// before var_pack_/image_/dim_pack_ start.
+	const int kTopY = 152;
 	const int kColorbarH = 20;
 	const int kColorbarGap = 10;
 	// Colorbar::draw() puts its tick labels ~13px below the swatch (plus
@@ -519,9 +527,18 @@ void MainWindow::layout( int w, int h )
 	if( right_w < 40 ) right_w = 40;
 
 	button_bar_->resize( kSideMargin, button_bar_y, button_bar_w, button_bar_h );
-	dim_pack_->resize( kSideMargin, dim_pack_y, w - 2*kSideMargin, kDimPackH );
+	// Same x/width as colorbar_/image_ (not the full window, which would
+	// also span the var_pack_ variable-list column to its left) -- this is
+	// what actually keeps the dimension rows aligned under the colorbar
+	// they control, on every resize.
+	dim_pack_->resize( kImageX, dim_pack_y, right_w, kDimPackH );
 	colorbar_->resize( kImageX, colorbar_y, right_w, kColorbarH );
 	image_->resize( kImageX, kTopY, right_w, image_h );
+
+	// dim_pack_->resize() above just stretched every row's Fl_Group to the
+	// new width; recenter each one's children within it (see
+	// recenterDimRow()'s comment for why Fl_Pack itself can't do this).
+	for( auto &row : dim_rows_ ) recenterDimRow( row );
 
 	int var_pack_h = dim_pack_y - kVarPackGap - kTopY;
 	if( var_pack_h < 40 ) var_pack_h = 40;
@@ -538,9 +555,11 @@ void MainWindow::layout( int w, int h )
 		b->size( w - kSideMargin - b->x(), b->h() );
 	};
 	if( labels_[static_cast<int>(Label::Title)] ) labels_[static_cast<int>(Label::Title)]->size( w - 2*kSideMargin, labels_[static_cast<int>(Label::Title)]->h() );
+	stretch_to_edge( Label::ScanvarName );
 	stretch_to_edge( Label::ScanPlace );
 	stretch_to_edge( Label::DataValue );
 	stretch_to_edge( Label::CcInfo1 );
+	stretch_to_edge( Label::ScalarDims );
 	stretch_to_edge( Label::CcInfo2 );
 
 	win_->redraw();
@@ -796,35 +815,117 @@ void MainWindow::indicateActiveVar( const char *var_name )
 	}
 }
 
+namespace {
+constexpr int kDimRowNameW = 120, kDimRowBtnW = 24, kDimRowSliderW = 220,
+              kDimRowSpacing = 4, kDimRowH = 24;
+constexpr int kDimRowContentW = kDimRowNameW + kDimRowSpacing + kDimRowBtnW
+                              + kDimRowSpacing + kDimRowSliderW + kDimRowSpacing + kDimRowBtnW;
+
+// Fl_Slider::draw() confines its own label rendering to the knob's small
+// rectangle (see the draw_label(xsl,ysl,wsl,hsl) call in FLTK's
+// Fl_Slider.cxx) -- fine for a short numeric readout right next to the
+// knob, but useless for a full string (a date, a coordinate) that needs
+// the whole widget's width to be legible: at a low value the knob is only
+// a few pixels wide, clipping the text down to a single character right
+// at the widget's left edge. Rather than use label() at all (and get that
+// stray knob-confined fragment drawn a second time, in the wrong place),
+// this keeps its own display text and draws it centered across the full
+// widget instead.
+class DimValueSlider : public Fl_Slider {
+public:
+	DimValueSlider( int X, int Y, int W, int H ) : Fl_Slider( X, Y, W, H ) { type( FL_HOR_SLIDER ); }
+	void setDisplayText( const char *s ) { display_text_ = s ? s : ""; redraw(); }
+	void draw() override
+	{
+		Fl_Slider::draw();
+		fl_push_clip( x(), y(), w(), h() );
+		fl_color( active_r() ? labelcolor() : FL_INACTIVE_COLOR );
+		fl_font( labelfont(), labelsize() );
+		fl_draw( display_text_.c_str(), x(), y(), w(), h(), FL_ALIGN_CENTER );
+		fl_pop_clip();
+	}
+private:
+	std::string display_text_;
+};
+} // namespace
+
 void MainWindow::rebuildDimRow( DimRow &row )
 {
-	auto *group = new Fl_Pack( 0, 0, dim_pack_->w(), 24 );
-	group->type( Fl_Pack::HORIZONTAL );
-	group->spacing( 4 );
-	row.name_box = new Fl_Box( 0, 0, 120, 22, "" );
+	// A plain Fl_Group, not Fl_Pack -- unlike the vertical dim_pack_ it
+	// lives in (which does need Fl_Pack's auto-stacking), this row's own
+	// four children are given fixed, explicitly centered positions by
+	// recenterDimRow() below, which Fl_Pack's own left-to-right packing
+	// can't do (it always starts from the row's left edge, leaving unused
+	// space stranded on the right instead of split evenly on both sides).
+	row.group = new Fl_Group( 0, 0, dim_pack_->w(), kDimRowH );
+	row.group->begin();
+	row.name_box = new Fl_Box( 0, 0, kDimRowNameW, 22, "" );
 	row.name_box->copy_label( row.name.c_str() );
 	row.name_box->box( FL_FLAT_BOX );
-	row.prev_btn = new Fl_Button( 0, 0, 24, 22, "@<" );
-	row.value_box = new Fl_Box( 0, 0, 220, 22, "" );
-	row.value_box->box( FL_DOWN_BOX );
-	row.next_btn = new Fl_Button( 0, 0, 24, 22, "@>" );
-	group->end();
-	dim_pack_->add( group );
+	row.prev_btn = new Fl_Button( 0, 0, kDimRowBtnW, 22, "@<" );
+	row.value_slider = new DimValueSlider( 0, 0, kDimRowSliderW, 22 );
+	row.value_slider->box( FL_DOWN_BOX );
+	// The slider's own numeric value is just an index into the dimension
+	// (bounds/current position set once the dim's size is known, in
+	// fillDimInfo() below); what the user actually reads is the formatted
+	// value (a date, a coordinate, ...), drawn centered across the full
+	// widget by DimValueSlider::draw() above.
+	row.value_slider->step( 1 );
+	// FL_WHEN_RELEASE (Fl_Slider's default is FL_WHEN_CHANGED): each step
+	// re-reads and redraws a full 2-D slice from the netCDF file, which is
+	// too expensive to do continuously while the knob is still being
+	// dragged -- commit once, on release, same as a click on prev_btn/
+	// next_btn commits once per click.
+	row.value_slider->when( FL_WHEN_RELEASE );
+	row.next_btn = new Fl_Button( 0, 0, kDimRowBtnW, 22, "@>" );
+	row.group->end();
+	row.group->resizable( nullptr );  // keep the fixed-size/centered layout on resize; see recenterDimRow()
+	dim_pack_->add( row.group );
+	recenterDimRow( row );
 
-	// Callback data (dim name + modifier) must outlive the callback;
-	// heap-allocated and intentionally never freed -- rows are rebuilt
-	// only when the scan dimensions change, a rare, low-cardinality
-	// event, so this is a small, bounded leak rather than a real one.
+	// Callback data (dim name + modifier, or just the dim name for the
+	// slider) must outlive the callback; heap-allocated and intentionally
+	// never freed -- rows are rebuilt only when the scan dimensions
+	// change, a rare, low-cardinality event, so this is a small, bounded
+	// leak rather than a real one.
 	row.prev_btn->callback( &MainWindow::dimStepCallback,
 		new std::pair<std::string,Modifier>( row.name, Modifier::M3 ) );
 	row.next_btn->callback( &MainWindow::dimStepCallback,
 		new std::pair<std::string,Modifier>( row.name, Modifier::M1 ) );
+	row.value_slider->callback( &MainWindow::dimSliderCallback, new std::string( row.name ) );
+}
+
+// dim_pack_ (an Fl_Pack) always force-resizes each row's width to its own
+// current width, so the row's four children need to be re-centered
+// whenever that changes -- at creation (rebuildDimRow() above) and again
+// on every window resize (layout() below), or they'd stay pinned wherever
+// they were centered for the *previous* width.
+void MainWindow::recenterDimRow( DimRow &row )
+{
+	if( row.group == nullptr ) return;
+	int left = ( row.group->w() - kDimRowContentW ) / 2;
+	if( left < 0 ) left = 0;
+	int y = row.group->y();
+	row.name_box->resize( row.group->x() + left, y, kDimRowNameW, 22 );
+	left += kDimRowNameW + kDimRowSpacing;
+	row.prev_btn->resize( row.group->x() + left, y, kDimRowBtnW, 22 );
+	left += kDimRowBtnW + kDimRowSpacing;
+	row.value_slider->resize( row.group->x() + left, y, kDimRowSliderW, 22 );
+	left += kDimRowSliderW + kDimRowSpacing;
+	row.next_btn->resize( row.group->x() + left, y, kDimRowBtnW, 22 );
 }
 
 void MainWindow::dimStepCallback( Fl_Widget *, void *data )
 {
 	auto *p = static_cast<std::pair<std::string,Modifier>*>(data);
 	view_change_cur_dim( (char *)p->first.c_str(), p->second );
+}
+
+void MainWindow::dimSliderCallback( Fl_Widget *w, void *data )
+{
+	auto *name = static_cast<std::string*>(data);
+	auto *slider = static_cast<Fl_Slider*>(w);
+	view_set_cur_dim_index( name->c_str(), lround( slider->value() ) );
 }
 
 void MainWindow::makeDimButtons( const Stringlist *dim_list )
@@ -861,6 +962,15 @@ void MainWindow::fillDimInfo( const NCDim *d, int /*please_flip*/ )
 		if( row.name == d->name ) {
 			row.name_box->copy_label( !d->long_name.empty() ? d->long_name.c_str() : d->name.c_str() );
 			row.name_box->redraw();
+			// The dim's size is only known once (here, at variable
+			// selection/scan-dim-set time), unlike its current place
+			// (view_change_cur_dim()/view_set_cur_dim_index()), which
+			// changes on every step -- so bounds are set here and the
+			// slider's value is kept current in setCurDimValue() below,
+			// called every time the place actually changes.
+			size_t size = d->size > 0 ? d->size : 1;
+			row.value_slider->bounds( 0, (double)(size-1) );
+			row.value_slider->value( (double)view_get_cur_dim_index( d->name.c_str() ) );
 			break;
 		}
 	}
@@ -868,15 +978,13 @@ void MainWindow::fillDimInfo( const NCDim *d, int /*please_flip*/ )
 
 void MainWindow::setCurDimValue( const char *name, const char *value )
 {
-	// Same missing-repaint bug as MainWindow::setLabel() (see its comment):
-	// copy_label() alone doesn't schedule a redraw, so a dimension row's
-	// displayed value -- e.g. "Time" during animation playback or manual
-	// scrubbing with the row's prev/next buttons -- only appeared to update
-	// when some unrelated event happened to repaint the window.
+	// setDisplayText() below schedules its own redraw() -- see
+	// DimValueSlider's comment for why it draws this itself instead of
+	// going through label()/copy_label() the way other widgets here do.
 	for( auto &row : dim_rows_ ) {
 		if( row.name == name ) {
-			row.value_box->copy_label( value );
-			row.value_box->redraw();
+			static_cast<DimValueSlider*>( row.value_slider )->setDisplayText( value );
+			row.value_slider->value( (double)view_get_cur_dim_index( name ) );
 			return;
 		}
 	}
