@@ -1272,22 +1272,39 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 			 */
 			warn_about_char_dims();
 			ret_type = NC_CHAR;
-			if( n_dims == 2 ) 
+			if( n_dims == 2 ) {
+				/* Fixed-length string over a second "characters"
+				 * dimension: read char-by-char at [place, i]
+				 * until a NUL or the dimension's length. */
 				limit = netcdf_dim_size( dimvar_gid, dim[1] );
-			else
-				limit = 1024;
-			i = 0L;
-			char_place[0] = place;
-			do	{
-				char_place[1] = i;
-				err = nc_get_var1_uchar( dimvar_gid, dimvar_id, char_place, (((unsigned char *)(ret_val_char))+i));
-				i++;
+				i = 0L;
+				char_place[0] = place;
+				do	{
+					char_place[1] = i;
+					err = nc_get_var1_uchar( dimvar_gid, dimvar_id, char_place, (((unsigned char *)(ret_val_char))+i));
+					i++;
+					}
+				while
+					(((size_t)i < limit) &&
+						(*(ret_val_char+i-1) != '\0'));
+				if( *(ret_val_char+i-1) != '\0')
+					*(ret_val_char+i-1) = '\0';
 				}
-			while
-				(((size_t)i < limit) &&
-					(*(ret_val_char+i-1) != '\0'));
-			if( *(ret_val_char+i-1) != '\0')
-				*(ret_val_char+i-1) = '\0';
+			else	{
+				/* 1-D NC_CHAR coordinate variable: one character
+				 * per coordinate position, no second dimension to
+				 * index over. The n_dims==2 path's index array
+				 * ({place, i}) is meaningless here -- nc_get_var1
+				 * only consults the first n_dims (1) of it, so
+				 * every "i" iteration re-read the same single
+				 * value at position "place", producing that one
+				 * character repeated rather than the intended
+				 * (single-character) string. */
+				size_t place1[1];
+				place1[0] = place;
+				err = nc_get_var1_uchar( dimvar_gid, dimvar_id, place1, (unsigned char *)ret_val_char );
+				ret_val_char[1] = '\0';
+				}
 			break;
 
 		case NC_BYTE:
