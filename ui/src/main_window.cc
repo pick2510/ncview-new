@@ -437,16 +437,22 @@ MainWindow::MainWindow()
 	// Each row above the colormap/transform/interpolation trio gets its own
 	// bordered background box too -- same FL_ENGRAVED_BOX treatment as that
 	// trio's box below, for a consistent look, and each created (so drawn)
-	// before the label(s) that sit on top of it. Width is fixed here and
-	// stretched to the window's right edge in layout(), same as the labels
-	// themselves.
-	info_row_boxes_[0] = new Fl_Box( 6, 2, W-12, 26 );
+	// before the label(s) that sit on top of it. These rows sit directly
+	// adjacent to each other (each one's y is exactly the previous one's
+	// y+h, no gap), so unlike a normal "pad outward a bit" border inset,
+	// insetting *inward* (y+1, h-2) is what actually keeps consecutive
+	// boxes from overlapping -- padding outward here would make each box 6px
+	// taller than its 18px row spacing, overlapping the next row's box by
+	// that much (this is exactly what the first version of this got wrong).
+	// Width is fixed here and stretched to the window's right edge in
+	// layout(), same as the labels themselves.
+	info_row_boxes_[0] = new Fl_Box( 6, 6, W-12, 18 );
 	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, 5, W-20, 20 );
-	info_row_boxes_[1] = new Fl_Box( 6, 22, W-12, 24 );
+	info_row_boxes_[1] = new Fl_Box( 6, 26, W-12, 16 );
 	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, 25, W-20, 18 );
-	info_row_boxes_[2] = new Fl_Box( 6, 40, W-12, 24 );
+	info_row_boxes_[2] = new Fl_Box( 6, 44, W-12, 16 );
 	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 10, 43, W-20, 18 );
-	info_row_boxes_[3] = new Fl_Box( 6, 58, W-12, 24 );
+	info_row_boxes_[3] = new Fl_Box( 6, 62, W-12, 16 );
 	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, 61, 300, 18 );
 	// Wide enough to actually show the full "Current: (i=.., j=..) val
 	// (x=.., y=..)" string view_report_position() builds -- the old fixed
@@ -459,16 +465,22 @@ MainWindow::MainWindow()
 	// A bordered box behind the trio below ties them together visually as
 	// one "display settings" unit, distinct from the free-form info lines
 	// around it -- created (and so drawn) before the labels it sits behind.
-	auto *display_settings_box = new Fl_Box( 6, 76, 280, 24 );
+	// Same inward inset as the row boxes above, for the same reason (this
+	// row starts right where Label::DataExtrema/DataValue's row ends).
+	auto *display_settings_box = new Fl_Box( 6, 80, 280, 16 );
 	display_settings_box->box( FL_ENGRAVED_BOX );
-	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 10, 79, 120, 18 );
+	// BlowupType ("Repl"/"Bi-lin") goes first/leftmost: unlike ColormapName
+	// and Transform, it's essentially always meaningful, so it anchors to
+	// the box's actual left edge instead of sitting stranded in the middle
+	// whenever the other two happen to be blank.
+	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 10, 79, 70, 18 );
 	// No Label::Blowup ("M X<n>") box -- it showed core's discrete
 	// pre-zoom pixel-buffer scale factor, which upstream's now-removed
 	// Button::Blowup let you cycle. With that gone (replaced by ImageView's
 	// continuous scroll/drag zoom, which this label never reflected anyway)
 	// it was a static, unexplained number nobody could act on.
-	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 135, 79, 70, 18 );
-	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 210, 79, 70, 18 );
+	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 85, 79, 70, 18 );
+	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 160, 79, 120, 18 );
 	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 10, 97, W-20, 18 );
 	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, 115, 150, 18 );
 	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, 115, W-180, 18 );
