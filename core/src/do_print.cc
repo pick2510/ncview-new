@@ -366,7 +366,8 @@ print_other_info( FILE *outf, float output_scale, size_t x_size, size_t y_size,
 		tstr[0] = '\0';
 		std::array<size_t, 20> actual_place;
 		virt_to_actual_place( view->variable, view->var_place.data(), actual_place.data(), &fdb );
-		if( (fi_recdim_id( view->variable->files.front().get()->id ) != view->x_axis_id ) &&
+		if( (view->scan_axis_id != -1) &&
+		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->x_axis_id ) &&
 		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->y_axis_id))
 			snprintf( tstr, 1499, "Frame %ld in ",
 				(long)(actual_place[view->scan_axis_id]+1) );
