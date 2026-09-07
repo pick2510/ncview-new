@@ -123,8 +123,14 @@ while read -r case_name extra_env; do
         continue
     fi
 
+    # ImageMagick's `compare -metric AE` output format is version-dependent:
+    # some versions print a bare pixel count ("0", "123"), others (e.g. IM7)
+    # always append a normalized value in parens ("0 (0)", "123 (0.0019)").
+    # Only the leading number is the actual differing-pixel count we care
+    # about.
     ae=$(compare -metric AE -fuzz 0 "$golden" "$shot" null: 2>&1)
-    if [ "$ae" != "0" ]; then
+    ae_count="${ae%% *}"
+    if [ "$ae_count" != "0" ]; then
         echo "ui_smoke: FAIL $case_name (AE=$ae, differing pixels) -- actual: $shot, expected: $golden"
         FAILED=1
     elif grep -q "got an expose event" "$WORKDIR/$case_name.log"; then
