@@ -101,7 +101,8 @@ private:
 
 struct DimRow {
 	std::string name;
-	Fl_Group   *group        = nullptr;  // see MainWindow::recenterDimRow()
+	int         index        = 0;        // this row's position in dim_pack_ -- see MainWindow::recenterDimRow()
+	Fl_Group   *group        = nullptr;
 	Fl_Box     *name_box     = nullptr;
 	// A slider so the user can drag straight to a place instead of only
 	// stepping one frame at a time with prev_btn/next_btn (which stay,
@@ -193,7 +194,16 @@ private:
 	ImageView         *image_ = nullptr;
 	Colorbar          *colorbar_ = nullptr;
 	Fl_Pack           *button_bar_ = nullptr;
-	Fl_Pack           *dim_pack_ = nullptr;
+	// Plain Fl_Group, not Fl_Pack -- each row's position is computed
+	// directly from its own index (see rebuildDimRow()/recenterDimRow()),
+	// not from Fl_Pack's auto-stacking, which (per Fl_Pack::resize() in
+	// FLTK's own source) only actually repositions children lazily inside
+	// draw(), not immediately when the pack itself is resized. Reading a
+	// row's "current" position between those two points (exactly what
+	// MainWindow::layout() used to do right after resizing this) reads a
+	// stale value, and this project isn't relying on FLTK-internal timing
+	// to sort that out.
+	Fl_Group          *dim_pack_ = nullptr;
 	Fl_Pack           *var_pack_ = nullptr;
 	std::vector<Fl_Choice*> var_choices_;         // one per dimensionality bucket (1d, 2d, ...)
 	Fl_Choice         *colormap_choice_ = nullptr; // last child of var_pack_; see rebuildColormapChoice()

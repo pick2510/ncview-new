@@ -495,8 +495,7 @@ MainWindow::MainWindow()
 	image_ = new ImageView( 200, 100, W-210, H-320 );
 	colorbar_ = new Colorbar( 200, H-210, W-210, 20 );
 
-	dim_pack_ = new Fl_Pack( 10, H-180, W-20, 100 );
-	dim_pack_->type( Fl_Pack::VERTICAL );
+	dim_pack_ = new Fl_Group( 10, H-180, W-20, 100 );
 	dim_pack_->end();
 
 	button_bar_ = new Fl_Pack( 10, H-70, W-20, 60 );
@@ -558,9 +557,9 @@ void MainWindow::layout( int w, int h )
 	colorbar_->resize( kImageX, colorbar_y, right_w, kColorbarH );
 	image_->resize( kImageX, kTopY, right_w, image_h );
 
-	// dim_pack_->resize() above just stretched every row's Fl_Group to the
-	// new width; recenter each one's children within it (see
-	// recenterDimRow()'s comment for why Fl_Pack itself can't do this).
+	// dim_pack_'s x/y/w just changed; recompute every row's own position
+	// from that (recenterDimRow() reads dim_pack_ directly, not any row's
+	// own possibly-stale position) and re-center its children within it.
 	for( auto &row : dim_rows_ ) recenterDimRow( row );
 
 	int var_pack_h = dim_pack_y - kVarPackGap - kTopY;
@@ -880,13 +879,13 @@ private:
 
 void MainWindow::rebuildDimRow( DimRow &row )
 {
-	// A plain Fl_Group, not Fl_Pack -- unlike the vertical dim_pack_ it
-	// lives in (which does need Fl_Pack's auto-stacking), this row's own
-	// four children are given fixed, explicitly centered positions by
-	// recenterDimRow() below, which Fl_Pack's own left-to-right packing
-	// can't do (it always starts from the row's left edge, leaving unused
-	// space stranded on the right instead of split evenly on both sides).
-	row.group = new Fl_Group( 0, 0, dim_pack_->w(), kDimRowH );
+	// row.index (this row's stacking position within dim_pack_, set by the
+	// caller before this runs) plus dim_pack_'s own x()/y() -- which, being
+	// a plain Fl_Widget field, is always current the instant dim_pack_ is
+	// resized, unlike a would-be sibling row's position under Fl_Pack's
+	// draw()-time relayout -- is what actually places this row, both here
+	// and in recenterDimRow() below (called again on every window resize).
+	row.group = new Fl_Group( dim_pack_->x(), dim_pack_->y() + row.index*kDimRowH, dim_pack_->w(), kDimRowH );
 	row.group->begin();
 	row.name_box = new Fl_Box( 0, 0, kDimRowNameW, 22, "" );
 	row.name_box->copy_label( row.name.c_str() );
@@ -928,24 +927,27 @@ void MainWindow::rebuildDimRow( DimRow &row )
 	row.value_slider->callback( &MainWindow::dimSliderCallback, new std::string( row.name ) );
 }
 
-// dim_pack_ (an Fl_Pack) always force-resizes each row's width to its own
-// current width, so the row's four children need to be re-centered
-// whenever that changes -- at creation (rebuildDimRow() above) and again
-// on every window resize (layout() below), or they'd stay pinned wherever
-// they were centered for the *previous* width.
+// Recomputes this row's absolute position (from dim_pack_'s current x/y/w
+// and the row's own index -- never by reading another widget's possibly
+// stale position) and re-centers its four children within it. Called once
+// at creation (rebuildDimRow() above) and again on every window resize
+// (layout() below), since dim_pack_'s width -- and so the centering offset
+// -- changes with it.
 void MainWindow::recenterDimRow( DimRow &row )
 {
 	if( row.group == nullptr ) return;
-	int left = ( row.group->w() - kDimRowContentW ) / 2;
+	int row_w = dim_pack_->w();
+	row.group->resize( dim_pack_->x(), dim_pack_->y() + row.index*kDimRowH, row_w, kDimRowH );
+	int left = ( row_w - kDimRowContentW ) / 2;
 	if( left < 0 ) left = 0;
-	int y = row.group->y();
-	row.name_box->resize( row.group->x() + left, y, kDimRowNameW, 22 );
+	int x = row.group->x(), y = row.group->y();
+	row.name_box->resize( x + left, y, kDimRowNameW, 22 );
 	left += kDimRowNameW + kDimRowSpacing;
-	row.prev_btn->resize( row.group->x() + left, y, kDimRowBtnW, 22 );
+	row.prev_btn->resize( x + left, y, kDimRowBtnW, 22 );
 	left += kDimRowBtnW + kDimRowSpacing;
-	row.value_slider->resize( row.group->x() + left, y, kDimRowSliderW, 22 );
+	row.value_slider->resize( x + left, y, kDimRowSliderW, 22 );
 	left += kDimRowSliderW + kDimRowSpacing;
-	row.next_btn->resize( row.group->x() + left, y, kDimRowBtnW, 22 );
+	row.next_btn->resize( x + left, y, kDimRowBtnW, 22 );
 }
 
 void MainWindow::dimStepCallback( Fl_Widget *, void *data )
@@ -968,17 +970,14 @@ void MainWindow::makeDimButtons( const Stringlist *dim_list )
 	for( auto &e : *dim_list ) {
 		DimRow row;
 		row.name = e.string;
+		row.index = (int)dim_rows_.size();
 		rebuildDimRow( row );
 		dim_rows_.push_back( row );
 	}
-	// A plain dim_pack_->redraw() isn't enough: Fl_Pack::draw() only
-	// recomputes child positions using the *pack's own* damage state, and
-	// after clear()+add() that alone doesn't reliably repaint a newly added
-	// row at the bottom (confirmed empirically -- switching to a variable
-	// with more scannable dims than the previous one, e.g. a 2-D var to a
-	// 3-D one, silently drops the last dimension row until some unrelated
-	// event forces a real relayout, such as resizing the window). Route
-	// through the same full relayout a resize already triggers instead.
+	// A plain dim_pack_->redraw() isn't enough -- route through the same
+	// full relayout a resize already triggers, which is what actually
+	// re-centers every row (recenterDimRow(), called from layout() below)
+	// for the current dim_pack_ width.
 	layout( win_->w(), win_->h() );
 }
 
