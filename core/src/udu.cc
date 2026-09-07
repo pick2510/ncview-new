@@ -173,12 +173,18 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 			}
 		if( ut_are_convertible( unit, seconds_since_epoch ) == 0 ) {
 			/* Units are genuinely not convertible to any notion of seconds */
+			ut_free( unit );
+			ut_free( seconds );
+			ut_free( seconds_since_epoch );
 			return( TimeGranularity::Sec );
 			}
+		ut_free( seconds );
 		seconds = seconds_since_epoch;
 		}
 	if( (convert_units_to_sec = ut_get_converter( unit, seconds )) == NULL ) {
 		/* This shouldn't happen */
+		ut_free( unit );
+		ut_free( seconds );
 		return( TimeGranularity::Sec );
 		}
 
@@ -231,6 +237,9 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 			printf("data is TGRAN_YEAR\n");
 		retval = TimeGranularity::Year;
 		}
+
+	ut_free( unit );
+	ut_free( seconds );
 
 	return( retval );
 }
