@@ -20,7 +20,9 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Group.H>
+#include <FL/Fl_Menu_Bar.H>
 #include <FL/Fl_Pack.H>
+#include <FL/Fl_Sys_Menu_Bar.H>
 #include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Slider.H>
 #include <FL/Fl_Widget.H>
@@ -175,6 +177,20 @@ public:
 	Message  printerOptionsDialog( PrintOptions *po );
 
 private:
+	// Height reserved for menu_bar_ at the very top of the window --
+	// everything else (info rows, image, dim rows, button bar) sits this
+	// many pixels lower than its own literal y in the constructor/layout(),
+	// both of which reference this same constant rather than a second
+	// hardcoded copy of it. Zero on macOS: menu_bar_ there is an
+	// Fl_Sys_Menu_Bar, which puts the menu in the native system menu bar at
+	// the top of the *screen*, not inside the window -- reserving in-window
+	// space for it would just leave a blank gray strip at the top.
+#ifdef __APPLE__
+	static constexpr int kMenuBarH = 0;
+#else
+	static constexpr int kMenuBarH = 25;
+#endif
+
 	// Recomputes every widget's position/size for the current window
 	// dimensions -- run once at construction and again on every live
 	// resize (via NcviewWindow::on_resize), so the layout adapts instead
@@ -193,6 +209,7 @@ private:
 	NcviewWindow     *win_ = nullptr;
 	ImageView         *image_ = nullptr;
 	Colorbar          *colorbar_ = nullptr;
+	Fl_Menu_Bar       *menu_bar_ = nullptr;
 	Fl_Pack           *button_bar_ = nullptr;
 	// Plain Fl_Group, not Fl_Pack -- each row's position is computed
 	// directly from its own index (see rebuildDimRow()/recenterDimRow()),
@@ -209,6 +226,10 @@ private:
 	Fl_Choice         *colormap_choice_ = nullptr; // last child of var_pack_; see rebuildColormapChoice()
 	Fl_Box            *labels_[16] = {};          // indexed by LABEL_*
 	Fl_Widget         *buttons_[32] = {};          // indexed by BUTTON_*
+	// Parallel to buttons_[], for the actions moved into menu_bar_ instead
+	// of staying toolbar buttons (see setSensitive(), which activates/
+	// deactivates whichever of the two a given Button id actually has).
+	Fl_Menu_Item      *menu_items_[32] = {};
 	// Purely decorative bordered boxes drawn behind the info rows above the
 	// colormap/transform/interpolation row (Title; ScanvarName; ScanPlace;
 	// DataExtrema+DataValue) -- one per row, each stretched to the window's

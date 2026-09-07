@@ -419,6 +419,37 @@ MainWindow::MainWindow()
 	const int W = 900, H = 760;
 	win_ = new NcviewWindow( W, H, "ncview" );
 
+	// Fl_Sys_Menu_Bar: on macOS this becomes the native system menu bar at
+	// the top of the screen (a documented drop-in replacement for
+	// Fl_Menu_Bar -- its own constructor detaches it from win_ once built,
+	// see Fl_Sys_Menu_Bar.cxx); on every other platform it behaves exactly
+	// like an ordinary in-window Fl_Menu_Bar.
+	menu_bar_ = new Fl_Sys_Menu_Bar( 0, 0, W, kMenuBarH );
+	// Every action below just forwards to the exact same in_button_pressed()
+	// path a toolbar button's click already used (buttonCallback() is a
+	// plain Fl_Callback -- Fl_Menu_Item::callback is the same typedef, so
+	// it works unchanged as a menu item's callback too), grouped as: File
+	// (whole-session actions), Edit (dialogs that change/configure state),
+	// View (display toggles and passive info). These are the 11 buttons
+	// upstream and earlier revisions of this port kept on the main toolbar
+	// that are used far less often than the animation transport and Min/
+	// Max, which stay as buttons below.
+	auto add_menu_item = [this]( const char *path, Button id ) {
+		int idx = menu_bar_->add( path, 0, &MainWindow::buttonCallback, (void*)(intptr_t)static_cast<int>(id) );
+		menu_items_[static_cast<int>(id)] = const_cast<Fl_Menu_Item*>( menu_bar_->menu() + idx );
+	};
+	add_menu_item( "File/Print...",              Button::Print );
+	add_menu_item( "File/Quit",                  Button::Quit );
+	add_menu_item( "Edit/Edit Data...",          Button::Edit );
+	add_menu_item( "Edit/Set Scan Dimensions...", Button::Dimset );
+	add_menu_item( "Edit/Options...",            Button::Options );
+	add_menu_item( "View/Info",                  Button::Info );
+	add_menu_item( "View/Range...",              Button::Range );
+	add_menu_item( "View/Transform",             Button::Transform );
+	add_menu_item( "View/Interp",                Button::BlowupType );
+	add_menu_item( "View/Invert Physical",       Button::InvertPhysical );
+	add_menu_item( "View/Invert Colormap",       Button::InvertColormap );
+
 	// Info rows above the image. Packing unrelated fields side-by-side in
 	// fixed-width columns (the previous layout, and upstream's before it)
 	// looks fine only when every field happens to be near its column's
@@ -448,45 +479,45 @@ MainWindow::MainWindow()
 	// that much (this is exactly what the first version of this got wrong).
 	// Width is fixed here and stretched to the window's right edge in
 	// layout(), same as the labels themselves.
-	info_row_boxes_[0] = new Fl_Box( 6, 6, W-12, 18 );
-	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, 5, W-20, 20 );
-	info_row_boxes_[1] = new Fl_Box( 6, 26, W-12, 16 );
-	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, 25, W-20, 18 );
-	info_row_boxes_[2] = new Fl_Box( 6, 44, W-12, 16 );
-	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 10, 43, W-20, 18 );
-	info_row_boxes_[3] = new Fl_Box( 6, 62, W-12, 16 );
-	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, 61, 300, 18 );
+	info_row_boxes_[0] = new Fl_Box( 6, kMenuBarH+6, W-12, 18 );
+	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, kMenuBarH+5, W-20, 20 );
+	info_row_boxes_[1] = new Fl_Box( 6, kMenuBarH+26, W-12, 16 );
+	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, kMenuBarH+25, W-20, 18 );
+	info_row_boxes_[2] = new Fl_Box( 6, kMenuBarH+44, W-12, 16 );
+	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 10, kMenuBarH+43, W-20, 18 );
+	info_row_boxes_[3] = new Fl_Box( 6, kMenuBarH+62, W-12, 16 );
+	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, kMenuBarH+61, 300, 18 );
 	// Wide enough to actually show the full "Current: (i=.., j=..) val
 	// (x=.., y=..)" string view_report_position() builds -- the old fixed
 	// 200px width clipped it right after "(x=", silently hiding the x/y
 	// coordinate values even though they were always part of the label
 	// text and updating on every mouse move. Resized to track the window
 	// edge in layout() below, same as Label::Title.
-	labels_[static_cast<int>(Label::DataValue)]   = new Fl_Box( 320, 61, W-330, 18 );
+	labels_[static_cast<int>(Label::DataValue)]   = new Fl_Box( 320, kMenuBarH+61, W-330, 18 );
 	for( auto *b : info_row_boxes_ ) b->box( FL_ENGRAVED_BOX );
 	// A bordered box behind the trio below ties them together visually as
 	// one "display settings" unit, distinct from the free-form info lines
 	// around it -- created (and so drawn) before the labels it sits behind.
 	// Same inward inset as the row boxes above, for the same reason (this
 	// row starts right where Label::DataExtrema/DataValue's row ends).
-	auto *display_settings_box = new Fl_Box( 6, 80, 280, 16 );
+	auto *display_settings_box = new Fl_Box( 6, kMenuBarH+80, 280, 16 );
 	display_settings_box->box( FL_ENGRAVED_BOX );
 	// BlowupType ("Repl"/"Bi-lin") goes first/leftmost: unlike ColormapName
 	// and Transform, it's essentially always meaningful, so it anchors to
 	// the box's actual left edge instead of sitting stranded in the middle
 	// whenever the other two happen to be blank.
-	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 10, 79, 70, 18 );
+	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 10, kMenuBarH+79, 70, 18 );
 	// No Label::Blowup ("M X<n>") box -- it showed core's discrete
 	// pre-zoom pixel-buffer scale factor, which upstream's now-removed
 	// Button::Blowup let you cycle. With that gone (replaced by ImageView's
 	// continuous scroll/drag zoom, which this label never reflected anyway)
 	// it was a static, unexplained number nobody could act on.
-	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 85, 79, 70, 18 );
-	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 160, 79, 120, 18 );
-	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 10, 97, W-20, 18 );
-	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, 115, 150, 18 );
-	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, 115, W-180, 18 );
-	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 10, 133, W-20, 18 );
+	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 85, kMenuBarH+79, 70, 18 );
+	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 160, kMenuBarH+79, 120, 18 );
+	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 10, kMenuBarH+97, W-20, 18 );
+	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, kMenuBarH+115, 150, 18 );
+	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, kMenuBarH+115, W-180, 18 );
+	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 10, kMenuBarH+133, W-20, 18 );
 	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP ); }
 
 	var_pack_ = new Fl_Pack( 10, 100, 180, H-220 );
@@ -519,10 +550,11 @@ void MainWindow::layout( int w, int h )
 {
 	const int kSideMargin = 10;
 	const int kImageX = 200;
-	// 8 info rows (5,25,43,61,79,97,115,133), each 18px (20 for the title)
-	// -- see the row layout comment in the constructor -- plus a small gap
-	// before var_pack_/image_/dim_pack_ start.
-	const int kTopY = 152;
+	// menu_bar_'s own height, plus 8 info rows (5,25,43,61,79,97,115,133
+	// within that, each 18px, 20 for the title) -- see the row layout
+	// comment in the constructor -- plus a small gap before
+	// var_pack_/image_/dim_pack_ start.
+	const int kTopY = kMenuBarH + 152;
 	const int kColorbarH = 20;
 	const int kColorbarGap = 10;
 	// Colorbar::draw() puts its tick labels ~13px below the swatch (plus
@@ -534,6 +566,8 @@ void MainWindow::layout( int w, int h )
 	const int kDimGap = 10;
 	const int kBottomMargin = 10;
 	const int kVarPackGap = 40;  // matches the original fixed layout's var_pack_-to-dim_pack_ gap
+
+	menu_bar_->resize( 0, 0, w, kMenuBarH );
 
 	// Bottom-up: the button bar's height depends on how many rows the
 	// current width wraps it into (rebuildButtonBar()), which then pushes
@@ -596,8 +630,16 @@ void MainWindow::layout( int w, int h )
 }
 
 // Explicit per-button pixel widths (rather than one fixed size for all)
-// since a uniform 60px was too narrow for "Transform"/etc, leaving their
+// since a uniform 60px was too narrow for "Restart"/etc, leaving their
 // labels crowding the button edges.
+//
+// Just the animation transport plus Min/Max -- the controls actually
+// clicked often enough, mid-session, to earn a permanently visible,
+// single-click button. Everything else (Inv.Phys, Inv.Cmap, Transform,
+// Interp, DimSet, Range, Edit, Info, Print, Options, Quit) moved into
+// menu_bar_ instead (see the constructor) -- occasional actions and
+// settings that are fine behind one extra click, freeing this bar to fit
+// on a single row instead of wrapping.
 //
 // No Button::ColormapSelect entry here -- replaced by the colormap combobox
 // in var_pack_ (see rebuildColormapChoice()), which shows every colormap's
@@ -609,21 +651,10 @@ struct ButtonSpec { Button id; const char *text; int width; };
 static const ButtonSpec kButtonSpecs[] = {
 	{ Button::Rewind, "@|<", 40 }, { Button::Backwards, "@<", 40 }, { Button::Pause, "@||", 40 },
 	{ Button::Forward, "@>", 40 }, { Button::Fastforward, "@>|", 40 }, { Button::Restart, "Restart", 65 },
-	{ Button::InvertPhysical, "Inv.Phys", 75 },
-	{ Button::InvertColormap, "Inv.Cmap", 78 }, { Button::Minimum, "Min", 50 }, { Button::Maximum, "Max", 50 },
 	// No Button::Blowup here -- replaced by ImageView's scroll-to-zoom (mouse
 	// wheel) and drag-to-pan (left-button drag), which give continuous
-	// navigation instead of upstream's discrete button. Button::BlowupType
-	// is unrelated to navigation (it toggles how core resamples pixels --
-	// replicate vs bilinear -- independent of the on-screen zoom level), so
-	// unlike Button::Blowup it still needs a real control; its current state
-	// is shown by the passive Label::BlowupType box up in the info area
-	// (unchanged from upstream), this button is just the trigger.
-	{ Button::BlowupType, "Interp", 60 },
-	{ Button::Transform, "Transform", 85 },
-	{ Button::Dimset, "DimSet", 65 }, { Button::Range, "Range", 60 }, { Button::Edit, "Edit", 50 },
-	{ Button::Info, "Info", 50 }, { Button::Print, "Print", 55 }, { Button::Options, "Options", 70 },
-	{ Button::Quit, "Quit", 55 },
+	// navigation instead of upstream's discrete button.
+	{ Button::Minimum, "Min", 50 }, { Button::Maximum, "Max", 50 },
 };
 
 // Rebuilds the button bar as however many rows of buttons fit in
@@ -825,9 +856,23 @@ void MainWindow::setSensitive( Button button_id, int state )
 	}
 	int idx = static_cast<int>( button_id );
 	if( idx < 0 || idx >= (int)(sizeof(buttons_)/sizeof(buttons_[0])) ) return;
-	if( buttons_[idx] == nullptr ) return;
-	if( state ) buttons_[idx]->activate();
-	else buttons_[idx]->deactivate();
+	// A given Button id has either a toolbar button (buttons_) or a menu
+	// item (menu_items_), never both -- whichever one this id actually has
+	// gets (de)activated, the other slot is just null.
+	if( buttons_[idx] != nullptr ) {
+		if( state ) buttons_[idx]->activate();
+		else buttons_[idx]->deactivate();
+	}
+	if( menu_items_[idx] != nullptr ) {
+		if( state ) menu_items_[idx]->activate();
+		else menu_items_[idx]->deactivate();
+		// update() (a no-op on non-Mac builds -- see Fl_Menu_Bar::update())
+		// is what actually pushes an Fl_Menu_Item flag change like this one
+		// out to macOS's native system menu bar; redraw() alone only
+		// affects an ordinary in-window Fl_Menu_Bar.
+		menu_bar_->update();
+		menu_bar_->redraw();
+	}
 }
 
 void MainWindow::indicateActiveVar( const char *var_name )
