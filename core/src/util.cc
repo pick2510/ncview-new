@@ -235,7 +235,7 @@ data_to_pixels( View *v )
 			}
 	    	snprintf( error_message, 1022, "min and max both 0 for variable %s.\nI can check ALL the data instead of subsampling if that's OK,\nor just cancel viewing this variable.",
 	    				v->variable->name.c_str() );
-		result = in_dialog( error_message, NULL, true );
+		result = in_dialog( error_message, NULL, 0, true );
 		if( result == Message::OK ) {
 			orig_minmax_method = options.min_max_method;
 			options.min_max_method = MinMaxMethod::Exhaust;
@@ -695,13 +695,13 @@ check_ranges( NCVar *var )
 	if( netcdf_min_max_option_set( var, &min, &max ) ) {
 		if( var->global_min < min ) {
 			snprintf( temp_string, 1022, "Calculated minimum (%g) is less than\nvalid_range minimum (%g).  Reset\nminimum to valid_range minimum?", var->global_min, min );
-			message = in_dialog( temp_string, NULL, true );
+			message = in_dialog( temp_string, NULL, 0, true );
 			if( message == Message::OK )
 				var->global_min = min;
 			}
 		if( var->global_max > max ) {
 			snprintf( temp_string, 1022, "Calculated maximum (%g) is greater\nthan valid_range maximum (%g). Reset\nmaximum to valid_range maximum?", var->global_max, max );
-			message = in_dialog( temp_string, NULL, true );
+			message = in_dialog( temp_string, NULL, 0, true );
 			if( message == Message::OK )
 				var->global_max = max;
 			}
@@ -710,7 +710,7 @@ check_ranges( NCVar *var )
 	if( netcdf_min_option_set( var, &min ) ) {
 		if( var->global_min < min ) {
 			snprintf( temp_string, 1022, "Calculated minimum (%g) is less than\nvalid_min minimum (%g).  Reset\nminimum to valid_min value?", var->global_min, min );
-			message = in_dialog( temp_string, NULL, true );
+			message = in_dialog( temp_string, NULL, 0, true );
 			if( message == Message::OK )
 				var->global_min = min;
 			}
@@ -719,7 +719,7 @@ check_ranges( NCVar *var )
 	if( netcdf_max_option_set( var, &max ) ) {
 		if( var->global_max > max ) {
 			snprintf( temp_string, 1022, "Calculated maximum (%g) is greater than\nvalid_max maximum (%g).  Reset\nmaximum to valid_max value?", var->global_max, max );
-			message = in_dialog( temp_string, NULL, true );
+			message = in_dialog( temp_string, NULL, 0, true );
 			if( message == Message::OK )
 				var->global_max = max;
 			}
@@ -1988,7 +1988,7 @@ warn_if_file_exits( char *fname )
 	fclose(f);
 
 	snprintf( message, 1022, "OK to overwrite existing file %s?\n", fname );
-	retval = in_dialog( message, NULL, true );
+	retval = in_dialog( message, NULL, 0, true );
 	return( retval );
 }
 

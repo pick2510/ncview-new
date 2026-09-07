@@ -23,7 +23,7 @@ void in_create_colormap(const char*, const ncv_pixel[256], const ncv_pixel[256],
 char *in_install_next_colormap(int) { return nullptr; }
 int in_set_2d_size(size_t, size_t) { return 0; }
 void in_set_sensitive(Button, int) {}
-Message in_dialog(const char*, char *ret_string, int) { if (ret_string) ret_string[0] = '\0'; return Message::OK; }
+Message in_dialog(const char*, char *ret_string, size_t, int) { if (ret_string) ret_string[0] = '\0'; return Message::OK; }
 void in_var_set_sensitive(const char*, int) {}
 void in_fill_dim_info(const NCDim*, int) {}
 void in_set_cur_dim_value(const char*, const char*) {}

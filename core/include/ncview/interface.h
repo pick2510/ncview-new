@@ -59,7 +59,10 @@ void	in_create_colormap	( const char *name, const ncv_pixel r[256], const ncv_pi
 char	*in_install_next_colormap( int do_widgets_flag );
 int	in_set_2d_size   	( size_t width, size_t height );
 void	in_set_sensitive	( Button button_id, int state );
-Message	in_dialog		( const char *message, char *ret_string, int want_cancel_button );
+/* ret_string_size is the capacity of the ret_string buffer (ignored when
+ * ret_string is NULL) -- the implementation must never write more than
+ * that, and must always NUL-terminate what it does write. */
+Message	in_dialog		( const char *message, char *ret_string, size_t ret_string_size, int want_cancel_button );
 void 	in_var_set_sensitive	( const char *var_name, int sensitivity );
 void 	in_fill_dim_info	( const NCDim *d, int please_flip );
 void	in_set_cur_dim_value	( const char *name, const char *string );

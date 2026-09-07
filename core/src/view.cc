@@ -1455,7 +1455,7 @@ view_set_scan_dims( void )
 	new_y_id = fi_dim_name_to_id( v->files.front().get()->id, const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[0].string.c_str() );
 	new_x_id = fi_dim_name_to_id( v->files.front().get()->id, const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[1].string.c_str() );
 	if( new_x_id < new_y_id ) {
-		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", NULL, true );
+		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", NULL, 0, true );
 		if( message == Message::Cancel )
 			return;
 		inv_dim_list = NULL;
@@ -2622,7 +2622,7 @@ view_data_edit_dump( void )
 
 	snprintf( filename, sizeof(filename), "%s", "dump.data" );
 	
-	message = in_dialog( "Filename to dump data to:", filename, true );
+	message = in_dialog( "Filename to dump data to:", filename, sizeof(filename), true );
 	if( message == Message::OK ) {
 		ncid = nccreate( filename, NC_CLOBBER );
 
@@ -2662,7 +2662,7 @@ view_data_edit_warn()
 {
 	Message	message;
 
-	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", NULL, true );
+	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", NULL, 0, true );
 	if( message == Message::Cancel ) 
 		return;
 

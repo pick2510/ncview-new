@@ -323,12 +323,17 @@ void in_query_pointer_position( int *x, int *y )
 
 /* ---- dialogs / errors ---------------------------------------------------- */
 
-Message in_dialog( const char *message, char *ret_string, int want_cancel_button )
+Message in_dialog( const char *message, char *ret_string, size_t ret_string_size, int want_cancel_button )
 {
 	if( ret_string != nullptr ) {
 		const char *result = fl_input( "%s", ret_string, message );
 		if( result == nullptr ) return Message::Cancel;
-		std::strncpy( ret_string, result, STRINGLIST_MAX_LEN-1 );
+		// ret_string_size is the caller's actual buffer capacity (e.g.
+		// view.cc's view_data_edit_dump() passes a 132-byte stack
+		// buffer) -- copying up to STRINGLIST_MAX_LEN-1 (999) bytes
+		// here, as this used to, overflowed it.
+		std::strncpy( ret_string, result, ret_string_size - 1 );
+		ret_string[ret_string_size-1] = '\0';
 		return Message::OK;
 	}
 	if( want_cancel_button ) {
