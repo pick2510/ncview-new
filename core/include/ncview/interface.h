@@ -81,6 +81,15 @@ int	in_report_auto_overlay  ( void );
 void 	in_timer_set            ( std::function<void()> callback, unsigned long delay_millisec );
 char    *in_install_prev_colormap( int do_widgets );
 char	*in_install_colormap_by_name( const char *name, int do_widgets );
+/* Called by ncview_main() (core/src/ncview.cc) when it's given no input
+ * files on the command line -- pops a native "open file(s)" dialog so the
+ * app is still usable when launched from a GUI (double-click / dock icon /
+ * Explorer "Open with"), not just from a shell with an argument. Multi-file
+ * selection covers both "open a single file" and "open several files as a
+ * time series" (upstream's own multi-file/virtual-variable handling, driven
+ * off however many files come back here) with the one dialog. Returns NULL
+ * if the user cancelled or picked nothing. */
+Stringlist *in_choose_input_files( void );
 
 /******************************************************************************
  * Functions core calls directly (not via in_*) that are nonetheless UI

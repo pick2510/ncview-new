@@ -97,6 +97,20 @@ ncview_main( int argc, char **argv )
 
 	in_parse_args               ( &argc, argv );
 	input_files = parse_options ( argc,  argv );	/* This parses ALL the non-X11 command line options, not just the input files */
+
+	/* No files given on the command line -- ask the user via a native
+	 * file-open dialog instead of just erroring out below. This is what
+	 * makes launching ncview with no arguments (double-click, dock icon,
+	 * "Open with") usable instead of a dead end.
+	 */
+	if( stringlist_len( input_files ) == 0 )
+		input_files = in_choose_input_files();
+
+	if( stringlist_len( input_files ) == 0 ) {
+		fprintf( stderr, "ncview: no input files given; exiting.\n" );
+		exit( 0 );
+		}
+
 	determine_file_type         ( input_files );
 
 	options.blowup       = 1;

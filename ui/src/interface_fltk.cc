@@ -17,6 +17,7 @@
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Double_Window.H>
+#include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_Table.H>
 #include <FL/Fl_Text_Buffer.H>
@@ -117,6 +118,36 @@ void in_process_user_input( void )
 {
 	// Upstream's contract: never returns, loops handling UI events.
 	Fl::run();
+}
+
+Stringlist *in_choose_input_files( void )
+{
+	// One multi-select dialog covers both cases ncview_main() wants:
+	// picking a single file, or picking a whole run's worth of
+	// one-file-per-timestep output to open as a series -- the latter is
+	// exactly the "virtual variable" multi-file merge core already does
+	// for however many filenames it's handed (see add_var_to_list() in
+	// util.cc), it's just normally spelled out on the command line.
+	Fl_Native_File_Chooser chooser;
+	chooser.title( "Open NetCDF File(s)" );
+	chooser.type( Fl_Native_File_Chooser::BROWSE_MULTI_FILE );
+	chooser.filter( "NetCDF Files\t*.{nc,cdf,nc4}\nAll Files\t*" );
+
+	switch( chooser.show() ) {
+		case -1: // error
+			fl_alert( "Error choosing file(s): %s", chooser.errmsg() );
+			return nullptr;
+		case 1: // cancelled
+			return nullptr;
+		default:
+			break;
+		}
+
+	Stringlist *file_list = nullptr;
+	int n = chooser.count();
+	for( int i = 0; i < n; i++ )
+		stringlist_add_string( &file_list, chooser.filename(i) );
+	return file_list;
 }
 
 void in_flush( void )

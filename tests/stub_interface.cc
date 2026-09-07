@@ -41,6 +41,7 @@ int in_report_auto_overlay() { return 0; }
 void in_timer_set(std::function<void()>, unsigned long) {}
 char *in_install_prev_colormap(int) { return nullptr; }
 char *in_install_colormap_by_name(const char*, int) { return nullptr; }
+Stringlist *in_choose_input_files() { return nullptr; }
 
 void set_options() {}
 Message printer_options(PrintOptions*) { return Message::OK; }
