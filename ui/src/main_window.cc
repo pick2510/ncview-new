@@ -900,12 +900,16 @@ void MainWindow::rebuildDimRow( DimRow &row )
 	// value (a date, a coordinate, ...), drawn centered across the full
 	// widget by DimValueSlider::draw() above.
 	row.value_slider->step( 1 );
-	// FL_WHEN_RELEASE (Fl_Slider's default is FL_WHEN_CHANGED): each step
-	// re-reads and redraws a full 2-D slice from the netCDF file, which is
-	// too expensive to do continuously while the knob is still being
-	// dragged -- commit once, on release, same as a click on prev_btn/
-	// next_btn commits once per click.
-	row.value_slider->when( FL_WHEN_RELEASE );
+	// Fl_Widget's own default is FL_WHEN_RELEASE (see Fl_Widget.cxx) --
+	// fine for a text input, wrong for a slider: it made the knob visibly
+	// slide under the mouse (that part is handled inside Fl_Slider itself,
+	// independent of the callback) while the value text next to it and the
+	// displayed 2-D slice both sat frozen on the pre-drag value the whole
+	// time, only jumping to the real one on mouse-up -- indistinguishable,
+	// mid-drag, from the control not responding at all. FL_WHEN_CHANGED
+	// re-reads and redraws on every step instead, same as actually holding
+	// prev_btn/next_btn down would.
+	row.value_slider->when( FL_WHEN_CHANGED );
 	row.next_btn = new Fl_Button( 0, 0, kDimRowBtnW, 22, "@>" );
 	row.group->end();
 	row.group->resizable( nullptr );  // keep the fixed-size/centered layout on resize; see recenterDimRow()
