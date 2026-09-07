@@ -92,6 +92,12 @@ epic_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCD
 	epic_time[1] = 0L;
 	ep_time_to_mdyhms(epic_time, &mon, &day, &yr, &hour, &min, &sec);
 
+	/* ep_time_to_mdyhms()'s Julian-day math only clamps the upper end
+	 * (mon>12 -> mon-=12); an out-of-range EPIC time value can still
+	 * produce mon<=0 here, reading out of bounds on months[mon-1]. */
+	if( mon < 1 ) mon = 1;
+	if( mon > 12 ) mon = 12;
+
 	snprintf( temp_string, temp_string_len, "%1d-%s-%04d %02d:%02d", day, months[mon-1],
 		yr, hour, min );
 	temp_string[ temp_string_len-1 ] = '\0';
