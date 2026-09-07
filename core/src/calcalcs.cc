@@ -1151,7 +1151,7 @@ int c_jday2date_gregorian( int jday, int *year, int *month, int *day )
 		return( ierr );
 	while( jday > tjday ) {
 		(*month)++;
-		if( (ierr = c_date2jday_gregorian( *year, *month, dpm2use[*month], &tjday) != 0))
+		if( (ierr = c_date2jday_gregorian( *year, *month, dpm2use[*month], &tjday)) != 0)
 			return( ierr );
 		}
 
@@ -1203,7 +1203,7 @@ int c_jday2date_gregorian_y0( int jday, int *year, int *month, int *day )
 		return( ierr );
 	while( jday > tjday ) {
 		(*month)++;
-		if( (ierr = c_date2jday_gregorian_y0( *year, *month, dpm2use[*month], &tjday) != 0))
+		if( (ierr = c_date2jday_gregorian_y0( *year, *month, dpm2use[*month], &tjday)) != 0)
 			return( ierr );
 		}
 
@@ -1320,7 +1320,7 @@ int c_jday2date_julian( int jday, int *year, int *month, int *day )
 		return( ierr );
 	while( jday > tjday ) {
 		(*month)++;
-		if( (ierr = c_date2jday_julian( *year, *month, dpm2use[*month], &tjday) != 0))
+		if( (ierr = c_date2jday_julian( *year, *month, dpm2use[*month], &tjday)) != 0)
 			return( ierr );
 		}
 
