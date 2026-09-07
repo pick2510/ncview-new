@@ -211,6 +211,10 @@ parse_options( int argc, char *argv[] )
 				}
 
 			else if( strncmp( argv[i], "-cal", 4 ) == 0 ) {
+				if( i == (argc-1) ) {
+					fprintf( stderr, "Error, -cal must be followed by a calendar name\n" );
+					exit(-1);
+					}
 				options.calendar = argv[i+1];
 				i++;
 				}
@@ -292,21 +296,37 @@ parse_options( int argc, char *argv[] )
 				}
 
 			else if( strncmp( argv[i], "-scale", 6 ) == 0 ) {
+				if( i == (argc-1) ) {
+					fprintf( stderr, "Error, -scale must be followed by a number\n" );
+					exit(-1);
+					}
 				sscanf( argv[i+1], "%f", &(options.scale) );
 				i++;
 				}
 
 			else if( strncmp( argv[i], "-offset", 7 ) == 0 ) {
+				if( i == (argc-1) ) {
+					fprintf( stderr, "Error, -offset must be followed by a number\n" );
+					exit(-1);
+					}
 				sscanf( argv[i+1], "%f", &(options.offset) );
 				i++;
 				}
 
 			else if( strncmp( argv[i], "-listsel_max", 7 ) == 0 ) {
+				if( i == (argc-1) ) {
+					fprintf( stderr, "Error, -listsel_max must be followed by an integer\n" );
+					exit(-1);
+					}
 				sscanf( argv[i+1], "%d", &(options.listsel_max) );
 				i++;
 				}
 
 			else if( strncmp( argv[i], "-missvalrgb", 11 ) == 0 ) {
+				if( i > (argc-4) ) {
+					fprintf( stderr, "Error, -missvalrgb must be followed by three integers (r g b)\n" );
+					exit(-1);
+					}
 				sscanf( argv[i+1], "%d", &(options.missval_r) );
 				i++;
 				sscanf( argv[i+1], "%d", &(options.missval_g) );
@@ -316,6 +336,10 @@ parse_options( int argc, char *argv[] )
 				}
 
 			else if( strncmp( argv[i], "-nc", 3 ) == 0 ) {
+				if( i == (argc-1) ) {
+					fprintf( stderr, "Error, -nc must be followed by an integer\n" );
+					exit(-1);
+					}
 				sscanf( argv[i+1], "%d", &(options.n_colors) );
 				if( options.n_colors > 255 ) {
 					fprintf( stderr, "maximum number of colors is currently 255\n" );
