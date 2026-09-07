@@ -574,6 +574,19 @@ int MainWindow::rebuildButtonBar( int available_width )
 			row = new Fl_Pack( 0, 0, available_width, kButtonHeight );
 			row->type( Fl_Pack::HORIZONTAL );
 			row->spacing( kSpacing );
+			// Every button below is added explicitly via row->add(), not
+			// FLTK's construct-time auto-parenting, so this doesn't need to
+			// stay "current" for that -- but leaving it current (Fl_Group's
+			// constructor always calls current(this), and nothing else ever
+			// closes it) meant Fl_Group::current() stayed pointed at the
+			// last-built row long after rebuildButtonBar() returned. Any
+			// later top-level Fl_Window built anywhere in the app (e.g. the
+			// "Plot Along Dimension" popup, plot_window.cc's
+			// PlotWindow::create) then got silently auto-parented as an X11
+			// child of *this* row -- and transitively of the main window --
+			// instead of becoming its own top-level window, which is exactly
+			// the "plot window draws inside the main window" bug.
+			row->end();
 			button_bar_->add( row );
 			row_width = 0;
 			n_rows++;
