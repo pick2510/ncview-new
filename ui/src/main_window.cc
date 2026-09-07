@@ -434,9 +434,19 @@ MainWindow::MainWindow()
 	// FL_ALIGN_CLIP is a belt-and-suspenders backstop: if some future
 	// content still ends up wider than its column, it gets clipped instead
 	// of silently drawing over whatever comes after it.
+	// Each row above the colormap/transform/interpolation trio gets its own
+	// bordered background box too -- same FL_ENGRAVED_BOX treatment as that
+	// trio's box below, for a consistent look, and each created (so drawn)
+	// before the label(s) that sit on top of it. Width is fixed here and
+	// stretched to the window's right edge in layout(), same as the labels
+	// themselves.
+	info_row_boxes_[0] = new Fl_Box( 6, 2, W-12, 26 );
 	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, 5, W-20, 20 );
+	info_row_boxes_[1] = new Fl_Box( 6, 22, W-12, 24 );
 	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, 25, W-20, 18 );
+	info_row_boxes_[2] = new Fl_Box( 6, 40, W-12, 24 );
 	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 10, 43, W-20, 18 );
+	info_row_boxes_[3] = new Fl_Box( 6, 58, W-12, 24 );
 	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, 61, 300, 18 );
 	// Wide enough to actually show the full "Current: (i=.., j=..) val
 	// (x=.., y=..)" string view_report_position() builds -- the old fixed
@@ -445,6 +455,7 @@ MainWindow::MainWindow()
 	// text and updating on every mouse move. Resized to track the window
 	// edge in layout() below, same as Label::Title.
 	labels_[static_cast<int>(Label::DataValue)]   = new Fl_Box( 320, 61, W-330, 18 );
+	for( auto *b : info_row_boxes_ ) b->box( FL_ENGRAVED_BOX );
 	// A bordered box behind the trio below ties them together visually as
 	// one "display settings" unit, distinct from the free-form info lines
 	// around it -- created (and so drawn) before the labels it sits behind.
@@ -561,6 +572,12 @@ void MainWindow::layout( int w, int h )
 	stretch_to_edge( Label::CcInfo1 );
 	stretch_to_edge( Label::ScalarDims );
 	stretch_to_edge( Label::CcInfo2 );
+
+	// The decorative row boxes behind Title/ScanvarName/ScanPlace/
+	// DataExtrema+DataValue track the window's right edge the same way
+	// (their x=6 inset, vs. the labels' x=10, is matched on the right too).
+	for( auto *b : info_row_boxes_ )
+		if( b ) b->size( w - 6 - b->x(), b->h() );
 
 	win_->redraw();
 }

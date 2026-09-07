@@ -199,6 +199,11 @@ private:
 	Fl_Choice         *colormap_choice_ = nullptr; // last child of var_pack_; see rebuildColormapChoice()
 	Fl_Box            *labels_[16] = {};          // indexed by LABEL_*
 	Fl_Widget         *buttons_[32] = {};          // indexed by BUTTON_*
+	// Purely decorative bordered boxes drawn behind the info rows above the
+	// colormap/transform/interpolation row (Title; ScanvarName; ScanPlace;
+	// DataExtrema+DataValue) -- one per row, each stretched to the window's
+	// right edge in layout() the same way the labels inside it already are.
+	Fl_Box            *info_row_boxes_[4] = {};
 
 	std::vector<DimRow> dim_rows_;
 	std::vector<NamedColormap> colormaps_;
