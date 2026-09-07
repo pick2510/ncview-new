@@ -11,7 +11,8 @@ submodule builds and the rest of the project actually need on the
 build machine (netCDF and expat as libraries; flex, bison, and
 texinfo as build tools).
 
-See [`PORTING.md`](PORTING.md) for the porting plan and design rationale.
+See [`CHANGELOG.md`](CHANGELOG.md) for what's changed release-to-release,
+and [`PORTING.md`](PORTING.md) for the porting plan and design rationale.
 
 ## Installing
 
