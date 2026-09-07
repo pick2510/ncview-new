@@ -135,14 +135,19 @@ void ncdf_fi_name_of_group( int ncid, char **name, int full_path )
 
 	*name = (char *)malloc( sizeof(char) * (nchar+2) );     /* add space for trailing NULL */
 
-	if( full_path == 0 ) 
+	if( full_path == 0 )
 		ierr = nc_inq_grpname( ncid, *name );
 	else
 		ierr = nc_inq_grpname_full( ncid, &dummy, *name );
 
-	/* Get rid of leading slash */
-	if( (*name)[0] == '/' ) 
-		(*name)++;
+	/* Get rid of leading slash. Shift left in place (rather than just
+	 * advancing *name past it, as this used to) so *name still points
+	 * at the actual malloc()'d block -- the caller frees *name, and
+	 * free()ing a pointer that's been moved off its allocation's start
+	 * is undefined behavior, which is exactly why every caller of this
+	 * used to just leak it instead. */
+	if( (*name)[0] == '/' )
+		memmove( *name, (*name)+1, strlen(*name) );
 
 	if( ierr != NC_NOERR ) {
 		fprintf( stderr, "Error getting grpname from file for ncid=%d: %s\n", 
@@ -244,6 +249,7 @@ void netcdf_fi_list_vars_v4( Stringlist **retval, int fileid )
 	ncdf_fi_name_of_group( fileid, &groupname, full_path );
 
 	netcdf_fi_list_vars_inner( retval, fileid, groupname );
+	free( groupname );
 
 	/* Get number of groups in this group
 	 */
