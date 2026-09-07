@@ -1286,14 +1286,16 @@ fill_dim_structs( NCVar *v )
 			/* Go through each file and see if it has the same units
 			 * as the first file, which is stored in d->units.
 			 *
-			 * Preserved verbatim from upstream: 'cursor' is never
-			 * advanced inside this loop, so if it ever triggers with
-			 * differing units this is an infinite loop -- a
-			 * pre-existing upstream defect, not something introduced
-			 * or fixed by this mechanical conversion. */
-			FDBlist *cursor = v->files[1].get();
-			while( cursor != NULL ) {
-				tmp_units = fi_dim_units( cursor->id, d->name );
+			 * Upstream walked this via cursor->next on a linked list
+			 * without ever advancing cursor -- an infinite loop the
+			 * moment it triggered, never hit in practice because it
+			 * requires >1 file AND a timelike first dimension AND
+			 * (for the printed warning) differing units, an unlikely
+			 * combination that apparently went unnoticed upstream.
+			 * v->files is a vector here, so just index it instead of
+			 * carrying that bug forward. */
+			for( size_t ifile = 1; ifile < v->files.size(); ifile++ ) {
+				tmp_units = fi_dim_units( v->files[ifile]->id, d->name );
 				if( d->units != tmp_units ) {
 					printf( "** Warning: different time units found in different files.  Trying to compensate...\n" );
 					d->units_change = 1;
