@@ -336,7 +336,7 @@ fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 	void
 fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 {
-	size_t	it, start2[20], count2[20], prod_lower_dims;
+	size_t	it, start2[MAX_NC_DIMS], count2[MAX_NC_DIMS], prod_lower_dims;
 	FDBlist	*file;
 	int	i;
 
