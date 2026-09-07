@@ -341,8 +341,15 @@ parse_options( int argc, char *argv[] )
 					exit(-1);
 					}
 				sscanf( argv[i+1], "%d", &(options.n_colors) );
-				if( options.n_colors > 255 ) {
-					fprintf( stderr, "maximum number of colors is currently 255\n" );
+				/* Data colors are stored at pixel indices
+				 * [n_extra_colors, n_extra_colors+n_colors) in a
+				 * 256-entry (ncv_pixel is a byte) colormap table --
+				 * n_colors can be at most 255-n_extra_colors, not
+				 * 255, or util.cc's data_to_pixels() computes an
+				 * out-of-range index for the brightest data values. */
+				if( options.n_colors > (255 - options.n_extra_colors) ) {
+					fprintf( stderr, "maximum number of colors is currently %d\n",
+						255 - options.n_extra_colors );
 					exit( -1 );
 					}
 				i++;

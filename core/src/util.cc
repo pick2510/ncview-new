@@ -318,7 +318,17 @@ data_to_pixels( View *v )
 					}		
 				if( options.invert_colors )
 					data = 1. - data;
-				pix_val = (ncv_pixel)(data * options.n_colors) + 10;
+				/* Compute in a wide type before narrowing to
+				 * ncv_pixel (an unsigned byte): casting
+				 * (data*n_colors) to ncv_pixel FIRST and adding
+				 * n_extra_colors after (as this used to, matching
+				 * upstream) truncates mod 256 before the offset is
+				 * even added, wrapping high data values back down
+				 * to low pixel indices instead of high ones -- e.g.
+				 * with -nc 255, data near the top of range wraps to
+				 * near-zero pixel values instead of the last few
+				 * color slots. */
+				pix_val = (ncv_pixel)( (int)(data * options.n_colors) + options.n_extra_colors );
 				if( options.display_type == PseudoColor )
 					pix_val = pixel_transform[pix_val];
 				}
