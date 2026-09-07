@@ -245,15 +245,14 @@ set_scan_variable( NCVar *var )
 				(xdim_new->size != xdim_old->size) || (ydim_new->size != ydim_old->size))
 			do_overlay(OVERLAY_NONE,NULL,true);
 
-		/* Release the old storage. old_view itself (the View object) is
-		 * intentionally leaked here, exactly as upstream did with malloc --
-		 * only its heap-backed members were ever freed on variable change. */
-		old_view->data.clear();
-		old_view->data.shrink_to_fit();
-		old_view->pixels.clear();
-		old_view->pixels.shrink_to_fit();
-		old_view->var_place.clear();
-		old_view->var_place.shrink_to_fit();
+		/* Release the old View entirely -- upstream only freed its
+		 * heap-backed members (equivalent to the vector clear()s this
+		 * used to do here) and intentionally leaked the malloc'd View
+		 * struct itself on every variable switch. Nothing holds a
+		 * reference to old_view past this point (view is reassigned
+		 * to new_view immediately below), so there's no parity reason
+		 * left to keep leaking it. */
+		delete old_view;
 
 		view = new_view;
 		}
