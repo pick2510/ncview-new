@@ -412,6 +412,12 @@ view_current_nt()
 	if( view->variable->size.empty() )
 		return( 0 );
 
+	/* No scan axis (e.g. a purely 2-D variable, or a modifier-based
+	 * navigation call on one) -- upstream indexed size[-1] here
+	 * unconditionally. There's exactly one frame in that case. */
+	if( view->scan_axis_id == -1 )
+		return( 1 );
+
 	size = view->variable->size[view->scan_axis_id];
 
 	return( size );
