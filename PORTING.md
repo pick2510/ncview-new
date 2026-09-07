@@ -88,7 +88,7 @@ Also found during M3 (dead upstream prototypes, like `clip_i()`/`qsort_sl()` in 
 
 Ship the colorbar (`cbar.c`) as a `Colorbar : Fl_Widget` in the same milestone — it shares the pixel/colormap path with `ImageView`.
 
-### M4 — Plots and dialogs — done (except file-open chooser)
+### M4 — Plots and dialogs — done
 Small modal dialogs added to `MainWindow` (`ui/src/main_window.cc`), each a plain `Fl_Window` run with the standard blocking-modal `set_modal(); show(); while(shown()) Fl::wait();` pattern, verified visually under Xvfb against the real data pipeline (not just "it compiles"):
 - ✅ **Range dialog** (`x_range` → `MainWindow::rangeDialog`): shows the real global min/max, min/max float inputs, an "apply to all variables" checkbox.
 - ✅ **Options dialog** (`set_options` → `MainWindow::setOptionsDialog`): checkboxes for `autoscale`, `want_extra_info`, `save_frames`, `auto_overlay`, reflecting and writing back the real `options` state, redrawing on OK.
@@ -101,6 +101,7 @@ Small modal dialogs added to `MainWindow` (`ui/src/main_window.cc`), each a plai
 - ✅ **Overlay selection** (`set_options.c`'s overlay section, previously missing from `MainWindow::setOptionsDialog` entirely -- there was no UI path to pick an overlay at all until now, only the `NCVIEW_TEST_DIALOG=overlay` test hook calling `do_overlay()` directly): a radio-button group built from the real `overlay_names()`/`overlay_n_overlays()`/`overlay_current()`, plus a custom-overlay-file picker using **`Fl_Native_File_Chooser`** (`filesel.c`'s one real caller upstream -- it's used for exactly this, a custom overlay file, not for opening netCDF data files; `file_select()` itself has no other callers anywhere in upstream's own source). Seeded with `determine_overlay_base_dir()`. On OK, calls `do_overlay()` if the selection changed (or is "custom", matching upstream's own re-apply-on-custom condition in `set_options.c`).
   - `Fl_Native_File_Chooser` needs no new dependency: it's part of FLTK's core `fltk` library target already linked, not `fltk_images`.
   - Per-colormap enable/disable (the other thing `set_options.c` has) remains a deliberate scope gap -- see the M6 notes below on `colormap_funcs.c`.
+- ✅ **Startup file-open chooser** (post-v0.2.0): launching with no input files used to just print "no displayable variables found!" and exit -- a dead end when started from a GUI (double-click, dock icon, "Open with") rather than a shell. `in_choose_input_files()` (new seam function, `ui/src/interface_fltk.cc`) pops a native `Fl_Native_File_Chooser` in `BROWSE_MULTI_FILE` mode when `ncview_main()` gets no files on the command line -- one dialog covers both opening a single file and picking a whole one-file-per-timestep run to open as a series, since core already merges however many filenames it's handed into one virtual variable.
 
 Testing note: `ui/src/interface_fltk.cc`'s `in_initialize()` has env-var-gated test hooks (`NCVIEW_TEST_AUTOSELECT=1|<var name>`, `NCVIEW_TEST_DIALOG=range|options|dimset|info|dataedit|plot|print|overlay`, `NCVIEW_TEST_BUTTON=<name>`) used to drive the app under Xvfb without a real mouse/keyboard — harmless in normal use, worth keeping for regression checks. `print`'s hook defers to the first event-loop tick via `Fl::add_timeout(0.0, ...)` since `print_init()` (which seeds `PrintOptions`' defaults) runs after `in_initialize()` returns, not before.
 
@@ -174,8 +175,28 @@ the unit suite, before it ever reached this branch's history); a
 pre-existing `-cal` argument allocation-size bug (fixed in Phase 2, inline
 with the `strcpy`->`snprintf` conversion that depended on it); and one
 upstream defect in `fill_dim_structs()`'s unit-mismatch check (an
-infinite-loop-shaped `while` condition) preserved verbatim per the
-strict-parity rule rather than silently fixed.
+infinite-loop-shaped `while` condition), originally preserved verbatim
+per the strict-parity rule this phase held to -- since fixed post-v0.2.0
+(see "Post-v0.2.0 defect audits" below), once it stopped being purely
+mechanical-conversion work and became a real external code-review pass
+with its own license to fix genuine bugs rather than only preserve them.
+
+## Post-v0.2.0 defect audits
+
+Four rounds of external code review against the released `v0.2.x` builds
+found and fixed ~16 further defects across `core/` -- most upstream bugs
+carried through the port verbatim (the M1-M9 phases' strict-parity rule
+deliberately preserved them; these audits are what finally closed them
+out), a few genuine port regressions. Full list with file:line, failure
+scenario, and severity in `modernization.md`'s "Post-v0.2.0 defect
+audits" section. Highlights: a critical infinite loop initializing any
+multi-file (virtual) variable with a timelike first dimension
+(`fill_dim_structs()`, the same bug flagged just above); a null-pointer
+crash reading `-scale`/`-offset` against a coordinate variable with a
+`_FillValue`/`missing_value` attribute; a stack buffer overflow in the
+data-edit-dump filename prompt; and an autoscale/framestore interaction
+that could display a frame under the wrong color range. All shipped in
+`v0.2.1`-`v0.2.3`.
 
 ## Verification
 
