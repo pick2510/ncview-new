@@ -417,9 +417,23 @@ MainWindow::MainWindow()
 	const int W = 900, H = 760;
 	win_ = new NcviewWindow( W, H, "ncview" );
 
+	// Five info rows above the image, each column sized (and, where the
+	// content is genuinely unbounded -- a variable name, a frame's date
+	// string with bounds, a mouse-position readout -- kept in sync with the
+	// window width in layout() below) so neighboring labels can't run into
+	// each other. FL_ALIGN_CLIP is a belt-and-suspenders backstop: if some
+	// future content still ends up wider than its column, it gets clipped
+	// to that column's box instead of silently drawing over the next label
+	// (which is exactly what used to happen here -- e.g. a longish variable
+	// name in Label::ScanvarName visibly ran into Label::ScanPlace's "frame
+	// N/M" text right after it, and Label::ScalarDims's fixed 280px width
+	// physically overlapped Label::CcInfo2's column).
 	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, 5, W-20, 20 );
-	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, 25, 200, 18 );
-	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 220, 25, 200, 18 );
+	// "displaying <var>" -- var names are unbounded, so this gets a wide
+	// fixed column and Label::ScanPlace (the rest of the row) is resized to
+	// track the window edge in layout(), same as Label::DataValue below.
+	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, 25, 400, 18 );
+	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 420, 25, W-430, 18 );
 	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, 43, 300, 18 );
 	// Wide enough to actually show the full "Current: (i=.., j=..) val
 	// (x=.., y=..)" string view_report_position() builds -- the old fixed
@@ -434,13 +448,16 @@ MainWindow::MainWindow()
 	// Button::Blowup let you cycle. With that gone (replaced by ImageView's
 	// continuous scroll/drag zoom, which this label never reflected anyway)
 	// it was a static, unexplained number nobody could act on.
-	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 170, 61, 80, 18 );
-	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 260, 61, 100, 18 );
-	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 370, 61, 200, 18 );
-	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 370, 79, 200, 18 );
+	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 170, 61, 90, 18 );
+	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 270, 61, 90, 18 );
+	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 370, 61, W-380, 18 );
 	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, 79, 150, 18 );
-	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, 79, 280, 18 );
-	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT ); }
+	// 170 + 190 = 360, a full 10px short of Label::CcInfo2's column at 370
+	// -- previously 280px wide (up to x=450), which physically overlapped
+	// CcInfo2 starting at x=370.
+	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, 79, 190, 18 );
+	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 370, 79, W-380, 18 );
+	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP ); }
 
 	var_pack_ = new Fl_Pack( 10, 100, 180, H-220 );
 	var_pack_->type( Fl_Pack::VERTICAL );
@@ -510,11 +527,21 @@ void MainWindow::layout( int w, int h )
 	if( var_pack_h < 40 ) var_pack_h = 40;
 	var_pack_->resize( kSideMargin, kTopY, 180, var_pack_h );
 
+	// These labels' text is unbounded in length (a variable name, a frame's
+	// date string with bounds, a mouse-position readout, "extra info"), so
+	// rather than pick a fixed width that's either too cramped on a small
+	// window or wastes space on a wide one, stretch each to the window's
+	// right edge on every resize -- same as Title above.
+	auto stretch_to_edge = [&]( Label id ) {
+		Fl_Box *b = labels_[static_cast<int>(id)];
+		if( b == nullptr ) return;
+		b->size( w - kSideMargin - b->x(), b->h() );
+	};
 	if( labels_[static_cast<int>(Label::Title)] ) labels_[static_cast<int>(Label::Title)]->size( w - 2*kSideMargin, labels_[static_cast<int>(Label::Title)]->h() );
-	if( labels_[static_cast<int>(Label::DataValue)] ) {
-		int lx = labels_[static_cast<int>(Label::DataValue)]->x();
-		labels_[static_cast<int>(Label::DataValue)]->size( w - kSideMargin - lx, labels_[static_cast<int>(Label::DataValue)]->h() );
-	}
+	stretch_to_edge( Label::ScanPlace );
+	stretch_to_edge( Label::DataValue );
+	stretch_to_edge( Label::CcInfo1 );
+	stretch_to_edge( Label::CcInfo2 );
 
 	win_->redraw();
 }
