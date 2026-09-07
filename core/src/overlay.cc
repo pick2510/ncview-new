@@ -351,7 +351,8 @@ gen_overlay( View *v, char *overlay_fname )
 	 */
 	while( fgets(line, 80, f) != NULL )
 		if( line[0] != '#' ) {
-			sscanf( line, "%f %f", &x, &y );
+			if( sscanf( line, "%f %f", &x, &y ) != 2 )
+				continue;	/* blank/malformed line -- skip rather than use stale x/y */
 			i = gen_xform( x, x_size, dim_x->values.data() );
 			if( i == -2 )
 				return {};
