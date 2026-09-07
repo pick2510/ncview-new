@@ -1723,13 +1723,16 @@ void netcdf_fill_value( int file_id, char *var_name, float *v, NetCDFOptions *au
 #endif
 
 	if( foundit ) {
-		/* Implement the "add_offset" and "scale_factor" attributes */
-		if( aux_data->add_offset_set && aux_data->scale_factor_set )
-			*v = *v * aux_data->scale_factor 
+		/* Implement the "add_offset" and "scale_factor" attributes.
+		 * aux_data is NULL for coordinate-variable reads (util.cc's
+		 * fill_dim_structs()/cache_scalar_coord_info() both pass NULL
+		 * here), which have no scale/offset attributes to apply. */
+		if( aux_data != NULL && aux_data->add_offset_set && aux_data->scale_factor_set )
+			*v = *v * aux_data->scale_factor
 					+ aux_data->add_offset;
-		else if( aux_data->add_offset_set )
+		else if( aux_data != NULL && aux_data->add_offset_set )
 			*v = *v + aux_data->add_offset;
-		else if( aux_data->scale_factor_set ) 
+		else if( aux_data != NULL && aux_data->scale_factor_set )
 			*v = *v * aux_data->scale_factor;
 
 		/* Turn nan's into a more useful value */
