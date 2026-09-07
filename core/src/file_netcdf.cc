@@ -82,12 +82,11 @@ int netcdf_fi_writable( char *name )
 	int	fd, ierr;
 
 	ierr = nc_open( name, NC_WRITE, &fd );
-	nc_close( fd );
-
 	if( ierr != NC_NOERR )
 		return( false );
-	else
-		return( true );
+
+	nc_close( fd );
+	return( true );
 }
 
 /*******************************************************************************************/
