@@ -107,7 +107,8 @@ TEST_CASE("n_vars_in_list: counts entries in the vector") {
 }
 
 TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
-          "accumulates var->size, but each file's own FDBlist keeps its own size") {
+          "accumulates var->size and var->dim[0]->size together, but each "
+          "file's own FDBlist keeps its own size") {
     ensure_ncview_misc_initialized();
 
     // Use a variable name unique to this test case (the global `variables`
@@ -159,12 +160,18 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
     // var->dim[] is only ever populated from the FIRST file's
     // fill_dim_structs() call (see util.cc:add_var_to_list()'s "already
     // exists" branch -- it never re-derives dim structs for later files),
-    // so dim->size reflects just that first file's 3 timesteps, NOT the
-    // accumulated 5 that var->size[0] now holds. This asymmetry is exactly
-    // the kind of detail Phase 5's NCVar/FDBlist rewrite must preserve.
+    // but that branch keeps dim->size in sync with the same accumulation
+    // it applies to var->size[0] (see the "kept in sync" comment there):
+    // a real macOS bug report (time_slider_bug_report.md) traced the "time"
+    // dimension row's slider being stuck unresponsive, while its prev/next
+    // buttons worked fine, to exactly this field going stale for a
+    // multi-file (e.g. one-timestep-per-file, WRF-style) virtual variable
+    // -- MainWindow::fillDimInfo() sets the slider's bounds from dim->size,
+    // while the buttons read var->size[0] directly, so a stale dim->size
+    // silently froze only the slider.
     REQUIRE(var->dim[0] != nullptr);
     CHECK(var->dim[0]->name == "time");
-    CHECK(var->dim[0]->size == 3);
+    CHECK(var->dim[0]->size == 5);
     CHECK(var->dim[0]->timelike == 1); // handle_time_dim() recognized the udunits time axis
 
     netcdf_fi_close(fid1);

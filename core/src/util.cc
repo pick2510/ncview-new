@@ -447,6 +447,23 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 			}
 		new_fdb->index    = var->files.back()->index + 1;	/* so index for this fdb is 1 more than index for prev one */
 		var->size[0]      += new_fdb->var_size[0];	/* this works b/c you can only concatenate across first (timelike) dim */
+		/* var->dim[0] (if scannable) is the NCDim fill_dim_structs() built
+		 * from the FIRST file alone, back when this var was created above --
+		 * its ->size field is a separate copy of what var->size[0] was at
+		 * that time, not a view onto it, so it silently goes stale here
+		 * unless kept in sync too. Left stale, this is invisible almost
+		 * everywhere else (view_change_cur_dim()'s prev/next stepping and
+		 * set_scan_view()'s "frame N/M" label both read var->size[0]
+		 * directly), but MainWindow::fillDimInfo() sets the scan-axis
+		 * slider's range from exactly this ->size -- so for a multi-file
+		 * (per-timestep-per-file, e.g. WRF-style) virtual variable, the
+		 * slider silently gets stuck at whatever range the first file
+		 * alone had (bounds(0,0), i.e. no visible range, if each file only
+		 * contributes one timestep) while every other UI element already
+		 * reflects the full concatenated size.
+		 */
+		if( var->dim[0] != nullptr )
+			var->dim[0]->size = var->size[0];
 		var->files.push_back( std::move( new_fdb_owner ) );
 		var->is_virtual   = true;
 		}
