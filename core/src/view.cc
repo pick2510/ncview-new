@@ -1269,16 +1269,30 @@ view_change_cur_dim( char *dim_name, Modifier modifier )
 
 	place = view->var_place[dimid];
 
-	type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
-		&has_bounds, &bound_min, &bound_max, view->var_place.data() );
-	if( type == NC_DOUBLE ) {
-		if( dim->timelike && options.t_conv ) {
-			fmt_time( temp_string, 1024, new_dimval, dim, 1 );
-			}
-		else
-			snprintf( temp_string, 1023, "%lg", new_dimval );
+	if( dimid == view->scan_axis_id ) {
+		/* This dim's own row arrows are stepping the scan axis itself
+		 * (e.g. "time" shown both as its own dimension row and as the
+		 * frame the animation buttons step through) -- go through
+		 * set_scan_view() so the "frame N/M <date>" title label
+		 * (Label::ScanPlace) stays in sync, not just this row's value
+		 * box. change_view() (the play/rewind/forward path) already
+		 * does this; this path was missing it, so stepping the scan
+		 * dimension via its own arrows silently went stale.
+		 */
+		set_scan_view( place );
 		}
-	in_set_cur_dim_value( dim_name, temp_string );
+	else {
+		type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
+			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
+		if( type == NC_DOUBLE ) {
+			if( dim->timelike && options.t_conv ) {
+				fmt_time( temp_string, 1024, new_dimval, dim, 1 );
+				}
+			else
+				snprintf( temp_string, 1023, "%lg", new_dimval );
+			}
+		in_set_cur_dim_value( dim_name, temp_string );
+		}
 
 	if( options.debug )
 		fprintf( stderr, "calling init_saveframes from view_change_cur_dim\n" );
