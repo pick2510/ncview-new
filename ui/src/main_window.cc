@@ -13,6 +13,7 @@
 #include <FL/Fl_Check_Button.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Float_Input.H>
+#include <FL/Fl_Hor_Slider.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Multi_Label.H>
 #include <FL/Fl_Native_File_Chooser.H>
@@ -675,13 +676,16 @@ int MainWindow::rebuildButtonBar( int available_width )
 	int row_width = 0;  // width used so far in the current row, incl. inter-button spacing
 	int n_rows = 0;
 
-	for( const auto &spec : kButtonSpecs ) {
-		int with_this = row_width + ( row_width > 0 ? kSpacing : 0 ) + spec.width;
+	// Starts a new row whenever the current one has no room left for
+	// item_width -- shared by the plain buttons below and the "Delay:"
+	// label+slider after them, so both wrap the same way.
+	auto ensure_row = [&]( int item_width ) {
+		int with_this = row_width + ( row_width > 0 ? kSpacing : 0 ) + item_width;
 		if( row == nullptr || with_this > available_width ) {
 			row = new Fl_Pack( 0, 0, available_width, kButtonHeight );
 			row->type( Fl_Pack::HORIZONTAL );
 			row->spacing( kSpacing );
-			// Every button below is added explicitly via row->add(), not
+			// Every child below is added explicitly via row->add(), not
 			// FLTK's construct-time auto-parenting, so this doesn't need to
 			// stay "current" for that -- but leaving it current (Fl_Group's
 			// constructor always calls current(this), and nothing else ever
@@ -698,12 +702,38 @@ int MainWindow::rebuildButtonBar( int available_width )
 			row_width = 0;
 			n_rows++;
 		}
+	};
+
+	for( const auto &spec : kButtonSpecs ) {
+		ensure_row( spec.width );
 		auto *btn = new Fl_Button( 0, 0, spec.width, kButtonHeight, spec.text );
 		btn->callback( &MainWindow::buttonCallback, (void*)(intptr_t)static_cast<int>(spec.id) );
 		row->add( btn );
 		buttons_[static_cast<int>(spec.id)] = btn;
 		row_width += ( row_width > 0 ? kSpacing : 0 ) + spec.width;
 	}
+
+	// "Delay:" label + a slider controlling options.frame_delay (0.0 =
+	// fastest, 1.0 = slowest -- see do_buttons.cc's DELAY_DELTA/
+	// DELAY_OFFSET, which turn this into the actual timer interval for
+	// Rewind/Fastforward's held-down auto-repeat). Upstream's
+	// x_interface.c placed this scrollbar directly in the button box too
+	// (scrollspeed_widget) rather than in a dialog, adjusted by feel while
+	// an animation is actually playing -- so it stays here rather than
+	// moving into menu_bar_ with the occasional-use actions.
+	const int kDelayLabelW = 40, kDelaySliderW = 90;
+	ensure_row( kDelayLabelW + kSpacing + kDelaySliderW );
+	auto *delay_label = new Fl_Box( 0, 0, kDelayLabelW, kButtonHeight, "Delay:" );
+	row->add( delay_label );
+	row_width += ( row_width > 0 ? kSpacing : 0 ) + kDelayLabelW;
+	auto *delay_slider = new Fl_Hor_Slider( 0, 0, kDelaySliderW, kButtonHeight );
+	delay_slider->bounds( 0.0, 1.0 );
+	delay_slider->value( options.frame_delay );
+	delay_slider->callback( []( Fl_Widget *w, void * ) {
+		options.frame_delay = static_cast<Fl_Slider*>(w)->value();
+	} );
+	row->add( delay_slider );
+	row_width += kSpacing + kDelaySliderW;
 
 	return n_rows*kButtonHeight + ( n_rows > 0 ? (n_rows-1)*kSpacing : 0 );
 }
