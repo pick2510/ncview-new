@@ -12,7 +12,9 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <FL/Fl_Box.H>
@@ -115,6 +117,13 @@ struct DimRow {
 	Fl_Slider  *value_slider = nullptr;
 	Fl_Button  *prev_btn     = nullptr;
 	Fl_Button  *next_btn     = nullptr;
+
+	// Owns prev_btn/next_btn/value_slider's callback data (see
+	// rebuildDimRow()) so it's freed when this row is torn down in
+	// clearDimButtons(), instead of leaking on every rebuild.
+	std::unique_ptr<std::pair<std::string,Modifier>> prev_cb_data;
+	std::unique_ptr<std::pair<std::string,Modifier>> next_cb_data;
+	std::unique_ptr<std::string>                     slider_cb_data;
 };
 
 struct NamedColormap {

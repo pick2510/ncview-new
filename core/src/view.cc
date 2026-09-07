@@ -631,31 +631,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	x_size = view->variable->size[view->x_axis_id];
 	y_size = view->variable->size[view->y_axis_id];
 
-	/* If we need to adjust the range to the current frame, then do so */
 	must_recalc_range = force_range_to_frame || options.autoscale;
-	if( must_recalc_range ) {
-		min = 1.0e35;
-		max = -min;
-
-		for( i=0; i<x_size*y_size; i++ ) {
-			dat = view->data[i];
-			if( dat != dat ) 
-				dat = view->variable->fill_value;
-			if( ! close_enough( dat, view->variable->fill_value) && (dat != FILL_FLOAT)) {
-				if( dat > max )
-					max = dat;
-				if( dat < min )
-					min = dat;
-				}
-			}
-
-		view->variable->user_min = min;
-		view->variable->user_max = max;
-		set_range_labels( min, max );
-		view->data_status = ViewDataStatus::Invalid;
-		invalidate_all_saveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is true, it won't happen */
-		view_recompute_colorbar();
-		}
 
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
 
@@ -703,6 +679,34 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		{
 		if( options.debug )
 			printf( "NOT reading data to contour, since data is valid (%d)\n", static_cast<int>(view->data_status) );
+		}
+
+	/* If we need to adjust the range to the current frame, then do so.
+	 * Must run after fill_view_data() above, so it sees the just-loaded
+	 * slice rather than whatever the previous frame left in view->data.
+	 */
+	if( must_recalc_range ) {
+		min = 1.0e35;
+		max = -min;
+
+		for( i=0; i<x_size*y_size; i++ ) {
+			dat = view->data[i];
+			if( dat != dat )
+				dat = view->variable->fill_value;
+			if( ! close_enough( dat, view->variable->fill_value) && (dat != FILL_FLOAT)) {
+				if( dat > max )
+					max = dat;
+				if( dat < min )
+					min = dat;
+				}
+			}
+
+		view->variable->user_min = min;
+		view->variable->user_max = max;
+		set_range_labels( min, max );
+		view->data_status = ViewDataStatus::Invalid;
+		invalidate_all_saveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is true, it won't happen */
+		view_recompute_colorbar();
 		}
 
 	if( options.debug )
@@ -868,6 +872,17 @@ view_check_new_data( int unused )
 
 	view->variable->size[ timelike_index ] = nt_new;
 	view->variable->files.back().get()->var_size[ timelike_index ] += dt;
+
+	/* The newly appended timesteps all live in the last (growing) file;
+	 * keep timestep_2_fdb (built once, up front, in
+	 * cache_scalar_coord_info()) in sync so looking up one of them
+	 * doesn't index past its old, now-too-short length.
+	 */
+	{
+	FDBlist *last_file = view->variable->files.back().get();
+	for( size_t k=0; k<dt; k++ )
+		view->variable->timestep_2_fdb.push_back( last_file );
+	}
 
 	/* Resync so we will read the last time entry */
 	nc_sync( view->variable->files.back().get()->id );

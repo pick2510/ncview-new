@@ -123,8 +123,14 @@ void ImageView::draw()
 	ctx.width = width_;
 	ctx.height = height_;
 	ctx.zoom = zoom_;
-	ctx.ox = x() + (w() - width_*zoom_) / 2.0 + panx_;
-	ctx.oy = y() + (h() - height_*zoom_) / 2.0 + pany_;
+	// fl_draw_image()'s per-scanline callback receives coordinates local to
+	// the drawn rectangle (cx starts at 0, cy is the scanline index within
+	// it) -- not window-absolute ones -- so the origin here must be
+	// widget-local too (contrast screenToBuffer() below, which converts
+	// Fl::event_x()/event_y(), themselves window-relative, and so does
+	// need x()/y()).
+	ctx.ox = (w() - width_*zoom_) / 2.0 + panx_;
+	ctx.oy = (h() - height_*zoom_) / 2.0 + pany_;
 	Fl::get_color( FL_DARK2, ctx.bg_r, ctx.bg_g, ctx.bg_b );
 
 	// Draw via a per-scanline callback rather than fl_draw_image() on a
@@ -1105,15 +1111,15 @@ void MainWindow::rebuildDimRow( DimRow &row )
 	recenterDimRow( row );
 
 	// Callback data (dim name + modifier, or just the dim name for the
-	// slider) must outlive the callback; heap-allocated and intentionally
-	// never freed -- rows are rebuilt only when the scan dimensions
-	// change, a rare, low-cardinality event, so this is a small, bounded
-	// leak rather than a real one.
-	row.prev_btn->callback( &MainWindow::dimStepCallback,
-		new std::pair<std::string,Modifier>( row.name, Modifier::M3 ) );
-	row.next_btn->callback( &MainWindow::dimStepCallback,
-		new std::pair<std::string,Modifier>( row.name, Modifier::M1 ) );
-	row.value_slider->callback( &MainWindow::dimSliderCallback, new std::string( row.name ) );
+	// slider) must outlive the callback; owned by the row itself
+	// (prev_cb_data/next_cb_data/slider_cb_data) and freed in
+	// clearDimButtons() when the row is torn down.
+	row.prev_cb_data = std::make_unique<std::pair<std::string,Modifier>>( row.name, Modifier::M3 );
+	row.next_cb_data = std::make_unique<std::pair<std::string,Modifier>>( row.name, Modifier::M1 );
+	row.slider_cb_data = std::make_unique<std::string>( row.name );
+	row.prev_btn->callback( &MainWindow::dimStepCallback, row.prev_cb_data.get() );
+	row.next_btn->callback( &MainWindow::dimStepCallback, row.next_cb_data.get() );
+	row.value_slider->callback( &MainWindow::dimSliderCallback, row.slider_cb_data.get() );
 }
 
 // Recomputes this row's absolute position (from dim_pack_'s current x/y/w
@@ -1185,7 +1191,7 @@ void MainWindow::makeDimButtons( const Stringlist *dim_list )
 		row.name = e.string;
 		row.index = (int)dim_rows_.size();
 		rebuildDimRow( row );
-		dim_rows_.push_back( row );
+		dim_rows_.push_back( std::move( row ) );
 	}
 	// A plain dim_pack_->redraw() isn't enough -- route through the same
 	// full relayout a resize already triggers, which is what actually
