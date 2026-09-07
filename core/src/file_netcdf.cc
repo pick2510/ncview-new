@@ -1540,7 +1540,25 @@ int netcdf_get_att_util( int id, int varid, const char *var_name, const char *at
 					err = nc_get_att_text( id, varid, att_name, char_att.data() );
 					if( err != NC_NOERR )
 						return( false );
-					sscanf( char_att.data(), "%f", (float *)value );
+					/* A char-typed numeric attribute (e.g. a
+					 * malformed valid_range="abc", or a
+					 * legitimate one with more than one
+					 * space-separated value) -- parse up to
+					 * expected_len values in sequence, and
+					 * treat the whole attribute as absent
+					 * (rather than reporting success with
+					 * unset/garbage values) if any of them
+					 * fails to parse. */
+					const char *p = char_att.data();
+					for( i=0; i<(size_t)expected_len; i++ ) {
+						int n_consumed = 0;
+						if( sscanf( p, "%f%n", (float *)value + i, &n_consumed ) != 1 ) {
+							fprintf( stderr, "netcdf_get_att_util: error, could not parse a numeric value out of char attribute \"%s\" for variable %s (value: \"%s\")\n",
+								att_name, var_name, char_att.data() );
+							return( false );
+							}
+						p += n_consumed;
+						}
 					}
 					break;
 
