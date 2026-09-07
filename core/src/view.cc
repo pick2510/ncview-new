@@ -651,8 +651,20 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 						frameno );
 		}
 
-	/* Is this frame stored in the framestore? */
-	if( framestore.valid && allow_framestore_usage ) {
+	/* Is this frame stored in the framestore? Never true under
+	 * -autoscale: upstream relied on its recalc-and-invalidate block
+	 * running *before* this check (invalidating whatever's cached here
+	 * on every autoscale draw, so this check would always miss while
+	 * autoscale is on). This port moved that block below, after
+	 * fill_view_data(), so it recomputes from the freshly-loaded frame
+	 * instead of upstream's stale-until-next-frame data -- but that
+	 * leaves a window where a still-cached, currently-displayed frame
+	 * (e.g. redrawn right after toggling autoscale on in the Options
+	 * dialog) gets served from the cache before the invalidate below
+	 * ever runs. Excluding autoscale here closes that window the same
+	 * way upstream's ordering did.
+	 */
+	if( framestore.valid && allow_framestore_usage && !options.autoscale ) {
 		if( framestore.frame_valid[frameno] == true ) {
 			if( options.debug )
 				printf( "drawing from framestore...\n" );
