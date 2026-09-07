@@ -480,6 +480,21 @@ stringlist_line_to_sl( char *line, int lineno, Stringlist **retval )
 
 /**************************************************************************************
  */
+/* A quote at line[cursor] is escaped iff it's preceded by an ODD number of
+ * consecutive backslashes (each pair of backslashes is itself an escaped
+ * backslash, not an escape of the quote) -- checking only line[cursor-1]
+ * (as this used to) gets a string ending in an even run of backslashes
+ * followed by a quote wrong, e.g. \\" is an escaped backslash then a real
+ * closing quote, not an escaped quote. */
+	static bool
+stringlist_quote_is_escaped( const char *line, int cursor )
+{
+	int n_backslashes = 0;
+	while( cursor - 1 - n_backslashes >= 0 && line[cursor - 1 - n_backslashes] == '\\' )
+		n_backslashes++;
+	return( (n_backslashes % 2) == 1 );
+}
+
 	static int
 stringlist_get_tok_indices( char *line, int *index0, int *index1, int *string0, int *string1,
 		int *aux_type0, int *aux_type1, int *aux_val0, int *aux_val1 )
@@ -532,7 +547,7 @@ stringlist_get_tok_indices( char *line, int *index0, int *index1, int *string0, 
 	/* Advance to next quote that is NOT escaped by a backslash */
 	/* an quote that is NOT escaped is this: ((line[cursor] == '"') && (line[cursor-1] != '\')) */
 	/* "while line[cursor] is NOT a (quote that is NOT escaped by a backslash)" */
-	while( (cursor < slen) && (! ((line[cursor] == '"') && (line[cursor-1] != '\\'))) )
+	while( (cursor < slen) && (! ((line[cursor] == '"') && !stringlist_quote_is_escaped(line, cursor))) )
 		cursor++;
 	if( cursor == slen ) {
 		fprintf( stderr, "stringlist_get_tok_indices: error reading from file, does string not end with a quote sign?\n" );
@@ -583,7 +598,7 @@ stringlist_get_tok_indices( char *line, int *index0, int *index1, int *string0, 
 		cursor++;	/* Advance past the opening quote */
 		*aux_val0 = cursor;
 		/* Advance to next quote that is NOT escaped by a backslash; see above */
-		while( (cursor < slen) && (! ((line[cursor] == '"') && (line[cursor-1] != '\\'))) )
+		while( (cursor < slen) && (! ((line[cursor] == '"') && !stringlist_quote_is_escaped(line, cursor))) )
 			cursor++;
 		if( cursor == slen ) {
 			fprintf( stderr, "stringlist_get_tok_indices: error reading from file, does the string-valued aux_val NOT end with a quote?\n" );
