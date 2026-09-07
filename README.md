@@ -5,8 +5,11 @@ David W. Pierce's netCDF visual browser. The original is C + X11/Xt/Athena
 widgets built with autotools; this port replaces the toolkit with
 [FLTK](https://www.fltk.org/) and the build with CMake. FLTK and
 [UDUNITS-2](https://www.unidata.ucar.edu/software/udunits/) are vendored as
-git submodules, so the only system dependency is netCDF (plus expat, for
-UDUNITS-2's XML parsing).
+git submodules and built from source, so there's no separate FLTK/
+UDUNITS-2 install step -- see Prerequisites below for what those
+submodule builds and the rest of the project actually need on the
+build machine (netCDF and expat as libraries; flex, bison, and
+texinfo as build tools).
 
 See [`PORTING.md`](PORTING.md) for the porting plan and design rationale.
 
@@ -20,8 +23,12 @@ Pre-built packages for Linux, macOS, and Windows are on the
 **Prerequisites**: a C++17 compiler, CMake >= 3.21, netCDF (C library +
 headers), expat, and — on Linux/BSD — X11 dev headers (`libx11-dev
 libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev
-libxfixes-dev` on Debian/Ubuntu). FLTK and UDUNITS-2 need nothing
-pre-installed; both build from the vendored submodules.
+libxfixes-dev` on Debian/Ubuntu). FLTK and UDUNITS-2 are built from the
+vendored submodules, but the vendored UDUNITS-2 build itself needs
+**flex**, **bison**, and **texinfo** on the build machine (on Unix it
+unconditionally regenerates its lexer/parser from source with flex/
+bison, and generates its documentation with texinfo's `makeinfo`/
+`install-info`) — `flex bison texinfo` on Debian/Ubuntu.
 
 ```sh
 git submodule update --init --recursive
