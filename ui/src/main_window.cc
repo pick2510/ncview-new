@@ -521,20 +521,21 @@ MainWindow::MainWindow()
 	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 10, kMenuBarH+133, W-20, 18 );
 	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP ); }
 
-	var_pack_ = new Fl_Pack( 10, 100, 180, H-220 );
-	var_pack_->type( Fl_Pack::VERTICAL );
-	var_pack_->spacing( 2 );
+	// Horizontal row now, centered (recenterVarPack()) and positioned below
+	// dim_pack_ in layout() -- was a vertical stack of dropdowns in its own
+	// left-hand column, which meant image_/colorbar_/dim_pack_ never got to
+	// use the window's full width.
+	var_pack_ = new Fl_Group( 10, 100, W-20, 30 );
 	var_pack_->end();
 
-	image_ = new ImageView( 200, 100, W-210, H-320 );
-	colorbar_ = new Colorbar( 200, H-210, W-210, 20 );
+	image_ = new ImageView( 10, 100, W-20, H-320 );
+	colorbar_ = new Colorbar( 10, H-210, W-20, 20 );
 
 	dim_pack_ = new Fl_Group( 10, H-180, W-20, 100 );
 	dim_pack_->end();
 
-	button_bar_ = new Fl_Pack( 10, H-70, W-20, 60 );
-	button_bar_->type( Fl_Pack::VERTICAL );  // a column of per-row horizontal packs; see rebuildButtonBar()
-	button_bar_->spacing( 2 );
+	button_bar_ = new Fl_Group( 10, H-70, W-20, 60 );
+	button_bar_->end();
 
 	win_->end();
 	// No win_->resizable(...): layout() (below) repositions/resizes every
@@ -547,14 +548,95 @@ MainWindow::MainWindow()
 	layout( W, H );
 }
 
+// Explicit per-button pixel widths (rather than one fixed size for all)
+// since a uniform 60px was too narrow for "Restart"/etc, leaving their
+// labels crowding the button edges.
+//
+// Just the animation transport -- the controls actually clicked often
+// enough, mid-session, to earn a permanently visible, single-click
+// button. Everything else (Inv.Phys, Inv.Cmap, Transform,
+// Interp, DimSet, Range, Edit, Info, Print, Options, Quit) moved into
+// menu_bar_ instead (see the constructor) -- occasional actions and
+// settings that are fine behind one extra click, freeing this bar to fit
+// on a single row instead of wrapping.
+//
+// No Button::ColormapSelect entry here -- replaced by the colormap combobox
+// in var_pack_ (see rebuildColormapChoice()), which shows every colormap's
+// name and a preview swatch instead of cycling through them blind one at a
+// time. Button::ColormapSelect/do_colormap_sel() still exist for the
+// NCVIEW_TEST_BUTTON headless-test hook and any script driving buttons by
+// id directly; they just have no on-screen button anymore.
+// No Button::Minimum/Maximum entries -- do_set_minimum()/do_set_maximum()
+// (core/src/do_buttons.cc) are empty stub bodies, faithfully preserved from
+// upstream, which itself never actually wired a widget to them either (its
+// x_interface.c never creates BUTTON_MINIMUM/BUTTON_MAXIMUM widgets, only
+// this port's toolbar ever did) -- both buttons were pure decoration that
+// happened to call into dead code. The real min/max-setting UI, in both
+// upstream and here, is Ctrl+click on the image
+// (ImageView::handle() -> set_min_from_curdata()/set_max_from_curdata()).
+struct ButtonSpec { Button id; const char *text; int width; };
+static const ButtonSpec kButtonSpecs[] = {
+	{ Button::Rewind, "@|<", 40 }, { Button::Backwards, "@<", 40 }, { Button::Pause, "@||", 40 },
+	{ Button::Forward, "@>", 40 }, { Button::Fastforward, "@>|", 40 }, { Button::Restart, "Restart", 65 },
+	// No Button::Blowup here -- replaced by ImageView's scroll-to-zoom (mouse
+	// wheel) and drag-to-pan (left-button drag), which give continuous
+	// navigation instead of upstream's discrete button.
+};
+
+namespace {
+// Dim-row geometry -- also needed by MainWindow::layout() (to size
+// dim_pack_ to the actual current row count, not a fixed placeholder
+// height), so these live here rather than down by rebuildDimRow()/
+// recenterDimRow(), which also use them.
+constexpr int kDimRowNameW = 120, kDimRowBtnW = 24, kDimRowSliderW = 220,
+              kDimRowSpacing = 4, kDimRowH = 24;
+constexpr int kDimRowContentW = kDimRowNameW + kDimRowSpacing + kDimRowBtnW
+                              + kDimRowSpacing + kDimRowSliderW + kDimRowSpacing + kDimRowBtnW;
+
+constexpr int kButtonBarH = 26, kButtonBarSpacing = 2;
+// "Delay:" label + slider (options.frame_delay) is one atomic item at the
+// end of the button list, alongside the plain buttons -- see
+// MainWindow::rebuildButtonBar()'s comment on it.
+constexpr int kDelayLabelW = 40, kDelaySliderW = 90;
+constexpr int kDelayItemW = kDelayLabelW + kButtonBarSpacing + kDelaySliderW;
+constexpr int kButtonBarNButtons = (int)(sizeof(kButtonSpecs)/sizeof(kButtonSpecs[0]));
+constexpr int kButtonBarNItems = kButtonBarNButtons + 1;
+
+int buttonBarItemWidth( int i ) { return i < kButtonBarNButtons ? kButtonSpecs[i].width : kDelayItemW; }
+
+// Decides which items land in which row for a given available_width, and
+// each row's total content width -- pure/no side effects, so
+// MainWindow::layout() can call this to learn the button bar's total
+// height *before* MainWindow::rebuildButtonBar() actually builds anything,
+// which is what lets that final resize (and so the bar's real, final x/y)
+// happen before rebuildButtonBar() needs to read it back, rather than
+// after.
+void computeButtonBarRows( int available_width, std::vector<int> &row_start_item, std::vector<int> &row_content_w )
+{
+	row_start_item.clear();
+	row_content_w.clear();
+	int cur_w = 0;
+	for( int i = 0; i < kButtonBarNItems; i++ ) {
+		int w = buttonBarItemWidth( i );
+		int with_this = cur_w + ( cur_w > 0 ? kButtonBarSpacing : 0 ) + w;
+		if( row_start_item.empty() || with_this > available_width ) {
+			row_start_item.push_back( i );
+			row_content_w.push_back( 0 );
+			cur_w = 0;
+		}
+		cur_w += ( cur_w > 0 ? kButtonBarSpacing : 0 ) + w;
+		row_content_w.back() = cur_w;
+	}
+}
+} // namespace
+
 void MainWindow::layout( int w, int h )
 {
 	const int kSideMargin = 10;
-	const int kImageX = 200;
 	// menu_bar_'s own height, plus 8 info rows (5,25,43,61,79,97,115,133
 	// within that, each 18px, 20 for the title) -- see the row layout
 	// comment in the constructor -- plus a small gap before
-	// var_pack_/image_/dim_pack_ start.
+	// image_/dim_pack_ start.
 	const int kTopY = kMenuBarH + 152;
 	const int kColorbarH = 20;
 	const int kColorbarGap = 10;
@@ -563,45 +645,77 @@ void MainWindow::layout( int w, int h )
 	// text height -- 10px wasn't enough and let tick labels bleed into (and
 	// render underneath) the dimension row widgets below.
 	const int kColorbarLabelGap = 20;
-	const int kDimPackH = 100;
 	const int kDimGap = 10;
+	const int kVarPackH = 30;  // one horizontal row of dropdowns; see the constructor
 	const int kBottomMargin = 10;
-	const int kVarPackGap = 40;  // matches the original fixed layout's var_pack_-to-dim_pack_ gap
+	// image_/colorbar_ are sized using this *nominal* dim_pack_ height, not
+	// the actual current row count -- so the plot area stays visually
+	// stable across variable switches instead of growing/shrinking every
+	// time the scannable-dimension count changes. The real row count
+	// instead controls where dim_pack_/var_pack_/button_bar_ sit (below),
+	// which is what actually makes that "lower block" move down/up as it
+	// grows/shrinks, per its own comment.
+	const int kNominalDimPackH = 100;
 
 	menu_bar_->resize( 0, 0, w, kMenuBarH );
 
-	// Bottom-up: the button bar's height depends on how many rows the
-	// current width wraps it into (rebuildButtonBar()), which then pushes
-	// everything above it up or down.
-	int button_bar_w = w - 2*kSideMargin;
-	int button_bar_h = rebuildButtonBar( button_bar_w );
-	int button_bar_y = h - kBottomMargin - button_bar_h;
+	// image_/colorbar_/dim_pack_/var_pack_/button_bar_ all now share this
+	// same x/width -- there's no separate left-hand column any more (that
+	// was var_pack_'s, before it moved to its own row below dim_pack_), so
+	// nothing needs to be centered/aligned against a *narrower* "plot area"
+	// than the window's own usable width.
+	int content_w = w - 2*kSideMargin;
 
-	int dim_pack_y = button_bar_y - kDimGap - kDimPackH;
-	int colorbar_y = dim_pack_y - kColorbarLabelGap - kColorbarH;
+	// button_bar_'s height depends on how many rows the current width
+	// wraps it into -- doesn't depend on dim row count, so this can be
+	// computed independently of the stacking below. computeButtonBarRows()
+	// (a pure row-break calculation, no widgets) gets the row count for
+	// that up front, so button_bar_ can be moved to its real final
+	// position *before* rebuildButtonBar() -- which needs to read that
+	// position back to place each row -- runs.
+	std::vector<int> button_bar_row_start, button_bar_row_w;
+	computeButtonBarRows( content_w, button_bar_row_start, button_bar_row_w );
+	int button_bar_n_rows = (int)button_bar_row_start.size();
+	int button_bar_h = button_bar_n_rows*kButtonBarH
+	                  + ( button_bar_n_rows > 0 ? (button_bar_n_rows-1)*kButtonBarSpacing : 0 );
+
+	// Nominal (dim-row-count-independent) sizing for image_/colorbar_ only.
+	int nominal_button_bar_y = h - kBottomMargin - button_bar_h;
+	int nominal_var_pack_y = nominal_button_bar_y - kDimGap - kVarPackH;
+	int nominal_dim_pack_y = nominal_var_pack_y - kDimGap - kNominalDimPackH;
+	int colorbar_y = nominal_dim_pack_y - kColorbarLabelGap - kColorbarH;
 	int image_h = colorbar_y - kColorbarGap - kTopY;
 	if( image_h < 40 ) image_h = 40;  // keep something sane at extreme window sizes
 
-	int right_w = w - kImageX - kSideMargin;
-	if( right_w < 40 ) right_w = 40;
+	image_->resize( kSideMargin, kTopY, content_w, image_h );
+	colorbar_->resize( kSideMargin, colorbar_y, content_w, kColorbarH );
 
-	button_bar_->resize( kSideMargin, button_bar_y, button_bar_w, button_bar_h );
-	// Same x/width as colorbar_/image_ (not the full window, which would
-	// also span the var_pack_ variable-list column to its left) -- this is
-	// what actually keeps the dimension rows aligned under the colorbar
-	// they control, on every resize.
-	dim_pack_->resize( kImageX, dim_pack_y, right_w, kDimPackH );
-	colorbar_->resize( kImageX, colorbar_y, right_w, kColorbarH );
-	image_->resize( kImageX, kTopY, right_w, image_h );
+	// Real stacking: dim_pack_/var_pack_/button_bar_ start right where the
+	// colorbar actually ends and stack top-down using dim_pack_'s *actual*
+	// current row count (0 before any variable is selected) -- so
+	// var_pack_ always starts right after the last real dim row, with no
+	// dead space between them, and switching to a variable with more
+	// scannable dimensions grows dim_pack_ downward and pushes
+	// var_pack_/button_bar_ down with it, rather than the image shrinking
+	// to compensate. A variable with enough extra dims can therefore push
+	// button_bar_ below the window's original bottom edge -- accepted
+	// trade-off for a stable plot area; resize the window taller if needed.
+	int dim_pack_n_rows = (int)dim_rows_.size();
+	int dim_pack_h = dim_pack_n_rows > 0 ? dim_pack_n_rows*kDimRowH : kDimRowH;
+	int dim_pack_y = colorbar_y + kColorbarH + kColorbarLabelGap;
+	int var_pack_y = dim_pack_y + dim_pack_h + kDimGap;
+	int button_bar_y = var_pack_y + kVarPackH + kDimGap;
+
+	dim_pack_->resize( kSideMargin, dim_pack_y, content_w, dim_pack_h );
+	var_pack_->resize( kSideMargin, var_pack_y, content_w, kVarPackH );
+	recenterVarPack();
+	button_bar_->resize( kSideMargin, button_bar_y, content_w, button_bar_h );
+	rebuildButtonBar( content_w );
 
 	// dim_pack_'s x/y/w just changed; recompute every row's own position
 	// from that (recenterDimRow() reads dim_pack_ directly, not any row's
 	// own possibly-stale position) and re-center its children within it.
 	for( auto &row : dim_rows_ ) recenterDimRow( row );
-
-	int var_pack_h = dim_pack_y - kVarPackGap - kTopY;
-	if( var_pack_h < 40 ) var_pack_h = 40;
-	var_pack_->resize( kSideMargin, kTopY, 180, var_pack_h );
 
 	// These labels' text is unbounded in length (a variable name, a frame's
 	// date string with bounds, a mouse-position readout, "extra info"), so
@@ -630,112 +744,82 @@ void MainWindow::layout( int w, int h )
 	win_->redraw();
 }
 
-// Explicit per-button pixel widths (rather than one fixed size for all)
-// since a uniform 60px was too narrow for "Restart"/etc, leaving their
-// labels crowding the button edges.
-//
-// Just the animation transport plus Min/Max -- the controls actually
-// clicked often enough, mid-session, to earn a permanently visible,
-// single-click button. Everything else (Inv.Phys, Inv.Cmap, Transform,
-// Interp, DimSet, Range, Edit, Info, Print, Options, Quit) moved into
-// menu_bar_ instead (see the constructor) -- occasional actions and
-// settings that are fine behind one extra click, freeing this bar to fit
-// on a single row instead of wrapping.
-//
-// No Button::ColormapSelect entry here -- replaced by the colormap combobox
-// in var_pack_ (see rebuildColormapChoice()), which shows every colormap's
-// name and a preview swatch instead of cycling through them blind one at a
-// time. Button::ColormapSelect/do_colormap_sel() still exist for the
-// NCVIEW_TEST_BUTTON headless-test hook and any script driving buttons by
-// id directly; they just have no on-screen button anymore.
-struct ButtonSpec { Button id; const char *text; int width; };
-static const ButtonSpec kButtonSpecs[] = {
-	{ Button::Rewind, "@|<", 40 }, { Button::Backwards, "@<", 40 }, { Button::Pause, "@||", 40 },
-	{ Button::Forward, "@>", 40 }, { Button::Fastforward, "@>|", 40 }, { Button::Restart, "Restart", 65 },
-	// No Button::Blowup here -- replaced by ImageView's scroll-to-zoom (mouse
-	// wheel) and drag-to-pan (left-button drag), which give continuous
-	// navigation instead of upstream's discrete button.
-	{ Button::Minimum, "Min", 50 }, { Button::Maximum, "Max", 50 },
-};
-
 // Rebuilds the button bar as however many rows of buttons fit in
 // available_width -- replaces the old single Fl_Pack::HORIZONTAL row, which
 // simply ran off the right edge of the window once the buttons' total width
-// (~1100px across 19 buttons) exceeded it (which it always did, even at the
-// original fixed 900px window width). button_bar_ itself is now a VERTICAL
-// pack of per-row HORIZONTAL packs, rebuilt every time available_width
-// changes (window resize) so it always wraps instead of overflowing.
-// Returns the total height needed for all the rows produced.
-int MainWindow::rebuildButtonBar( int available_width )
+// exceeded it (which it always did, even at the original fixed 900px window
+// width). button_bar_ is a plain Fl_Group; each row is centered within
+// available_width and positioned at button_bar_'s *current* x/y -- which
+// MainWindow::layout() must therefore set (via computeButtonBarRows() to
+// learn the height this will need, then button_bar_->resize()) before
+// calling this, not after, or rows end up positioned relative to wherever
+// button_bar_ was left by the previous layout() call instead of where it
+// actually is now.
+void MainWindow::rebuildButtonBar( int available_width )
 {
 	button_bar_->clear();
 	if( available_width < 60 ) available_width = 60;
 
-	const int kButtonHeight = 26, kSpacing = 2;
-	Fl_Pack *row = nullptr;
-	int row_width = 0;  // width used so far in the current row, incl. inter-button spacing
-	int n_rows = 0;
+	std::vector<int> row_start_item, row_content_w;
+	computeButtonBarRows( available_width, row_start_item, row_content_w );
 
-	// Starts a new row whenever the current one has no room left for
-	// item_width -- shared by the plain buttons below and the "Delay:"
-	// label+slider after them, so both wrap the same way.
-	auto ensure_row = [&]( int item_width ) {
-		int with_this = row_width + ( row_width > 0 ? kSpacing : 0 ) + item_width;
-		if( row == nullptr || with_this > available_width ) {
-			row = new Fl_Pack( 0, 0, available_width, kButtonHeight );
-			row->type( Fl_Pack::HORIZONTAL );
-			row->spacing( kSpacing );
-			// Every child below is added explicitly via row->add(), not
-			// FLTK's construct-time auto-parenting, so this doesn't need to
-			// stay "current" for that -- but leaving it current (Fl_Group's
-			// constructor always calls current(this), and nothing else ever
-			// closes it) meant Fl_Group::current() stayed pointed at the
-			// last-built row long after rebuildButtonBar() returned. Any
-			// later top-level Fl_Window built anywhere in the app (e.g. the
-			// "Plot Along Dimension" popup, plot_window.cc's
-			// PlotWindow::create) then got silently auto-parented as an X11
-			// child of *this* row -- and transitively of the main window --
-			// instead of becoming its own top-level window, which is exactly
-			// the "plot window draws inside the main window" bug.
-			row->end();
-			button_bar_->add( row );
-			row_width = 0;
-			n_rows++;
+	for( size_t r = 0; r < row_start_item.size(); r++ ) {
+		int start = row_start_item[r];
+		int end = ( r+1 < row_start_item.size() ) ? row_start_item[r+1] : kButtonBarNItems;
+		int content_w = row_content_w[r];
+		int row_x = ( available_width - content_w ) / 2;
+		if( row_x < 0 ) row_x = 0;
+		row_x += button_bar_->x();
+		int row_y = button_bar_->y() + (int)r * ( kButtonBarH + kButtonBarSpacing );
+
+		auto *row = new Fl_Pack( row_x, row_y, content_w, kButtonBarH );
+		row->type( Fl_Pack::HORIZONTAL );
+		row->spacing( kButtonBarSpacing );
+		// Every child below is added explicitly via row->add(), not FLTK's
+		// construct-time auto-parenting, so this doesn't need to stay
+		// "current" for that -- but leaving it current (Fl_Group's
+		// constructor always calls current(this), and nothing else ever
+		// closes it) meant Fl_Group::current() stayed pointed at the
+		// last-built row long after rebuildButtonBar() returned. Any later
+		// top-level Fl_Window built anywhere in the app (e.g. the "Plot
+		// Along Dimension" popup, plot_window.cc's PlotWindow::create)
+		// then got silently auto-parented as an X11 child of *this* row --
+		// and transitively of the main window -- instead of becoming its
+		// own top-level window, which is exactly the "plot window draws
+		// inside the main window" bug.
+		row->end();
+
+		for( int i = start; i < end; i++ ) {
+			if( i < kButtonBarNButtons ) {
+				const auto &spec = kButtonSpecs[i];
+				auto *btn = new Fl_Button( 0, 0, spec.width, kButtonBarH, spec.text );
+				btn->callback( &MainWindow::buttonCallback, (void*)(intptr_t)static_cast<int>(spec.id) );
+				row->add( btn );
+				buttons_[static_cast<int>(spec.id)] = btn;
+			} else {
+				// "Delay:" label + a slider controlling options.frame_delay
+				// (0.0 = fastest, 1.0 = slowest -- see do_buttons.cc's
+				// DELAY_DELTA/DELAY_OFFSET, which turn this into the actual
+				// timer interval for Rewind/Fastforward's held-down auto-
+				// repeat). Upstream's x_interface.c placed this scrollbar
+				// directly in the button box too (scrollspeed_widget)
+				// rather than in a dialog, adjusted by feel while an
+				// animation is actually playing -- so it stays here rather
+				// than moving into menu_bar_ with the occasional-use
+				// actions.
+				auto *delay_label = new Fl_Box( 0, 0, kDelayLabelW, kButtonBarH, "Delay:" );
+				row->add( delay_label );
+				auto *delay_slider = new Fl_Hor_Slider( 0, 0, kDelaySliderW, kButtonBarH );
+				delay_slider->bounds( 0.0, 1.0 );
+				delay_slider->value( options.frame_delay );
+				delay_slider->callback( []( Fl_Widget *w, void * ) {
+					options.frame_delay = static_cast<Fl_Slider*>(w)->value();
+				} );
+				row->add( delay_slider );
+			}
 		}
-	};
-
-	for( const auto &spec : kButtonSpecs ) {
-		ensure_row( spec.width );
-		auto *btn = new Fl_Button( 0, 0, spec.width, kButtonHeight, spec.text );
-		btn->callback( &MainWindow::buttonCallback, (void*)(intptr_t)static_cast<int>(spec.id) );
-		row->add( btn );
-		buttons_[static_cast<int>(spec.id)] = btn;
-		row_width += ( row_width > 0 ? kSpacing : 0 ) + spec.width;
+		button_bar_->add( row );
 	}
-
-	// "Delay:" label + a slider controlling options.frame_delay (0.0 =
-	// fastest, 1.0 = slowest -- see do_buttons.cc's DELAY_DELTA/
-	// DELAY_OFFSET, which turn this into the actual timer interval for
-	// Rewind/Fastforward's held-down auto-repeat). Upstream's
-	// x_interface.c placed this scrollbar directly in the button box too
-	// (scrollspeed_widget) rather than in a dialog, adjusted by feel while
-	// an animation is actually playing -- so it stays here rather than
-	// moving into menu_bar_ with the occasional-use actions.
-	const int kDelayLabelW = 40, kDelaySliderW = 90;
-	ensure_row( kDelayLabelW + kSpacing + kDelaySliderW );
-	auto *delay_label = new Fl_Box( 0, 0, kDelayLabelW, kButtonHeight, "Delay:" );
-	row->add( delay_label );
-	row_width += ( row_width > 0 ? kSpacing : 0 ) + kDelayLabelW;
-	auto *delay_slider = new Fl_Hor_Slider( 0, 0, kDelaySliderW, kButtonHeight );
-	delay_slider->bounds( 0.0, 1.0 );
-	delay_slider->value( options.frame_delay );
-	delay_slider->callback( []( Fl_Widget *w, void * ) {
-		options.frame_delay = static_cast<Fl_Slider*>(w)->value();
-	} );
-	row->add( delay_slider );
-	row_width += kSpacing + kDelaySliderW;
-
-	return n_rows*kButtonHeight + ( n_rows > 0 ? (n_rows-1)*kSpacing : 0 );
 }
 
 void MainWindow::buttonCallback( Fl_Widget *, void *data )
@@ -770,6 +854,11 @@ std::string escapeMenuLabel( const char *name )
 	}
 	return out;
 }
+// Fixed per-dropdown width for var_pack_'s children -- it's a horizontal
+// row now (see the constructor), not a vertical stack filling its own
+// column, so each Fl_Choice needs its own explicit width rather than
+// var_pack_->w() (which would size every dropdown to the *entire* row).
+constexpr int kVarChoiceW = 180;
 } // namespace
 
 void MainWindow::populateVarList()
@@ -794,7 +883,7 @@ void MainWindow::populateVarList()
 	for( int i = 0; i < 5; i++ ) {
 		if( buckets[i].empty() ) continue;
 
-		auto *choice = new Fl_Choice( 0, 0, var_pack_->w(), 24 );
+		auto *choice = new Fl_Choice( 0, 0, kVarChoiceW, 24 );
 		char header[64];
 		std::snprintf( header, sizeof(header), "(%zu) %s vars", buckets[i].size(), kBucketSuffix[i] );
 		choice->add( header, 0, nullptr, nullptr, FL_MENU_INACTIVE );
@@ -807,6 +896,7 @@ void MainWindow::populateVarList()
 		var_choices_.push_back( choice );
 	}
 	rebuildColormapChoice();
+	recenterVarPack();
 	var_pack_->redraw();
 }
 
@@ -821,7 +911,7 @@ void MainWindow::populateVarList()
 // buckets (1d/2d/3d/4d/5d) the current file's variables happen to produce.
 void MainWindow::rebuildColormapChoice()
 {
-	colormap_choice_ = new Fl_Choice( 0, 0, var_pack_->w(), 24 );
+	colormap_choice_ = new Fl_Choice( 0, 0, kVarChoiceW, 24 );
 	for( size_t i = 0; i < colormaps_.size(); i++ ) {
 		std::string label = escapeMenuLabel( colormaps_[i].name.c_str() );
 		int idx = colormap_choice_->add( label.c_str(), 0, &MainWindow::colormapChoiceCallback,
@@ -921,11 +1011,6 @@ void MainWindow::indicateActiveVar( const char *var_name )
 }
 
 namespace {
-constexpr int kDimRowNameW = 120, kDimRowBtnW = 24, kDimRowSliderW = 220,
-              kDimRowSpacing = 4, kDimRowH = 24;
-constexpr int kDimRowContentW = kDimRowNameW + kDimRowSpacing + kDimRowBtnW
-                              + kDimRowSpacing + kDimRowSliderW + kDimRowSpacing + kDimRowBtnW;
-
 // Fl_Slider::draw() confines its own label rendering to the knob's small
 // rectangle (see the draw_label(xsl,ysl,wsl,hsl) call in FLTK's
 // Fl_Slider.cxx) -- fine for a short numeric readout right next to the
@@ -1052,6 +1137,30 @@ void MainWindow::recenterDimRow( DimRow &row )
 	row.value_slider->resize( x + left, y, kDimRowSliderW, 22 );
 	left += kDimRowSliderW + kDimRowSpacing;
 	row.next_btn->resize( x + left, y, kDimRowBtnW, 22 );
+}
+
+// Centers var_pack_'s current children (whatever mix of variable-bucket
+// dropdowns and the colormap combobox populateVarList()/rebuildColormapChoice()
+// last built) within its own width, the same way recenterDimRow() centers a
+// dim row's children -- Fl_Pack's left-to-right packing can't do this,
+// hence var_pack_ being a plain Fl_Group. Called after (re)building those
+// children and again on every window resize (layout()), since var_pack_'s
+// width -- and so the centering offset -- changes with it.
+void MainWindow::recenterVarPack()
+{
+	int n = var_pack_->children();
+	if( n == 0 ) return;
+	int content_w = -2;  // -2 to cancel the one extra "+2" the loop below adds before the first child
+	for( int i = 0; i < n; i++ ) content_w += 2 + var_pack_->child(i)->w();
+	int left = ( var_pack_->w() - content_w ) / 2;
+	if( left < 0 ) left = 0;
+	int x = var_pack_->x() + left;
+	for( int i = 0; i < n; i++ ) {
+		Fl_Widget *c = var_pack_->child(i);
+		int y = var_pack_->y() + ( var_pack_->h() - c->h() ) / 2;
+		c->resize( x, y, c->w(), c->h() );
+		x += c->w() + 2;
+	}
 }
 
 void MainWindow::dimStepCallback( Fl_Widget *, void *data )

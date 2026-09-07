@@ -196,9 +196,13 @@ private:
 	// resize (via NcviewWindow::on_resize), so the layout adapts instead
 	// of clipping/overflowing at anything other than the original 900x760.
 	void layout( int w, int h );
-	int  rebuildButtonBar( int available_width );  // returns total bar height (may be several rows)
+	// Builds the button bar's rows at button_bar_'s *current* position --
+	// see its own comment for why the caller must set that (via
+	// computeButtonBarRows() + button_bar_->resize()) before calling this.
+	void rebuildButtonBar( int available_width );
 	void rebuildDimRow( DimRow &row );
 	void recenterDimRow( DimRow &row );
+	void recenterVarPack();
 	void rebuildColormapChoice();
 	static void buttonCallback( Fl_Widget *w, void *data );
 	static void varChoiceCallback( Fl_Widget *w, void *data );
@@ -210,7 +214,11 @@ private:
 	ImageView         *image_ = nullptr;
 	Colorbar          *colorbar_ = nullptr;
 	Fl_Menu_Bar       *menu_bar_ = nullptr;
-	Fl_Pack           *button_bar_ = nullptr;
+	// Plain Fl_Group, not Fl_Pack -- rebuildButtonBar() positions each row
+	// explicitly (centered horizontally), for the same reason dim_pack_ is
+	// an Fl_Group rather than relying on Fl_Pack's own (lazy, draw()-time)
+	// child layout: see dim_pack_'s comment below.
+	Fl_Group          *button_bar_ = nullptr;
 	// Plain Fl_Group, not Fl_Pack -- each row's position is computed
 	// directly from its own index (see rebuildDimRow()/recenterDimRow()),
 	// not from Fl_Pack's auto-stacking, which (per Fl_Pack::resize() in
@@ -221,7 +229,10 @@ private:
 	// stale value, and this project isn't relying on FLTK-internal timing
 	// to sort that out.
 	Fl_Group          *dim_pack_ = nullptr;
-	Fl_Pack           *var_pack_ = nullptr;
+	// Plain Fl_Group, not Fl_Pack -- its children (variable-bucket +
+	// colormap dropdowns) are centered as a group (see recenterVarPack()),
+	// which Fl_Pack's own left-to-right packing can't do.
+	Fl_Group          *var_pack_ = nullptr;
 	std::vector<Fl_Choice*> var_choices_;         // one per dimensionality bucket (1d, 2d, ...)
 	Fl_Choice         *colormap_choice_ = nullptr; // last child of var_pack_; see rebuildColormapChoice()
 	Fl_Box            *labels_[16] = {};          // indexed by LABEL_*
