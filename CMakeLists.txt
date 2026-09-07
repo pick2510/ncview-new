@@ -11,6 +11,35 @@ endif()
 
 include(GNUInstallDirs)
 
+# On systems with a Homebrew/Linuxbrew install on PATH, its pkg-config binary
+# ignores the system pkgconfig directories by default (they're not baked into
+# its own default search path). third_party/fltk's pango/cairo/X11 detection
+# below then resolves some modules (e.g. pangocairo) against Homebrew's
+# copies and others (e.g. pangoxft, which Homebrew's pango doesn't ship) or
+# nothing (mismatched .so of the same name found via the linker's own search
+# path instead) against the system's -- silently mixing two incompatible
+# library stacks and producing undefined-reference link errors. Prepending
+# the system pkgconfig directories here makes pkg-config prefer them so every
+# pango/cairo/glib module resolves from the same (system) stack consistently.
+if(CMAKE_HOST_UNIX AND NOT APPLE)
+    foreach(_ncview_sys_pkgconfig_dir
+            /usr/lib64/pkgconfig
+            /usr/lib/x86_64-linux-gnu/pkgconfig
+            /usr/lib/pkgconfig
+            /usr/share/pkgconfig)
+        if(IS_DIRECTORY "${_ncview_sys_pkgconfig_dir}")
+            list(APPEND _ncview_sys_pkgconfig_dirs "${_ncview_sys_pkgconfig_dir}")
+        endif()
+    endforeach()
+    if(_ncview_sys_pkgconfig_dirs)
+        list(JOIN _ncview_sys_pkgconfig_dirs ":" _ncview_sys_pkgconfig_path)
+        set(ENV{PKG_CONFIG_PATH} "${_ncview_sys_pkgconfig_path}:$ENV{PKG_CONFIG_PATH}")
+    endif()
+    unset(_ncview_sys_pkgconfig_dir)
+    unset(_ncview_sys_pkgconfig_dirs)
+    unset(_ncview_sys_pkgconfig_path)
+endif()
+
 # core/modernization.md Phase 0a: surface every warning the compiler already
 # has an opinion about, without failing the build on them yet (see
 # core/WARNINGS.md for the baseline this produced and the plan for clearing
