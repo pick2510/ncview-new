@@ -731,10 +731,21 @@ initialize_file_interface( Stringlist *input_files )
 		for( idim=0; idim<var->n_dims; idim++ ) {
 			if( var->size[idim] > 1 )
 				var->effective_dimensionality++;
-			if( options.debug )
-				printf( "var %s has %d dims, dim %d: >%s< len %zu\n",
-					var->name.c_str(), var->n_dims, idim,
-					var->dim[idim]->name.c_str(), var->dim[idim]->size );
+			if( options.debug ) {
+				/* var->dim[idim] is null for a non-scannable
+				 * (singleton) dimension -- see util.cc's
+				 * fill_dim_structs(), "Indicate non-scannable
+				 * dimensions by a null entry". A pre-existing
+				 * upstream bug unconditionally dereferenced it
+				 * here too. */
+				if( var->dim[idim] != nullptr )
+					printf( "var %s has %d dims, dim %d: >%s< len %zu\n",
+						var->name.c_str(), var->n_dims, idim,
+						var->dim[idim]->name.c_str(), var->dim[idim]->size );
+				else
+					printf( "var %s has %d dims, dim %d: (non-scannable, no dim struct)\n",
+						var->name.c_str(), var->n_dims, idim );
+				}
 			}
 		if( options.debug ) {
 			printf( "variable %s had effective_dimensionality of %d\n",
