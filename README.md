@@ -75,8 +75,8 @@ Keep the tag in sync with `CPACK_PACKAGE_VERSION` in the top-level
 `CMakeLists.txt`.
 
 ```sh
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.2.3
+git push origin v0.2.3
 ```
 
 To re-publish an existing tag (e.g. after a CI flake), run `release.yml`
