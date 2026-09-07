@@ -268,8 +268,14 @@ stringlist_check_args( const char *new_string, const StringlistAux &aux )
 			/* found the header */
 			if( debug ) printf( "stringlist_read_from_file: found header line\n" );
 
-			/* chomp trailing LF */
-			line[ strlen(line)-1 ] = '\0';
+			/* chomp a trailing newline, if there is one -- a valid
+			 * final line with no trailing newline must not lose
+			 * its last character. Handles CRLF too. */
+			{
+			size_t len = strlen(line);
+			if( len > 0 && line[len-1] == '\n' ) { line[--len] = '\0'; }
+			if( len > 0 && line[len-1] == '\r' ) { line[--len] = '\0'; }
+			}
 
 			if( (err = stringlist_line_to_sl( line, lineno, &header_el )) != 0 ) {
 				fprintf( stderr, "stringlist_read_from_file: error reading header line from file!\n" );
@@ -320,8 +326,14 @@ stringlist_check_args( const char *new_string, const StringlistAux &aux )
 
 		if( (strlen(line)>2) && (line[0] != '\0') && (line[0] != '#' )) {
 
-			/* chomp trailing LF */
-			line[ strlen(line)-1 ] = '\0';
+			/* chomp a trailing newline, if there is one -- a valid
+			 * final line with no trailing newline must not lose
+			 * its last character. Handles CRLF too. */
+			{
+			size_t len = strlen(line);
+			if( len > 0 && line[len-1] == '\n' ) { line[--len] = '\0'; }
+			if( len > 0 && line[len-1] == '\r' ) { line[--len] = '\0'; }
+			}
 
 			if( (err = stringlist_line_to_sl( line, lineno+nlines_in_header, sl )) != 0 )
 				return( err );
