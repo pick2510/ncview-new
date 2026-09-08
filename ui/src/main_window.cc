@@ -503,37 +503,33 @@ MainWindow::MainWindow()
 	constexpr int kInfoRowPad = 4;
 	constexpr int kInfoRowH = 20 + 2*kInfoRowPad;
 	constexpr int kInfoTitleRowH = 22 + 2*kInfoRowPad;
-	// fl_draw()'s vertical centering (fl_draw.cxx: "ypos = y + (h -
-	// lines*height)/2 + height", height == fl_height(), the font's full
-	// ascent+descent line height) places the text baseline at
-	// y + h/2 + height/2 -- i.e. it centers a box *height* tall below the
-	// baseline, not the actual glyph ink around it. Since a normal font's
-	// ascent is taller than its descent, the ink ends up centered not on
-	// the label rect's true middle but on (true middle + (ascent-descent)/2).
-	// Measured directly (fl_height()/fl_descent() at this project's default
-	// label font/size, FL_HELVETICA/FL_NORMAL_SIZE=14): height=17,
-	// descent=4, so ascent=13 and the bias is (13-4)/2 = 4.5, rounded to 5.
-	// This nudges each label's own y upward by that amount to compensate,
-	// without moving the decorative box drawn behind it (fl_height() itself
-	// needs a live graphics context, unavailable this early at window
-	// construction time, hence the baked-in numbers rather than a live
-	// query -- re-measure if the label font/size here ever changes).
-	constexpr int kLabelVNudge = 5;
-	info_row_boxes_[0] = new Fl_Box( 6, kMenuBarH+5+kInfoRowInset, W-12, kInfoTitleRowH-2*kInfoRowInset );
-	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, kMenuBarH+5-kLabelVNudge, W-20, kInfoTitleRowH );
-	info_row_boxes_[1] = new Fl_Box( 6, kMenuBarH+5+kInfoTitleRowH+kInfoRowInset, W-12, kInfoRowH-2*kInfoRowInset );
-	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, kMenuBarH+5+kInfoTitleRowH-kLabelVNudge, W-20, kInfoRowH );
-	info_row_boxes_[2] = new Fl_Box( 6, kMenuBarH+5+kInfoTitleRowH+kInfoRowH+kInfoRowInset, W-12, kInfoRowH-2*kInfoRowInset );
-	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 10, kMenuBarH+5+kInfoTitleRowH+kInfoRowH-kLabelVNudge, W-20, kInfoRowH );
-	info_row_boxes_[3] = new Fl_Box( 6, kMenuBarH+5+kInfoTitleRowH+2*kInfoRowH+kInfoRowInset, W-12, kInfoRowH-2*kInfoRowInset );
-	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, kMenuBarH+5+kInfoTitleRowH+2*kInfoRowH-kLabelVNudge, 300, kInfoRowH );
+	// Each label box shares its *exact* y and height with the engraved box
+	// behind it (only x/width differ, to inset the text horizontally from
+	// the border) so that FLTK's own default vertical centering -- which
+	// centers within whatever rect a label owns, no flag needed -- centers
+	// the text in the same rect the border is drawn around. Any attempt to
+	// out-guess that centering with a manual offset (a prior version of
+	// this code did) drifts out of sync with FLTK's actual metrics across
+	// platforms/fonts; matching the rects exactly needs no such guess.
+	const int kTitleRowY = kMenuBarH+5+kInfoRowInset, kTitleRowH = kInfoTitleRowH-2*kInfoRowInset;
+	info_row_boxes_[0] = new Fl_Box( 6, kTitleRowY, W-12, kTitleRowH );
+	labels_[static_cast<int>(Label::Title)]        = new Fl_Box( 10, kTitleRowY, W-20, kTitleRowH );
+	const int kRow1Y = kMenuBarH+5+kInfoTitleRowH+kInfoRowInset, kRowH = kInfoRowH-2*kInfoRowInset;
+	info_row_boxes_[1] = new Fl_Box( 6, kRow1Y, W-12, kRowH );
+	labels_[static_cast<int>(Label::ScanvarName)] = new Fl_Box( 10, kRow1Y, W-20, kRowH );
+	const int kRow2Y = kMenuBarH+5+kInfoTitleRowH+kInfoRowH+kInfoRowInset;
+	info_row_boxes_[2] = new Fl_Box( 6, kRow2Y, W-12, kRowH );
+	labels_[static_cast<int>(Label::ScanPlace)]   = new Fl_Box( 10, kRow2Y, W-20, kRowH );
+	const int kRow3Y = kMenuBarH+5+kInfoTitleRowH+2*kInfoRowH+kInfoRowInset;
+	info_row_boxes_[3] = new Fl_Box( 6, kRow3Y, W-12, kRowH );
+	labels_[static_cast<int>(Label::DataExtrema)] = new Fl_Box( 10, kRow3Y, 300, kRowH );
 	// Wide enough to actually show the full "Current: (i=.., j=..) val
 	// (x=.., y=..)" string view_report_position() builds -- the old fixed
 	// 200px width clipped it right after "(x=", silently hiding the x/y
 	// coordinate values even though they were always part of the label
 	// text and updating on every mouse move. Resized to track the window
 	// edge in layout() below, same as Label::Title.
-	labels_[static_cast<int>(Label::DataValue)]   = new Fl_Box( 320, kMenuBarH+5+kInfoTitleRowH+2*kInfoRowH-kLabelVNudge, W-330, kInfoRowH );
+	labels_[static_cast<int>(Label::DataValue)]   = new Fl_Box( 320, kRow3Y, W-330, kRowH );
 	for( auto *b : info_row_boxes_ ) b->box( FL_ENGRAVED_BOX );
 	// A bordered box behind the trio below ties them together visually as
 	// one "display settings" unit, distinct from the free-form info lines
@@ -541,24 +537,28 @@ MainWindow::MainWindow()
 	// Same inward inset as the row boxes above, for the same reason (this
 	// row starts right where Label::DataExtrema/DataValue's row ends).
 	const int kDisplaySettingsY = kMenuBarH+5+kInfoTitleRowH+3*kInfoRowH;
-	auto *display_settings_box = new Fl_Box( 6, kDisplaySettingsY+kInfoRowInset, 280, kInfoRowH-2*kInfoRowInset );
+	const int kSettingsRow0Y = kDisplaySettingsY+kInfoRowInset;
+	auto *display_settings_box = new Fl_Box( 6, kSettingsRow0Y, 280, kRowH );
 	display_settings_box->box( FL_ENGRAVED_BOX );
 	// BlowupType ("Repl"/"Bi-lin") goes first/leftmost: unlike ColormapName
 	// and Transform, it's essentially always meaningful, so it anchors to
 	// the box's actual left edge instead of sitting stranded in the middle
 	// whenever the other two happen to be blank.
-	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 10, kDisplaySettingsY-kLabelVNudge, 70, kInfoRowH );
+	labels_[static_cast<int>(Label::BlowupType)]  = new Fl_Box( 10, kSettingsRow0Y, 70, kRowH );
 	// No Label::Blowup ("M X<n>") box -- it showed core's discrete
 	// pre-zoom pixel-buffer scale factor, which upstream's now-removed
 	// Button::Blowup let you cycle. With that gone (replaced by ImageView's
 	// continuous scroll/drag zoom, which this label never reflected anyway)
 	// it was a static, unexplained number nobody could act on.
-	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 85, kDisplaySettingsY-kLabelVNudge, 70, kInfoRowH );
-	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 160, kDisplaySettingsY-kLabelVNudge, 120, kInfoRowH );
-	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 10, kDisplaySettingsY+kInfoRowH-kLabelVNudge, W-20, kInfoRowH );
-	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, kDisplaySettingsY+2*kInfoRowH-kLabelVNudge, 150, kInfoRowH );
-	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, kDisplaySettingsY+2*kInfoRowH-kLabelVNudge, W-180, kInfoRowH );
-	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 10, kDisplaySettingsY+3*kInfoRowH-kLabelVNudge, W-20, kInfoRowH );
+	labels_[static_cast<int>(Label::Transform)]    = new Fl_Box( 85, kSettingsRow0Y, 70, kRowH );
+	labels_[static_cast<int>(Label::ColormapName)]= new Fl_Box( 160, kSettingsRow0Y, 120, kRowH );
+	// These three rows have no engraved box of their own (only the trio
+	// above does), so they keep the plain full kInfoRowH row height --
+	// there's no border rect to match here, just even line spacing.
+	labels_[static_cast<int>(Label::CcInfo1)]     = new Fl_Box( 10, kDisplaySettingsY+kInfoRowH, W-20, kInfoRowH );
+	labels_[static_cast<int>(Label::Skip)]         = new Fl_Box( 10, kDisplaySettingsY+2*kInfoRowH, 150, kInfoRowH );
+	labels_[static_cast<int>(Label::ScalarDims)]  = new Fl_Box( 170, kDisplaySettingsY+2*kInfoRowH, W-180, kInfoRowH );
+	labels_[static_cast<int>(Label::CcInfo2)]     = new Fl_Box( 10, kDisplaySettingsY+3*kInfoRowH, W-20, kInfoRowH );
 	for( auto *b : labels_ ) if( b ) { b->box( FL_NO_BOX ); b->align( FL_ALIGN_INSIDE | FL_ALIGN_LEFT | FL_ALIGN_CLIP ); }
 
 	// Horizontal row now, centered (recenterVarPack()) and positioned below
