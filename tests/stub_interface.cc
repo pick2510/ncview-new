@@ -45,7 +45,7 @@ Stringlist *in_choose_input_files() { return nullptr; }
 
 void set_options() {}
 Message printer_options(PrintOptions*) { return Message::OK; }
-void printer_options_init() {}
+void in_print(const PrintInfo&, const PrintOptions&) {}
 Message x_range(float, float, float, float, float*, float*, int*) { return Message::OK; }
 // Captured for test_view_data_edit.cc: view_data_edit() builds this array
 // and hands ownership to x_dataedit(), which upstream's real FLTK dialog

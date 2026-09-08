@@ -93,6 +93,13 @@ char	*in_install_colormap_by_name( const char *name, int do_widgets );
  * off however many files come back here) with the one dialog. Returns NULL
  * if the user cancelled or picked nothing. */
 Stringlist *in_choose_input_files( void );
+/* Called by do_print() (core/src/do_print.cc) once it has gathered the
+ * metadata/pixels to print (info) and the user has confirmed the
+ * page-layout settings in the printer_options() dialog below (po). Pops
+ * the platform's native print dialog (printer/paper/orientation/copies,
+ * "print to file") -- ncview_ui owns rendering the page onto whatever
+ * surface that dialog hands back. */
+void	in_print		( const PrintInfo &info, const PrintOptions &po );
 
 /******************************************************************************
  * Functions core calls directly (not via in_*) that are nonetheless UI
@@ -100,7 +107,6 @@ Stringlist *in_choose_input_files( void );
  */
 void	set_options		( void );
 Message	printer_options		( PrintOptions *po );
-void	printer_options_init	( void );
 Message	x_range( float old_min, float old_max, float global_min, float global_max,
 		float *new_min, float *new_max, int *allvars );
 void	x_dataedit( char **text, int nx );

@@ -215,11 +215,6 @@ enum class ShrinkMethod { Mean = 0, Mode = 1 };
 enum class ViewDataStatus { Valid = 1, Invalid = 2, Edited = 3 };
 
 /*******************************************************************
- * Where postscript output can go.
- */
-enum class Device { Printer = 1, File = 2 };
-
-/*******************************************************************
  * Ways of handling the variable-select area.  We can either list
  * all the variables, or make a pull-down menu for selecting them.
  */
@@ -539,22 +534,32 @@ struct Options {
 };
 
 /***********************************************************************************************************/
-/* Postscript printer output options */
+/* How a printed page is laid out. Where the output goes (printer vs file,
+ * which printer, paper, orientation) is the native print dialog's job --
+ * see in_print() in ncview/interface.h. */
 struct PrintOptions {
-	float	page_width, page_height,		/* In inches */
-		page_x_margin, page_upper_y_margin,	/* In inches */
-		page_lower_y_margin, ppi;		/* Points per inch */
+	float	page_x_margin, page_upper_y_margin,	/* In inches */
+		page_lower_y_margin;
 	int	font_size,
 		leading,
 		header_font_size;		/* In points */
-	std::string	font_name,			/* Postscript name */
-			out_file_name;
-	Device	output_device;
+	std::string	font_name;		/* One of the FLTK base face names -- see in_print() */
 	int	include_outline,
 		include_id,
 		include_title,
 		include_axis_labels,
 		include_extra_info,
 		test_only;
+};
+
+/* What core hands the UI to lay out on a printed page -- see in_print()
+ * in ncview/interface.h. */
+struct PrintInfo {
+	std::string	title;				/* long var name + units, centered above image */
+	std::string	x_axis_label, y_axis_label;
+	std::vector<std::string>	extra_info;	/* one line each, below image */
+	std::string	id_stamp;			/* user + date, rotated at the page edge */
+	size_t		width, height;			/* of pixels[], in ncv_pixel units */
+	const ncv_pixel	*pixels;			/* borrowed; valid for the duration of the in_print() call only */
 };
 
