@@ -11,7 +11,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <typeinfo>
 
 #include <FL/Fl.H>
 #include <FL/fl_draw.H>
@@ -1114,9 +1113,6 @@ class DimValueSlider : public Fl_Slider {
 public:
 	DimValueSlider( int X, int Y, int W, int H ) : Fl_Slider( X, Y, W, H ) { type( FL_HOR_SLIDER ); }
 	void setDisplayText( const char *s ) { display_text_ = s ? s : ""; redraw(); }
-	// Purely diagnostic: which dim row this slider belongs to, used only by
-	// handle()'s -debug logging below to tell rows apart in the log.
-	void setDimName( const char *s ) { dim_name_ = s ? s : ""; }
 	void draw() override
 	{
 		Fl_Slider::draw();
@@ -1126,31 +1122,8 @@ public:
 		fl_draw( display_text_.c_str(), x(), y(), w(), h(), FL_ALIGN_CENTER );
 		fl_pop_clip();
 	}
-	// Temporary instrumentation for the macOS-only "time" slider bug
-	// (doesn't respond to clicks/drags at all on macOS; not reproducible
-	// under Linux/Xvfb) -- logs every event this widget actually receives
-	// so a `-debug` run on macOS can show whether FL_PUSH/FL_DRAG/
-	// FL_RELEASE ever arrive here at all, vs. being eaten by something
-	// else (an overlapping widget, a stale Fl::pushed()/belowmouse()
-	// pointer, ...) before they reach this handle(). See
-	// time_slider_bug_report.md.
-	int handle( int event ) override
-	{
-		if( options.debug )
-			fprintf( stderr, "DimValueSlider[%s]::handle: event=%s (%d) at (%d,%d), "
-				"pushed()=%p belowmouse()=%p this=%p\n",
-				dim_name_.c_str(), fl_eventnames[event], event,
-				Fl::event_x(), Fl::event_y(),
-				(void*)Fl::pushed(), (void*)Fl::belowmouse(), (void*)this );
-		int ret = Fl_Slider::handle( event );
-		if( options.debug )
-			fprintf( stderr, "DimValueSlider[%s]::handle: event=%s returned %d, value()=%g\n",
-				dim_name_.c_str(), fl_eventnames[event], ret, value() );
-		return ret;
-	}
 private:
 	std::string display_text_;
-	std::string dim_name_;
 };
 } // namespace
 
@@ -1169,7 +1142,6 @@ void MainWindow::rebuildDimRow( DimRow &row )
 	row.name_box->box( FL_FLAT_BOX );
 	row.prev_btn = new Fl_Button( 0, 0, kDimRowBtnW, 22, "@<" );
 	row.value_slider = new DimValueSlider( 0, 0, kDimRowSliderW, 22 );
-	static_cast<DimValueSlider*>( row.value_slider )->setDimName( row.name.c_str() );
 	row.value_slider->box( FL_DOWN_BOX );
 	// The slider's own numeric value is just an index into the dimension
 	// (bounds/current position set once the dim's size is known, in
@@ -1281,30 +1253,6 @@ void MainWindow::makeDimButtons( const Stringlist *dim_list )
 	// re-centers every row (recenterDimRow(), called from layout() below)
 	// for the current dim_pack_ width.
 	layout( win_->w(), win_->h() );
-
-	// Temporary instrumentation for the macOS-only "time" slider bug (see
-	// time_slider_bug_report.md and DimValueSlider::handle() above): dump
-	// dim_pack_'s actual widget tree after every rebuild, in creation/
-	// z-order, so a `-debug` run can confirm there's exactly one row's
-	// worth of widgets per dim (no leftover/duplicate group stacked on
-	// top of the scan-axis row eating its clicks) and that each row's
-	// slider rectangle is where recenterDimRow() thinks it is.
-	if( options.debug ) {
-		fprintf( stderr, "dim_pack_ children after makeDimButtons(): %d\n", dim_pack_->children() );
-		for( int i = 0; i < dim_pack_->children(); ++i ) {
-			Fl_Widget *g = dim_pack_->child( i );
-			fprintf( stderr, "  [%d] %s %p (%d,%d %dx%d)\n",
-				i, typeid(*g).name(), (void*)g,
-				g->x(), g->y(), g->w(), g->h() );
-			if( auto *grp = dynamic_cast<Fl_Group*>( g ) )
-				for( int j = 0; j < grp->children(); ++j ) {
-					Fl_Widget *c = grp->child( j );
-					fprintf( stderr, "      [%d.%d] %s %p (%d,%d %dx%d)\n",
-						i, j, typeid(*c).name(), (void*)c,
-						c->x(), c->y(), c->w(), c->h() );
-				}
-		}
-	}
 }
 
 void MainWindow::clearDimButtons()

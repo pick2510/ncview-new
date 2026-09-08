@@ -164,13 +164,13 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
     // exists" branch -- it never re-derives dim structs for later files),
     // but that branch keeps dim->size in sync with the same accumulation
     // it applies to var->size[0] (see the "kept in sync" comment there):
-    // a real macOS bug report (time_slider_bug_report.md) traced the "time"
-    // dimension row's slider being stuck unresponsive, while its prev/next
-    // buttons worked fine, to exactly this field going stale for a
-    // multi-file (e.g. one-timestep-per-file, WRF-style) virtual variable
-    // -- MainWindow::fillDimInfo() sets the slider's bounds from dim->size,
-    // while the buttons read var->size[0] directly, so a stale dim->size
-    // silently froze only the slider.
+    // a real macOS bug report traced the "time" dimension row's slider
+    // being stuck unresponsive, while its prev/next buttons worked fine,
+    // to exactly this field going stale for a multi-file (e.g.
+    // one-timestep-per-file, WRF-style) virtual variable -- MainWindow::
+    // fillDimInfo() sets the slider's bounds from dim->size, while the
+    // buttons read var->size[0] directly, so a stale dim->size silently
+    // froze only the slider.
     REQUIRE(var->dim[0] != nullptr);
     CHECK(var->dim[0]->name == "time");
     CHECK(var->dim[0]->size == 5);
