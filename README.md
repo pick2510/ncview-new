@@ -14,6 +14,12 @@ texinfo as build tools).
 See [`CHANGELOG.md`](CHANGELOG.md) for what's changed release-to-release,
 and [`PORTING.md`](PORTING.md) for the porting plan and design rationale.
 
+## License
+
+GNU General Public License, version 3 -- see [`LICENSE`](LICENSE). Ncview
+itself is Copyright (C) 1993 through 2024, David W. Pierce; this C++/FLTK
+port is Copyright (C) 2026 Dominik Strebel.
+
 ## Installing
 
 Pre-built packages for Linux, macOS, and Windows are on the
