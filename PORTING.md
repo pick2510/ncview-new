@@ -162,11 +162,17 @@ harness byte-identical to the pre-change build. In order:
 (this codebase's uniform error-handling convention -- an unrecoverable
 condition terminates the process outright, both in original upstream code
 and in every phase of this modernization; no exception-based error handling
-was introduced) and its 5 global variables (`options`, `variables`,
-`pixel_transform`, `framestore` in `ncview.cc`, `view` in `view.cc`) --
-each already documented at its declaration as the seam through which
-`core` and `ncview_ui` share state, and none of the seven phases found a
-reason to eliminate them.
+was introduced) and, *at the time*, its 5 global variables (`options`,
+`variables`, `pixel_transform`, `framestore` in `ncview.cc`, `view` in
+`view.cc`) -- each already documented at its declaration as the seam
+through which `core` and `ncview_ui` share state, and none of the seven
+phases found a reason to eliminate them under this phase's strict-parity
+rule. **This decision was revisited** in the `OOP_redesign` branch (see
+below) once the goal shifted from "port with zero behavior change" to
+"maintainability" -- a different bar, since ongoing changes (not just this
+one-time port) are what ownership boundaries actually pay for. `exit()`
+usage was not revisited and remains this codebase's error-handling
+convention.
 
 **Defects found along the way** (full detail in `modernization.md`'s
 "Sanitizer findings" and per-phase sections): an ASan-caught
@@ -182,6 +188,70 @@ per the strict-parity rule this phase held to -- since fixed post-v0.2.0
 (see "Post-v0.2.0 defect audits" below), once it stopped being purely
 mechanical-conversion work and became a real external code-review pass
 with its own license to fix genuine bugs rather than only preserve them.
+
+## OOP_redesign: turning the procedural core into explicit classes
+
+A third effort, on the `OOP_redesign` branch, revisited the "5 globals
+stay globals" decision above -- this time explicitly for maintainability
+rather than parity, per the plan document each step's commit references.
+Unlike the modernization phases, this was not a strict-parity conversion:
+each step still had to leave `ctest`, `ncview_core_linkcheck`, and the
+Xvfb screenshot harness passing, but the goal was real ownership, not
+preserving every implementation detail.
+
+Nine steps, each its own commit with full verification:
+
+1. Extended `tests/stub_interface.cc` with call recording and scripted
+   dialog responses, so later steps had a regression net for workflows
+   (variable selection, range cancellation, playback) that had none.
+2. Extracted `FrameRenderer` (`core/include/ncview/frame_renderer.h`) --
+   the pure pixel-mapping loop -- out of `data_to_pixels()`.
+3. Extracted `FrameCache` (`core/include/ncview/frame_cache.h`) from the
+   bare `FrameStore` struct, replacing direct field access with named
+   methods (`reset`, `growTo`, `invalidateAll`, `lookup`, `store`).
+4. Dissolved `interface_glue.cc` -- its four functions moved to the files
+   that actually own the logic they wrap (`view.cc`, `do_buttons.cc`,
+   `util.cc`).
+5. Introduced `Dataset` (`core/include/ncview/dataset.h`) and a
+   `NetCDFFile` RAII wrapper, closing files for the first time in this
+   codebase's history (`fi_close()` previously had zero callers -- every
+   opened file leaked open for the process's life). `FDBlist::id` (a raw
+   `int`) became `FDBlist::file` (a non-owning `NetCDFFile*`) with an
+   `id()` accessor.
+6. Wrapped the global `View*` in a `std::unique_ptr<ViewState>`
+   (`ViewState` is an alias for `View`), fixing two real leaks this
+   surfaced: `set_scan_variable()`'s early-return path, and
+   `invalidate_variable()`'s reset -- both used to reassign/clear the
+   pointer without deleting what it pointed to.
+7. Introduced `ViewerController` (`core/include/ncview/viewer_controller.h`),
+   absorbing `do_buttons.cc`'s 21 `do_*()` actions as named methods, with
+   playback state (`cur_button_`) as a real member instead of a file-static.
+8. Introduced `ViewerSession` (`core/include/ncview/viewer_session.h`),
+   which became the real owner of `Dataset`, the active `ViewState`, and
+   `FrameCache`.
+9. Moved every field of the global `Options` struct onto `ViewerSession`,
+   grouped into `RenderSettings`/`PlaybackSettings`/`SessionDisplayPrefs`/
+   `StartupSettings`, and converted the `interface.h` free-function seam
+   into a `ViewerUi` virtual interface (`core/include/ncview/viewer_ui.h`)
+   with two concrete implementations: `FltkViewerUi` (the real app) and
+   `RecordingViewerUi` (tests).
+
+**The result**: `options`, `variables`, `g_dataset`, `view`, and
+`framestore` are no longer 5 independent globals -- they are all facets
+of one object, the global `ViewerSession g_viewer_session`. `Options`'s
+~40 fields are reference members bound to `ViewerSession`-owned storage;
+`g_dataset`/`view`/`framestore` are references onto `ViewerSession`'s own
+`Dataset`/`ViewState`/`FrameCache` members. **The bridge names themselves
+are deliberately still there** -- `options`, `variables`, `g_dataset`,
+`view`, and `framestore` all still work exactly as before at their
+~700+ combined existing call sites across `core/`, `ui/`, and `tests/` --
+this was the load-bearing design choice that made each step safely
+verifiable on its own (the same technique Phase 5's `Dataset`/`variables`
+migration above pioneered): move *ownership*, not *every call site*, per
+step. Purging the bridge names themselves and rewriting every call site
+to go through `g_viewer_session` directly would be a further, much
+larger, primarily cosmetic pass with no remaining ownership question to
+resolve -- not attempted here.
 
 ## Post-v0.2.0 defect audits
 
