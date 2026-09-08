@@ -36,6 +36,7 @@
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
+#include "ncview/frame_renderer.h"
 
 #include "math.h"
 
@@ -164,18 +165,14 @@ data_has_mv( float *data, size_t n, float fill_value )
 	int
 data_to_pixels( View *v )
 {
-	size_t	i, j, j2;
+	size_t	i;
 	size_t	x_size, y_size, new_x_size, new_y_size;
-	ncv_pixel pix_val;
-	float	data_range, rawdata, data, fill_value;
+	float	fill_value;
 	std::vector<float> scaled_data;
 	long	blowup;
 	Message	result;
 	MinMaxMethod	orig_minmax_method;
 	char	error_message[1024];
-	double	pi;
-
-	pi = 3.1415926536;
 
 	/* Make sure the limits have been set on this variable.
 	 * They won't always be because an initial expose event can 
@@ -217,8 +214,6 @@ data_to_pixels( View *v )
 		if( options.debug ) printf( "..contracting data, blowup=%ld\n", blowup );
 		contract_data( scaled_data.data(), v, fill_value );
 		}
-
-	data_range = v->variable->user_max - v->variable->user_min;
 
 	if( (v->variable->user_max == 0) &&
 	    (v->variable->user_min == 0) &&
@@ -285,57 +280,13 @@ data_to_pixels( View *v )
 			v->variable->user_max = 0;
 	    	}
 
-	for( j=0; j<new_y_size; j++ ) {
-
-		if( options.invert_physical )
-			j2 = j;
-		else
-			j2 = new_y_size - j - 1;
-
-		for( i=0; i<new_x_size; i++ ) {
-			rawdata =  scaled_data[i + j2*new_x_size];
-			if( close_enough(rawdata, fill_value) || (rawdata == FILL_FLOAT))
-				pix_val = pixel_transform[0];
-			else
-				{
-				data = (rawdata - v->variable->user_min) / data_range;
-				clip_f( &data, 0.0, .9999 );
-				switch( options.transform ) {
-					case Transform::None:	break;
-
-					/* This might cause problems.  It is at odds with what
-					 * the manual claims--at least for Ultrix--but works, 
-					 * whereas what the manual claims works, doesn't!
-					 */
-					case Transform::Low:	data = sqrt( data );  
-								data = sqrt( data );
-								break;
-
-					case Transform::Hi:	data = data*data*data*data;     break;
-
-					case Transform::Center:	data = atan( (data - 0.5)*8.0 );
-								data = data/pi + 0.5;
-								break;
-					}		
-				if( options.invert_colors )
-					data = 1. - data;
-				/* Compute in a wide type before narrowing to
-				 * ncv_pixel (an unsigned byte): casting
-				 * (data*n_colors) to ncv_pixel FIRST and adding
-				 * n_extra_colors after (as this used to, matching
-				 * upstream) truncates mod 256 before the offset is
-				 * even added, wrapping high data values back down
-				 * to low pixel indices instead of high ones -- e.g.
-				 * with -nc 255, data near the top of range wraps to
-				 * near-zero pixel values instead of the last few
-				 * color slots. */
-				pix_val = (ncv_pixel)( (int)(data * options.n_colors) + options.n_extra_colors );
-				if( options.display_type == PseudoColor )
-					pix_val = pixel_transform[pix_val];
-				}
-			v->pixels[i + j*new_x_size] = pix_val;
-			}
-		}
+	PixelMapSettings pixel_map_settings {
+		options.transform, options.invert_colors != 0, options.invert_physical != 0,
+		options.n_colors, options.n_extra_colors, options.display_type
+	};
+	FrameRenderer::render( scaled_data.data(), new_x_size, new_y_size,
+		fill_value, v->variable->user_min, v->variable->user_max,
+		pixel_map_settings, pixel_transform, v->pixels.data() );
 
 	return( 0 );
 }
