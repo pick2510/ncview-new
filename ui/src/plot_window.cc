@@ -13,6 +13,7 @@
 
 #include <FL/Fl.H>
 #include <FL/Fl_Float_Input.H>
+#include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_Return_Button.H>
 #include <FL/Fl_Window.H>
 #include <FL/fl_ask.H>
@@ -379,11 +380,20 @@ void PlotWindow::printCallback( Fl_Widget *, void *data )
 void PlotWindow::dumpCallback( Fl_Widget *, void *data )
 {
 	auto *pw = static_cast<PlotWindow*>( data );
-	char filename[1024];
-	strcpy( filename, "ncview.dump" );
-	const char *result = fl_input( "File to dump to:", filename );
-	if( result == nullptr ) return;
-	FILE *f = fopen( result, "w" );
+
+	Fl_Native_File_Chooser chooser;
+	chooser.title( "Dump plot data to file" );
+	chooser.type( Fl_Native_File_Chooser::BROWSE_SAVE_FILE );
+	chooser.options( Fl_Native_File_Chooser::SAVEAS_CONFIRM );
+	chooser.preset_file( "ncview.dump" );
+	switch( chooser.show() ) {
+		case -1: fl_alert( "Error choosing file: %s", chooser.errmsg() ); return;
+		case 1:  return;
+		default: break;
+	}
+	if( chooser.filename() == nullptr ) return;
+
+	FILE *f = fopen( chooser.filename(), "w" );
 	if( f == nullptr ) {
 		fl_alert( "Cannot open file for writing!" );
 		return;
