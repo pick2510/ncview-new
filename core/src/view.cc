@@ -696,7 +696,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 			if( view->scan_axis_id != -1 ) {
 				scan_size  = view->variable->size[view->scan_axis_id];
 				if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
-					in_timer_set( [](){ view_check_new_data(0); }, 1000L );
+					in_timer_set( [](){ view->checkNewData(0); }, 1000L );
 					}
 				}
 			return(0);
@@ -773,7 +773,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	if( view->scan_axis_id != -1 ) {
 		scan_size  = view->variable->size[view->scan_axis_id];
 		if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
-			in_timer_set( [](){ view_check_new_data(0); }, 1000L );
+			in_timer_set( [](){ view->checkNewData(0); }, 1000L );
 			}
 		}
 
@@ -785,8 +785,9 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
  * Checks if the file has grown since we last saw it
  */
 	void
-view_check_new_data( int unused )
+View::checkNewData( int unused )
 {
+	View *view = this;
 	size_t 	file_var_size[MAX_NC_DIMS], *t, n_other;
 	size_t	i;
 	int	has_grown, t_ncid, timelike_index;
@@ -822,7 +823,7 @@ view_check_new_data( int unused )
 		}
 
 	if( ! has_grown ) {
-		in_timer_set( [](){ view_check_new_data(0); }, 1000L );
+		in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
 		return;
 		}
 

@@ -223,7 +223,6 @@ size_t	view_get_cur_dim_index( const char *dim_name );
 void	view_forward         ( void );
 void	view_backward        ( void );
 void 	redraw_ccontour      ( void );
-void	view_check_new_data  ( int unused );
 void	view_report_position ( int x, int y, unsigned int button_mask );
 void 	view_report_position_vals( float xval, float yval, int plot_index );
 void 	plot_XY              ( void );

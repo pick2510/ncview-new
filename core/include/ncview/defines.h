@@ -553,6 +553,13 @@ struct View {
 	void plotXYFmtXVal( float val, int dimindex, char *s, size_t s_len );
 	void information();
 	void redrawDimensionInfo();
+	/* Formerly view_check_new_data(): also has no internal view==NULL
+	 * guard -- only reached via a timer armed from view_draw() (which
+	 * stays a free function; it has its own view==NULL guard, since
+	 * it's also called from expose events before any variable is
+	 * selected) once view is already known valid, never directly from
+	 * an expose/click event itself. */
+	void checkNewData( int unused );
 
 private:
 	/* Implementation details of determineScanAxes()/setScanPlace() above
