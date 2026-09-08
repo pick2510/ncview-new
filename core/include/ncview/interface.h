@@ -4,20 +4,27 @@
  * Copyright (C) 2026 Dominik Strebel
  *
  * The toolkit seam. ncview_core calls only the functions declared here to
- * talk to the UI; ncview_ui (FLTK) implements every one of them. This is
- * upstream's in_* contract (originally declared inline in ncview.protos.h,
- * implemented by src/interface/interface.c delegating to x_interface.c),
- * plus a handful of functions core calls directly by name that are really
- * UI dialogs/state (set_options, printer_options, x_range, x_dataedit,
- * x_seen_colormap_name, x_check_legal_colormap_loaded, x_create_colorbar,
- * x_draw_colorbar, x_error, x_force_set_invert_state, x_init_dim_info,
+ * talk to the UI. This is upstream's in_* contract (originally declared
+ * inline in ncview.protos.h, implemented by src/interface/interface.c
+ * delegating to x_interface.c), plus a handful of functions core calls
+ * directly by name that are really UI dialogs/state (set_options,
+ * printer_options, x_range, x_dataedit, x_seen_colormap_name,
+ * x_check_legal_colormap_loaded, x_create_colorbar, x_draw_colorbar,
+ * x_error, x_force_set_invert_state, x_init_dim_info,
  * x_set_var_sensitivity, get_persistent_X_state, unlock_plot) -- upstream
  * never routed those through in_*, but they are exactly as much a part of
  * the seam. See PORTING.md, "Why the port is tractable".
  *
- * A headless implementation of everything in this file lives in
- * tests/stub_interface.cc and is what proves ncview_core has no hidden UI
- * dependency.
+ * OOP_redesign plan, Step 9b: every function declared below is now
+ * implemented once, in core/src/viewer_ui_bridge.cc, as a forwarder onto
+ * ncview/viewer_ui.h's ViewerUi virtual interface -- see that header for
+ * why (short version: lets ncview_ui's FltkViewerUi and tests'
+ * RecordingViewerUi both implement one interface instead of each
+ * providing a parallel set of ~48 free functions, while every core call
+ * site here keeps calling these functions by their original names,
+ * unchanged). "Implements it" below now means "provides the ViewerUi
+ * implementation g_viewer_ui is set to", not "defines these free
+ * functions directly" -- ncview_ui no longer does the latter.
  */
 #pragma once
 

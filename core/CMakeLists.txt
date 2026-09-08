@@ -21,6 +21,7 @@ add_library(ncview_core STATIC
     src/view.cc
     src/viewer_controller.cc
     src/viewer_session.cc
+    src/viewer_ui_bridge.cc
 )
 set_target_properties(ncview_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(ncview_core PRIVATE ncview_warning_flags ncview_sanitize_flags)
