@@ -996,6 +996,15 @@ handle_dim_mapping_scalar( NCVar *v, char *coord_var_name, char *coord_att )
 	tmi->coord_var_units = fi_var_units( v->files.front()->id, coord_var_name );
 	tmi->scalar_all_same = 0;
 
+	/* Same check handle_time_dim() runs for a real dimension's own units --
+	 * lets a scalar coordinate like WRF's "XTIME" (units "minutes since
+	 * ...") be printed as a calendar date later, instead of the raw
+	 * "<value> <units>" string this used to always fall back to. */
+	if( udu_utistime( coord_var_name, const_cast<char *>(tmi->coord_var_units.c_str()) ) ) {
+		tmi->timelike = 1;
+		tmi->calendar = fi_dim_calendar( v->files.front()->id, coord_var_name );
+		}
+
 	/* Add this new scalar dim to the array */
 	v->scalar_dim_map_info.push_back( std::move( tmi_owner ) );
 

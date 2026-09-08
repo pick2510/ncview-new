@@ -348,6 +348,13 @@ struct NCDim_map_info {
 	std::vector<size_t> index_place_factor;	/* Array of size var_i_map->n_dims, is 0 or factor to mult loc by */
 	int	scalar_all_same = 0;	/* ==1 iff is a scalar coord var AND all vals are identical; ==0 otherwise */
 
+	/* Set once, at scalar-coord discovery time (handle_dim_mapping_scalar()),
+	 * the same way a real dimension's own timelike-ness is determined in
+	 * handle_time_dim() -- lets view_construct_scalar_coord_str() print a
+	 * scalar coordinate like "XTIME" as a calendar date (via fmt_time())
+	 * instead of the bare "<value> <units>" it otherwise falls back to. */
+	int	timelike = 0;
+	std::string	calendar;	/* only meaningful if timelike; CF-1.0 value, may be empty ("standard") */
 };
 
 /*****************************************************************************/

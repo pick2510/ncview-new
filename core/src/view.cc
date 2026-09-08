@@ -2366,6 +2366,26 @@ view_construct_scalar_coord_str( char *str, int slen )
 			strip_trailing_zeros( v2 );
 			snprintf( tstr, 1020, "%s=%s -> %s %s", sdmi->coord_var_name.c_str(), v1, v2, funits );
 			}
+		else if( sdmi->timelike ) {
+			/* A CF scalar coordinate whose own units parse as a UDUNITS
+			 * time (e.g. WRF's "XTIME", "minutes since ..."). Format it
+			 * as a calendar date the same way a real time dimension's
+			 * current value is (set_scan_view(), above) instead of
+			 * showing the raw "<value> <units>" string -- built via a
+			 * throwaway NCDim carrying just what fmt_time()/udu_fmt_time()
+			 * actually read (name/units/calendar/timelike/time_std); no
+			 * real NCDim exists for a scalar coordinate variable.
+			 */
+			NCDim time_dim;
+			time_dim.name = sdmi->coord_var_name;
+			time_dim.units = sdmi->coord_var_units;
+			time_dim.calendar = sdmi->calendar;
+			time_dim.timelike = 1;
+			time_dim.time_std = TimeStandard::Udunits;
+			char date_str[128];
+			fmt_time( date_str, sizeof(date_str), (double)fval, &time_dim, 0 );
+			snprintf( tstr, 1020, "%s=%s", sdmi->coord_var_name.c_str(), date_str );
+			}
 		else
 			snprintf( tstr, 1020, "%s=%s %s", sdmi->coord_var_name.c_str(), v1, funits );
 
