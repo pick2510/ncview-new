@@ -59,10 +59,7 @@ void	in_create_colormap	( const char *name, const ncv_pixel r[256], const ncv_pi
 char	*in_install_next_colormap( int do_widgets_flag );
 int	in_set_2d_size   	( size_t width, size_t height );
 void	in_set_sensitive	( Button button_id, int state );
-/* ret_string_size is the capacity of the ret_string buffer (ignored when
- * ret_string is NULL) -- the implementation must never write more than
- * that, and must always NUL-terminate what it does write. */
-Message	in_dialog		( const char *message, char *ret_string, size_t ret_string_size, int want_cancel_button );
+Message	in_dialog		( const char *message, int want_cancel_button );
 void 	in_var_set_sensitive	( const char *var_name, int sensitivity );
 void 	in_fill_dim_info	( const NCDim *d, int please_flip );
 void	in_set_cur_dim_value	( const char *name, const char *string );
@@ -93,6 +90,14 @@ char	*in_install_colormap_by_name( const char *name, int do_widgets );
  * off however many files come back here) with the one dialog. Returns NULL
  * if the user cancelled or picked nothing. */
 Stringlist *in_choose_input_files( void );
+/* Pops a native "save file" dialog (title/default_name seed it) so core can
+ * ask for an output path without prompting for free-text in a plain dialog
+ * box -- used by view_data_edit_dump() (core/src/view.cc). ret_path_size is
+ * the capacity of the ret_path buffer; the implementation must never write
+ * more than that, and must always NUL-terminate what it does write.
+ * Returns Message::Cancel (leaving ret_path untouched) if the user
+ * cancelled. */
+Message in_choose_save_file( const char *title, const char *default_name, char *ret_path, size_t ret_path_size );
 /* Called by do_print() (core/src/do_print.cc) once it has gathered the
  * metadata/pixels to print (info) and the user has confirmed the
  * page-layout settings in the printer_options() dialog below (po). Pops

@@ -336,24 +336,31 @@ void in_query_pointer_position( int *x, int *y )
 
 /* ---- dialogs / errors ---------------------------------------------------- */
 
-Message in_dialog( const char *message, char *ret_string, size_t ret_string_size, int want_cancel_button )
+Message in_dialog( const char *message, int want_cancel_button )
 {
-	if( ret_string != nullptr ) {
-		const char *result = fl_input( "%s", ret_string, message );
-		if( result == nullptr ) return Message::Cancel;
-		// ret_string_size is the caller's actual buffer capacity (e.g.
-		// view.cc's view_data_edit_dump() passes a 132-byte stack
-		// buffer) -- copying up to STRINGLIST_MAX_LEN-1 (999) bytes
-		// here, as this used to, overflowed it.
-		std::strncpy( ret_string, result, ret_string_size - 1 );
-		ret_string[ret_string_size-1] = '\0';
-		return Message::OK;
-	}
 	if( want_cancel_button ) {
 		int r = fl_choice( "%s", "Cancel", "OK", nullptr, message );
 		return r == 1 ? Message::OK : Message::Cancel;
 	}
 	fl_alert( "%s", message );
+	return Message::OK;
+}
+
+Message in_choose_save_file( const char *title, const char *default_name, char *ret_path, size_t ret_path_size )
+{
+	Fl_Native_File_Chooser chooser;
+	chooser.title( title );
+	chooser.type( Fl_Native_File_Chooser::BROWSE_SAVE_FILE );
+	chooser.options( Fl_Native_File_Chooser::SAVEAS_CONFIRM );
+	if( default_name != nullptr ) chooser.preset_file( default_name );
+	switch( chooser.show() ) {
+		case -1: fl_alert( "Error choosing file: %s", chooser.errmsg() ); return Message::Cancel;
+		case 1:  return Message::Cancel;
+		default: break;
+	}
+	if( chooser.filename() == nullptr ) return Message::Cancel;
+	std::strncpy( ret_path, chooser.filename(), ret_path_size - 1 );
+	ret_path[ret_path_size-1] = '\0';
 	return Message::OK;
 }
 

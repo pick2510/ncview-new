@@ -162,5 +162,5 @@ in_button_pressed( Button button_id, Modifier modifier )
 void
 in_error( const char *message )
 {
-	in_dialog( message, NULL, 0, false );
+	in_dialog( message, false );
 }

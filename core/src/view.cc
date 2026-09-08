@@ -1460,7 +1460,7 @@ view_set_scan_dims( void )
 	new_y_id = fi_dim_name_to_id( v->files.front().get()->id, const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[0].string.c_str() );
 	new_x_id = fi_dim_name_to_id( v->files.front().get()->id, const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[1].string.c_str() );
 	if( new_x_id < new_y_id ) {
-		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", NULL, 0, true );
+		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", true );
 		if( message == Message::Cancel )
 			return;
 		inv_dim_list = NULL;
@@ -2615,7 +2615,7 @@ view_change_dat( size_t index, float new_val )
 	void
 view_data_edit_dump( void )
 {
-	char	filename[132], *dim_name, *var_name;
+	char	filename[1024], *dim_name, *var_name;
 	int	ncid, dims[2];
 	Message	message;
 	size_t	x_size, y_size, start[2], count[2];
@@ -2625,9 +2625,7 @@ view_data_edit_dump( void )
 		fprintf( stderr, "Warning!  Data is NOT CHANGED!\n" );
 		}
 
-	snprintf( filename, sizeof(filename), "%s", "dump.data" );
-	
-	message = in_dialog( "Filename to dump data to:", filename, sizeof(filename), true );
+	message = in_choose_save_file( "Dump data to netCDF file", "dump.data", filename, sizeof(filename) );
 	if( message == Message::OK ) {
 		ncid = nccreate( filename, NC_CLOBBER );
 
@@ -2667,7 +2665,7 @@ view_data_edit_warn()
 {
 	Message	message;
 
-	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", NULL, 0, true );
+	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", true );
 	if( message == Message::Cancel ) 
 		return;
 
