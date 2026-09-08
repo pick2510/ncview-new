@@ -7,6 +7,11 @@ the short version.
 
 ## [Unreleased]
 
+### Changed
+- "Dump Data" (data-edit grid) and the XY plot window's "Dump" button now
+  use the platform's native save-file dialog instead of a plain text-input
+  prompt for the output filename.
+
 ### Fixed
 - Ctrl+click on the Rewind/Backwards/Forward/Fastforward transport buttons
   now accelerates stepping (a percentage of the file's frame count instead
