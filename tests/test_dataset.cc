@@ -4,7 +4,7 @@
 // Step 5. Before this class existed, no file ncview ever opened was closed
 // (fi_close() had zero callers anywhere in core/ui); these tests exist
 // specifically to confirm that's no longer true, and that a single
-// physical file shared by many variables (the normal case: add_var_to_list()
+// physical file shared by many variables (the normal case: Dataset::addVariable()
 // calls Dataset::trackFile() once per variable in a file, all with the same
 // fileid) is only tracked -- and closed -- once.
 #include <cstdio>
@@ -103,7 +103,7 @@ TEST_CASE("Dataset::trackFile deduplicates by fileid: many variables in one "
 
     Dataset ds;
     NetCDFFile *first = ds.trackFile(fileid);
-    NetCDFFile *second = ds.trackFile(fileid);   // as add_var_to_list() does for
+    NetCDFFile *second = ds.trackFile(fileid);   // as Dataset::addVariable() does for
     NetCDFFile *third = ds.trackFile(fileid);    // every subsequent var in the same file
     CHECK(first == second);
     CHECK(first == third);

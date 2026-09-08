@@ -10,19 +10,26 @@
  *
  * Dataset: owns every NCVar (replacing the global `variables`) and every
  * NetCDFFile a session has opened. A single physical file is opened once
- * (add_var_to_list() in util.cc is called once per (file, variable name)
- * pair, but with the SAME netCDF fileid for every variable that file
- * contains), so trackFile() deduplicates by fileid: the first FDBlist for
- * a given fileid causes Dataset to take ownership of it; every subsequent
- * FDBlist for that same fileid gets a pointer to the already-tracked
- * NetCDFFile instead of a second, competing owner.
+ * (addVariable() below is called once per (file, variable name) pair, but
+ * with the SAME netCDF fileid for every variable that file contains), so
+ * trackFile() deduplicates by fileid: the first FDBlist for a given
+ * fileid causes Dataset to take ownership of it; every subsequent FDBlist
+ * for that same fileid gets a pointer to the already-tracked NetCDFFile
+ * instead of a second, competing owner.
  *
- * OOP_redesign plan, Step 5. This step only introduces the ownership and
- * bridges the legacy global `variables` onto Dataset's storage (see
- * ncview.cc) -- it deliberately does not yet change the ~80 call sites
- * that read NCVar/FDBlist through that global, nor introduce the fuller
- * Dataset API (findVariable/readSlice) the original plan sketched; those
- * are follow-on work once ViewerSession exists to hold Dataset directly.
+ * OOP_redesign plan, Step 5 introduced the ownership and bridged the
+ * legacy global `variables` onto Dataset's storage (see ncview.cc); a
+ * later pass moved the functions that actually build/mutate that list
+ * (formerly free functions in util.cc: add_var_to_list, add_vars_to_list,
+ * get_var, cache_scalar_coord_info, calc_dim_minmaxes, init_min_max, plus
+ * their file-private helpers check_ranges/get_min_max_onestep/
+ * copy_info_to_identical_dims/equivalent_FDBs/new_fdblist) onto Dataset
+ * as real methods, with every call site updated directly -- no
+ * free-function forwarding shim kept for compatibility. Functions that
+ * only fill in fields of an already-allocated NCVar* from netCDF metadata,
+ * without touching the variable list itself (fill_dim_structs,
+ * handle_dim_mapping, is_scannable, ...), stay free functions in util.cc,
+ * called from Dataset's methods the same way anything else calls them.
  */
 #pragma once
 
@@ -30,6 +37,7 @@
 #include <vector>
 
 #include "ncview/defines.h"
+#include "ncview/stringlist.h"
 
 class NetCDFFile {
 public:
@@ -71,6 +79,41 @@ public:
 	 * same fileid. */
 	NetCDFFile *trackFile( int fileid );
 
+	/* Formerly util.cc's get_var(): a plain linear scan by name. */
+	NCVar *findVariable( const char *var_name );
+
+	/* Formerly util.cc's add_var_to_list()/add_vars_to_list(): fill out
+	 * the FDBlist/NCVar structures for the given variable(s) and add them
+	 * to (or extend an existing entry in) variables_. */
+	void addVariable( const char *var_name, int file_id, const char *filename, int nfiles );
+	void addVariables( Stringlist *var_list, int id, const char *filename, int nfiles );
+
+	/* Formerly util.cc's cache_scalar_coord_info(): builds timestep_2_fdb
+	 * and the scalar-coordinate data cache for every variable currently
+	 * on the list. Must run after all files have been added. */
+	void cacheScalarCoordInfo();
+
+	/* Formerly util.cc's calc_dim_minmaxes(): computes min/max (and a
+	 * lat/lon guess) for every not-yet-processed NCDim referenced by any
+	 * variable on the list. */
+	void calcDimMinmaxes();
+
+	/* Formerly util.cc's init_min_max(): samples a variable's data to
+	 * establish its global min/max, then reconciles that against any
+	 * valid_range/valid_min/valid_max attribute (possibly prompting via
+	 * in_dialog()). */
+	void initMinMax( NCVar *var );
+
+	/* Formerly util.cc's get_min_max_onestep(): reads one timestep's data
+	 * and folds its extrema into min/max. Public: initMinMax() uses it
+	 * internally to sample several timesteps, but view.cc's
+	 * view_check_new_data() also calls it directly (to check a single
+	 * newly-arrived timestep against an as-yet-unset range), so it's a
+	 * genuinely shared operation, not a private implementation detail of
+	 * initMinMax() alone. */
+	void getMinMaxOnestep( NCVar *var, size_t n_other, size_t tstep, float *data,
+	                        float *min, float *max, int verbose );
+
 private:
 	/* Declared before variables_ so it's destroyed AFTER variables_ --
 	 * member destruction runs in reverse declaration order, and nothing
@@ -78,4 +121,15 @@ private:
 	 * NetCDFFiles start closing. */
 	std::vector<std::unique_ptr<NetCDFFile>> files_;
 	std::vector<std::unique_ptr<NCVar>> variables_;
+
+	/* initMinMax()'s only caller of this -- formerly util.cc's
+	 * check_ranges(), with no other external callers, so it moved along
+	 * with initMinMax() as an implementation detail rather than becoming
+	 * a public Dataset method. */
+	void checkRanges( NCVar *var );
+
+	/* calcDimMinmaxes()'s only caller of this -- formerly util.cc's
+	 * copy_info_to_identical_dims(), which directly scanned the global
+	 * variable list the same way calcDimMinmaxes() itself does. */
+	void copyInfoToIdenticalDims( NCVar *vsrc, NCDim *dsrc, size_t dim_len );
 };

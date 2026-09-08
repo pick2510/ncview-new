@@ -97,7 +97,7 @@ fi_initialize( char *name, int nfiles )
 	if( options.debug ) 
 		printf( "Getting list of variables for file %s\n", name );
 	var_list = fi_list_vars( id );
-	add_vars_to_list( var_list, id, name, nfiles );
+	g_dataset.addVariables( var_list, id, name, nfiles );
 	
 	if( options.debug ) 
 		printf( "Done initializing file %s\n", name );

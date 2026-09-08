@@ -144,7 +144,7 @@ Stringlist *FltkViewerUi::in_choose_input_files( void )
 	// picking a single file, or picking a whole run's worth of
 	// one-file-per-timestep output to open as a series -- the latter is
 	// exactly the "virtual variable" multi-file merge core already does
-	// for however many filenames it's handed (see add_var_to_list() in
+	// for however many filenames it's handed (see Dataset::addVariable() in
 	// util.cc), it's just normally spelled out on the command line.
 	Fl_Native_File_Chooser chooser;
 	chooser.title( "Open NetCDF File(s)" );

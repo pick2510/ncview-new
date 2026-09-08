@@ -735,7 +735,7 @@ initialize_file_interface( Stringlist *input_files )
 			fi_initialize( (char *)f.string.c_str(), nfiles );
 	if( options.debug )
 		printf( "...calculating dim min & maxes...\n" );
-	calc_dim_minmaxes();
+	g_dataset.calcDimMinmaxes();
 
 	/* Get the effective dimensionality of all the vars.
 	 * Can't do this before we have read in all of the
@@ -775,7 +775,7 @@ initialize_file_interface( Stringlist *input_files )
 	 * gather any scalar coordinate information (which
 	 * might possibly change in each file)
 	 */
-	cache_scalar_coord_info( variables );
+	g_dataset.cacheScalarCoordInfo();
 
 	if( nvars > options.listsel_max )
 		options.varsel_style = VarselStyle::Menu;

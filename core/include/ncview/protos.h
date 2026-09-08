@@ -160,13 +160,15 @@ int 	safe_ncvarid( int fileid, char *varname );
 int 	close_enough	   ( float data, float fill );
 void 	new_netcdf         ( NetCDFOptions **n );
 int	data_to_pixels     ( View *v );
-void	add_var_to_list    ( char *var_name, int file_id, char *filename, int nfiles );
-NCVar	*get_var	   ( const char *var_name );
-void	init_min_max	   ( NCVar *var );
 void	clip_f		   ( float *val, float min, float max );
+/* Only called by Dataset::addVariable() (ncview/dataset.h) -- fills in
+ * fields of an already-allocated NCVar* from netCDF metadata without
+ * touching the variable list itself, so it stayed a free function here
+ * rather than moving onto Dataset with the functions that do. */
 void 	fill_dim_structs   ( NCVar *v );
+/* Ditto -- also only called by Dataset::addVariable(). */
+void	handle_dim_mapping ( NCVar *v );
 void 	expand_data	   ( float *big_data, View *v, size_t array_size );
-void 	check_ranges       ( NCVar *var );
 std::string limit_string   ( std::string_view s );
 std::vector<int> gen_overlay       ( View *v, char *overlay_fname );
 void 	fmt_time	   ( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity );
@@ -176,14 +178,9 @@ int 	n_strings_in_list  ( Stringlist *s );
 int 	strncmp_nocase     ( const char *s1, const char *s2, size_t n );
 Message	warn_if_file_exits ( char *fname );
 void 	virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **file );
-void 	calc_dim_minmaxes   ( void );
-void    add_vars_to_list    ( Stringlist *var_list, int id, char *filename, int nfiles );
 int     is_scannable        ( NCVar *v, int i );
 void 	sl_cat		    ( Stringlist **dest, Stringlist **src );
-void 	get_min_max_onestep( NCVar *var, size_t n_other, size_t tstep, float *data,
-					float *min, float *max, int verbose );
 int 	unpack_groupname( const char *varname, int ig, char *groupname );
-void 	cache_scalar_coord_info( const std::vector<std::unique_ptr<NCVar>> &vars );
 int 	count_nslashes	    ( const char *s );
 Stringlist *get_group_list  ( const std::vector<std::unique_ptr<NCVar>> &vars );
 void 	varname_no_groups   ( const char *varname, char *varname_sans_groups, char *groupname );

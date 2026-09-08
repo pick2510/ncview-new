@@ -295,7 +295,7 @@ set_scan_variable( NCVar *var )
 
 	/* Set the min and maxes of the data */
 	if( !view->variable->have_set_range )
-		init_min_max( var );
+		g_dataset.initMinMax( var );
 
 	/* If we are automatically putting on overlays, do so now */
 	xdim = view->variable->dim[view->x_axis_id].get();
@@ -384,7 +384,7 @@ in_variable_selected( const char *var_name )
 {
 	NCVar	*var;
 
-	if( (var = get_var( var_name )) == NULL ) {
+	if( (var = g_dataset.findVariable( var_name )) == NULL ) {
 		fprintf( stderr, "ncview: in_variable_selected: internal error " );
 		fprintf( stderr, "no variable with name >%s< found on variable list\n",
 					var_name );
@@ -917,7 +917,7 @@ view_check_new_data( int unused )
 
 	/* The newly appended timesteps all live in the last (growing) file;
 	 * keep timestep_2_fdb (built once, up front, in
-	 * cache_scalar_coord_info()) in sync so looking up one of them
+	 * Dataset::cacheScalarCoordInfo()) in sync so looking up one of them
 	 * doesn't index past its old, now-too-short length.
 	 */
 	{
@@ -939,7 +939,7 @@ view_check_new_data( int unused )
 				n_other *= view->variable->size[i];
 		std::vector<float> data_buf( n_other );
 		data = data_buf.data();
-		get_min_max_onestep( view->variable, n_other, nt_new, data, &min, &max, 0 );
+		g_dataset.getMinMaxOnestep( view->variable, n_other, nt_new, data, &min, &max, 0 );
 		if( min != max ) {
 			view->variable->auto_set_no_range = 0;
 			if( (min < 0) && (max > 0)) {

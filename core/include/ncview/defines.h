@@ -410,7 +410,7 @@ struct NCVar {
 						 * Because this can only be filled out
 						 * AFTER we have processed all the files,
 						 * it is done in a slighly strange place...
-						 * in routine cache_scalar_coord_info.
+						 * in routine Dataset::cacheScalarCoordInfo().
 						 */
 	float	global_min = 0, global_max = 0,		/* These are diffferent from the */
 	        user_min = 0, user_max = 0;	 	/* min & max in the FDBs because these
