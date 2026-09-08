@@ -22,6 +22,7 @@
 
 #include "ncview/includes.h"
 #include "ncview/defines.h"
+#include "ncview/frame_cache.h"
 #include "ncview/protos.h"
 
 /* These hold data for our colormaps */
@@ -77,7 +78,7 @@
 Options	  options;
 std::vector<std::unique_ptr<NCVar>> variables;
 std::vector<ncv_pixel> pixel_transform;
-FrameStore framestore;
+FrameCache framestore;
 Stringlist *read_in_state;
 
 static void init_cmaps_from_data();
@@ -467,7 +468,7 @@ initialize_misc()
 	options.missval_g 	= 255;
 	options.missval_b 	= 255;
 
-	framestore.valid = false;
+	framestore = FrameCache();
 
 }
 

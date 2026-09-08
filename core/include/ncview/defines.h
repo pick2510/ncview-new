@@ -466,17 +466,6 @@ struct View {
 	size_t	plot_XY_position[MAX_LINES_PER_PLOT][10];
 };
 
-/*****************************************************************************
- * Place to store the frames in, if we want in-core displaying.
- */
-struct FrameStore {
-	int	valid;		/* Is ANYTHING in the frame store valid? */
-	size_t	nt;		/* # of frames in the store.  Can be > than nt cuz we allocate some extra to handle file growth */
-	size_t	nx, ny;		/* # of X and Y entries per frame */
-	std::vector<ncv_pixel> frame;	/* Actual store of the frames */
-	std::vector<int> frame_valid;	/* Is this particular frame valid? */
-};
-
 /*****************************************************************************/
 /* program options */
 

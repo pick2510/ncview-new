@@ -34,11 +34,12 @@
 /* Include files */
 #include "ncview/includes.h"
 #include "ncview/defines.h"
+#include "ncview/frame_cache.h"
 #include "ncview/protos.h"
 
 /* External variables */
 extern	Options options;
-extern  FrameStore framestore;
+extern  FrameCache framestore;
 
 View  *view = NULL;
 
@@ -670,12 +671,12 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	 * ever runs. Excluding autoscale here closes that window the same
 	 * way upstream's ordering did.
 	 */
-	if( framestore.valid && allow_framestore_usage && !options.autoscale ) {
-		if( framestore.frame_valid[frameno] == true ) {
+	if( allow_framestore_usage && !options.autoscale ) {
+		const ncv_pixel *cached = framestore.lookup( frameno );
+		if( cached != nullptr ) {
 			if( options.debug )
 				printf( "drawing from framestore...\n" );
-			in_draw_2d_field( (framestore.frame.data() + frameno*framesize),
-				scaled_x_size, scaled_y_size, frameno );
+			in_draw_2d_field( cached, scaled_x_size, scaled_y_size, frameno );
 			lockout_view_changes = false;
 
 			if( view->scan_axis_id != -1 ) {
@@ -748,11 +749,8 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		printf( "Calling draw_2d_field...\n" );
 	in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, frameno );
 
-	if( framestore.valid == true ) {
-		for( i=0; i<framesize; i++ )
-			framestore.frame[frameno*framesize + i] = view->pixels[i];
-		framestore.frame_valid[frameno] = true;
-		}
+	if( framestore.valid() )
+		framestore.store( frameno, view->pixels.data(), framesize );
 
 	/* If we just drew the last time entry for this var, then
 	 * set up a callback that waits 1 second and checks for
@@ -778,7 +776,7 @@ view_check_new_data( int unused )
 	size_t 	file_var_size[MAX_NC_DIMS], *t, n_other;
 	size_t	i;
 	int	has_grown, t_ncid, timelike_index;
-	size_t	dt, nt_new, n_scan_entries, n_extra_frames, storage_size, old_nt;
+	size_t	dt, nt_new, n_scan_entries, n_extra_frames;
 	char	message[1024], rate_units[50];
 	time_t	tt;
 	long	nframes_tot, delta_time;
@@ -868,24 +866,16 @@ view_check_new_data( int unused )
 	in_set_label( Label::Title, message );
 
 	/* See if we need to reallocate the framestore */
-	if( nt_new >= framestore.nt ) {
-		old_nt = framestore.nt;
+	if( nt_new >= framestore.nt() ) {
 		n_scan_entries = view->variable->size[view->scan_axis_id];
 		n_extra_frames = floor( n_scan_entries * 0.2 ) + 1;
 		if( n_extra_frames < 25 )
 			n_extra_frames = 25;
-		framestore.nt = nt_new + n_extra_frames;
-		storage_size  = framestore.nx * framestore.ny * framestore.nt;
 
 		if( options.debug )
-			printf( "reallocating framestore to new nt=%zu\n", framestore.nt );
+			printf( "reallocating framestore to new nt=%zu\n", nt_new + n_extra_frames );
 
-		framestore.frame.resize( storage_size );
-		framestore.frame_valid.resize( framestore.nt );
-
-		/* Initialize to NOT a valid frame for the new frames */
-		for( i=old_nt; i<framestore.nt; i++ )
-			framestore.frame_valid[i] = false;
+		framestore.growTo( nt_new + n_extra_frames );
 		}
 
 	view->variable->size[ timelike_index ] = nt_new;
@@ -1714,16 +1704,11 @@ beep()
 	void
 init_saveframes()
 {
-	size_t	storage_size, n_scan_entries, xsize, ysize, n_extra_frames;
+	size_t	storage_size, n_scan_entries, xsize, ysize, n_extra_frames, nt, nx, ny;
 	char	err_message[132];
 
 	if( options.save_frames == false )
 		return;
-
-	framestore.frame.clear();
-	framestore.frame.shrink_to_fit();
-	framestore.frame_valid.clear();
-	framestore.frame_valid.shrink_to_fit();
 
 	if( view->scan_axis_id == -1 ) {
 		n_scan_entries = 1;
@@ -1736,13 +1721,13 @@ init_saveframes()
 		if( n_extra_frames < 10 )
 			n_extra_frames = 10;
 		}
-	framestore.nt = n_scan_entries + n_extra_frames;
+	nt = n_scan_entries + n_extra_frames;
 
 	xsize = view->variable->size[view->x_axis_id];
 	ysize = view->variable->size[view->y_axis_id];
-	view_get_scaled_size( options.blowup, xsize, ysize, &(framestore.nx), &(framestore.ny) );
+	view_get_scaled_size( options.blowup, xsize, ysize, &nx, &ny );
 
-	storage_size =  framestore.nx * framestore.ny * framestore.nt;
+	storage_size = nx * ny * nt;
 
 	if( options.debug ) {
 		fprintf( stderr, "initializing saveframes:\n" );
@@ -1758,18 +1743,11 @@ init_saveframes()
 	 * this path was always meant to degrade gracefully (in-core frame
 	 * caching is an optional speed optimization, not required for
 	 * correctness) -- preserved here by catching std::bad_alloc from
-	 * resize() rather than letting it propagate. */
+	 * FrameCache::reset() rather than letting it propagate. */
 	try {
-		framestore.frame.resize( storage_size );
-		framestore.frame_valid.resize( framestore.nt, false );
-		framestore.valid = true;
+		framestore.reset( nt, nx, ny );
 		}
 	catch( const std::bad_alloc & ) {
-		framestore.frame.clear();
-		framestore.frame.shrink_to_fit();
-		framestore.frame_valid.clear();
-		framestore.frame_valid.shrink_to_fit();
-		framestore.valid = false;
 		snprintf( err_message, 131, "Can't allocate space for frame store.\nRequested size: %.1f MB",
 				(float)(storage_size*sizeof( ncv_pixel ))/1000000. );
 		options.save_frames = false;
@@ -1781,16 +1759,13 @@ init_saveframes()
 	void
 invalidate_all_saveframes()
 {
-	size_t	i;
-
 	if( view == NULL )
 		return;
 
-	if( (view->scan_axis_id == -1) || ( framestore.valid == false ))
+	if( (view->scan_axis_id == -1) || ! framestore.valid() )
 		return;
 
-	for( i=0L; i<framestore.nt; i++ )
-		framestore.frame_valid[i] = false;
+	framestore.invalidateAll();
 }
 
 /**************************************************************************************/

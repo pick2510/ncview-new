@@ -50,7 +50,6 @@ extern ut_system *unitsys;
 extern Options   options;
 extern std::vector<std::unique_ptr<NCVar>> variables;
 extern std::vector<ncv_pixel> pixel_transform;
-extern FrameStore framestore;
 
 static void handle_time_dim( int fileid, NCVar *v, int dimid );
 static TimeGranularity  months_calc_tgran( int fileid, NCDim *d );
