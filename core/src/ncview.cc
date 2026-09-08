@@ -75,12 +75,12 @@
 #define DEFAULT_COLOR_BY_NDIMS	true
 #define DEFAULT_AUTO_OVERLAY	true
 
-ViewerSession g_viewer_session;
-Options	  options( g_viewer_session );
-Dataset   &g_dataset = g_viewer_session.dataset();
+AppContext g_app;
+Options	  options( g_app.session );
+Dataset   &g_dataset = g_app.session.dataset();
 std::vector<std::unique_ptr<NCVar>> &variables = g_dataset.variablesMutable();
-std::vector<ncv_pixel> &pixel_transform = g_viewer_session.pixelTransform();
-FrameCache &framestore = g_viewer_session.frameCache();
+std::vector<ncv_pixel> &pixel_transform = g_app.session.pixelTransform();
+FrameCache &framestore = g_app.session.frameCache();
 Stringlist *read_in_state;
 
 static void init_cmaps_from_data();

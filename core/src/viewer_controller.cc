@@ -19,8 +19,6 @@
 
 extern Options options;
 
-ViewerController g_viewer_controller;
-
 /*===========================================================================================*/
 void
 ViewerController::dispatch( Button button_id, Modifier modifier )

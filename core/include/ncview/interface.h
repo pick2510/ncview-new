@@ -23,7 +23,7 @@
  * providing a parallel set of ~48 free functions, while every core call
  * site here keeps calling these functions by their original names,
  * unchanged). "Implements it" below now means "provides the ViewerUi
- * implementation g_viewer_ui is set to", not "defines these free
+ * implementation g_app.ui is set to", not "defines these free
  * functions directly" -- ncview_ui no longer does the latter.
  */
 #pragma once

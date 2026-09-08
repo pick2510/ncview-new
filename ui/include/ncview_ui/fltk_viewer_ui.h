@@ -7,7 +7,7 @@
  * ncview/viewer_ui.h's ViewerUi interface, delegating to the MainWindow
  * singleton (main_window.h) exactly as ui/src/interface_fltk.cc's free
  * functions used to before this step. app/main.cc constructs one and
- * assigns it to g_viewer_ui before calling into ncview_core.
+ * assigns it to g_app.ui before calling into ncview_core.
  */
 #pragma once
 

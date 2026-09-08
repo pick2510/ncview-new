@@ -12,7 +12,7 @@
  *
  * do_buttons.cc keeps the free-function names (do_range, do_pause, ...,
  * which_button_pressed, in_button_pressed, in_colormap_selected) as thin
- * one-line forwards to the single global instance below, so every
+ * one-line forwards to g_app.controller (ncview/app_context.h), so every
  * existing call site elsewhere in core/, ui/, and tests/ keeps compiling
  * and behaving identically -- only do_buttons.cc itself changed to move
  * the actual logic here.
@@ -68,5 +68,3 @@ public:
 private:
 	Button cur_button_ = Button::Pause;
 };
-
-extern ViewerController g_viewer_controller;

@@ -18,10 +18,10 @@
  * `core/src/viewer_ui_bridge.cc` defines the *free functions* still
  * declared in ncview/interface.h (core calls them by those names at every
  * existing call site -- zero call-site churn) as one-line forwarders onto
- * `g_viewer_ui`, the currently-installed ViewerUi. Whoever owns the
- * process (app/main.cc for the real app, each test binary's setup for
- * tests) constructs a concrete ViewerUi and assigns it to g_viewer_ui
- * before any core code that might call through the seam runs.
+ * `g_app.ui` (ncview/app_context.h), the currently-installed ViewerUi.
+ * Whoever owns the process (app/main.cc for the real app, each test
+ * binary's setup for tests) constructs a concrete ViewerUi and assigns it
+ * to g_app.ui before any core code that might call through the seam runs.
  */
 #pragma once
 
@@ -88,10 +88,3 @@ public:
 	virtual Stringlist *get_persistent_X_state( void ) = 0;
 	virtual void	pix_to_rgb( ncv_pixel pix, int *r, int *g, int *b ) = 0;
 };
-
-/* The currently-installed ViewerUi. Assigned once, before any core code
- * that might reach the seam runs: app/main.cc for the real app (to a
- * FltkViewerUi), each test binary's setup for tests (to a
- * RecordingViewerUi). Defaults to nullptr; core/src/viewer_ui_bridge.cc's
- * forwarders dereference it, so something must set it before use. */
-extern ViewerUi *g_viewer_ui;

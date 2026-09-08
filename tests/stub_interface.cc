@@ -10,9 +10,9 @@
 // OOP_redesign plan, Step 9b: this used to be ~48 free functions directly
 // satisfying ncview/interface.h's declarations; those declarations are now
 // satisfied once, by core/src/viewer_ui_bridge.cc's forwarders onto
-// whichever ViewerUi is currently installed (g_viewer_ui). This file's job
+// whichever ViewerUi is currently installed (g_app.ui). This file's job
 // is now to provide that ViewerUi for test binaries: g_recording_ui is a
-// single global RecordingViewerUi instance, and g_viewer_ui is pointed at
+// single global RecordingViewerUi instance, and g_app.ui is pointed at
 // it via a namespace-scope initializer below, before any test's main()
 // runs.
 #include <cstdio>
@@ -135,10 +135,23 @@ public:
 
 namespace {
 RecordingViewerUi g_recording_ui;
-// Runs as part of this TU's static initialization, before any test's
-// main() -- see viewer_ui.h: g_viewer_ui defaults to nullptr, and nothing
-// calls through it during any other global's static init.
-struct InstallRecordingViewerUi {
-	InstallRecordingViewerUi() { g_viewer_ui = &g_recording_ui; }
-} g_install_recording_viewer_ui;
 } // namespace
+
+// Called explicitly from each test binary's main() (tests/main.cc), NOT
+// from a static initializer here: g_app (ncview/app_context.h) now
+// contains a ViewerSession/ViewerController with non-trivial members
+// (Dataset's vectors, etc.), so g_app itself requires dynamic
+// initialization -- its constructor can run either before or after this
+// TU's own static initializers, in unspecified order (the classic static-
+// initialization-order fiasco). A static initializer here that set
+// g_app.ui directly used to be safe back when g_viewer_ui was its own
+// bare, constant-initialized pointer global; now that it's a member of a
+// dynamically-initialized aggregate, setting it too early gets silently
+// overwritten when g_app's own constructor subsequently runs and
+// default-member-initializes ui back to nullptr. main() is guaranteed to
+// run after all static initialization completes, so calling this from
+// there sidesteps the ordering question entirely.
+void installRecordingViewerUi()
+{
+	g_app.ui = &g_recording_ui;
+}

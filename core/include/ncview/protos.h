@@ -40,21 +40,24 @@
 
 #include "ncview/stringlist.h"
 #include "ncview/interface.h"
-#include "ncview/viewer_session.h"
+#include "ncview/app_context.h"
 
 /* Global state, defined in ncview.cc. Upstream had every .c file that
  * needed these declare its own local `extern`; this is the one canonical
  * declaration ncview_ui can use too. */
 extern Options options;
 
-/* ViewerSession owns the Dataset, the active ViewState, and the FrameCache
- * (OOP_redesign plan, Step 8). `g_dataset`, `view`, and `framestore` are
- * migration bridges -- references onto g_viewer_session's own members --
- * so the many existing callsites across core/, ui/, and tests/ that read
- * these globals by their original names keep compiling and behaving
- * identically. All four are defined together in ncview.cc, except `view`,
- * which is defined in view.cc (its sole owner before this step). */
-extern ViewerSession g_viewer_session;
+/* g_app (ncview/app_context.h) is the single composition-root global:
+ * it owns the ViewerSession (Dataset, active ViewState, FrameCache,
+ * pixel_transform, Options's field storage), the ViewerController, and a
+ * non-owning pointer to whichever ViewerUi is installed. `g_dataset`,
+ * `view`, `framestore`, and `pixel_transform` are migration bridges --
+ * references onto g_app.session's own members -- so the many existing
+ * callsites across core/, ui/, and tests/ that read these globals by
+ * their original names keep compiling and behaving identically. All are
+ * defined together in ncview.cc, except `view`, which is defined in
+ * view.cc (its sole owner before this step). */
+extern AppContext g_app;
 extern Dataset &g_dataset;
 extern std::vector<std::unique_ptr<NCVar>> &variables;
 extern std::unique_ptr<ViewState> &view;

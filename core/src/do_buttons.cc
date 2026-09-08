@@ -38,132 +38,132 @@
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
-#include "ncview/viewer_controller.h"
+#include "ncview/app_context.h"
 
 	Button
 which_button_pressed( void )
 {
-	return( g_viewer_controller.whichButtonPressed() );
+	return( g_app.controller.whichButtonPressed() );
 }
 
 	void
 do_range( Modifier modifier )
 {
-	g_viewer_controller.range( modifier );
+	g_app.controller.range( modifier );
 }
 
 	void
 do_dimset( Modifier modifier )
 {
-	g_viewer_controller.dimset( modifier );
+	g_app.controller.dimset( modifier );
 }
 
 	void
 do_restart( Modifier modifier )
 {
-	g_viewer_controller.restart( modifier );
+	g_app.controller.restart( modifier );
 }
 
 	void
 do_rewind( Modifier modifier )
 {
-	g_viewer_controller.rewind( modifier );
+	g_app.controller.rewind( modifier );
 }
 
 	void
 do_quit( Modifier modifier )
 {
-	g_viewer_controller.quit( modifier );
+	g_app.controller.quit( modifier );
 }
 
 	void
 do_backwards( Modifier modifier )
 {
-	g_viewer_controller.backwards( modifier );
+	g_app.controller.backwards( modifier );
 }
 
 	void
 do_pause( Modifier modifier )
 {
-	g_viewer_controller.pause( modifier );
+	g_app.controller.pause( modifier );
 }
 
 	void
 do_forward( Modifier modifier )
 {
-	g_viewer_controller.forward( modifier );
+	g_app.controller.forward( modifier );
 }
 
 	void
 do_fastforward( Modifier modifier )
 {
-	g_viewer_controller.fastforward( modifier );
+	g_app.controller.fastforward( modifier );
 }
 
 	void
 do_colormap_sel( Modifier modifier )
 {
-	g_viewer_controller.colormapSelect( modifier );
+	g_app.controller.colormapSelect( modifier );
 }
 
 	void
 do_invert_physical( Modifier modifier )
 {
-	g_viewer_controller.invertPhysical( modifier );
+	g_app.controller.invertPhysical( modifier );
 }
 
 	void
 do_data_edit( Modifier modifier )
 {
-	g_viewer_controller.dataEdit( modifier );
+	g_app.controller.dataEdit( modifier );
 }
 
 	void
 do_invert_colormap( Modifier modifier )
 {
-	g_viewer_controller.invertColormap( modifier );
+	g_app.controller.invertColormap( modifier );
 }
 
 	void
 do_set_minimum( Modifier modifier )
 {
-	g_viewer_controller.setMinimum( modifier );
+	g_app.controller.setMinimum( modifier );
 }
 
 	void
 do_set_maximum( Modifier modifier )
 {
-	g_viewer_controller.setMaximum( modifier );
+	g_app.controller.setMaximum( modifier );
 }
 
 	void
 do_blowup( Modifier modifier )
 {
-	g_viewer_controller.blowup( modifier );
+	g_app.controller.blowup( modifier );
 }
 
 	void
 do_transform( Modifier modifier )
 {
-	g_viewer_controller.transform( modifier );
+	g_app.controller.transform( modifier );
 }
 
 	void
 do_blowup_type( Modifier modifier )
 {
-	g_viewer_controller.blowupType( modifier );
+	g_app.controller.blowupType( modifier );
 }
 
 	void
 do_info( Modifier modifier )
 {
-	g_viewer_controller.info( modifier );
+	g_app.controller.info( modifier );
 }
 
 	void
 do_options( Modifier modifier )
 {
-	g_viewer_controller.optionsDialog( modifier );
+	g_app.controller.optionsDialog( modifier );
 }
 
 /*****************************************************************************
@@ -179,7 +179,7 @@ do_options( Modifier modifier )
 void
 in_button_pressed( Button button_id, Modifier modifier )
 {
-	g_viewer_controller.dispatch( button_id, modifier );
+	g_app.controller.dispatch( button_id, modifier );
 }
 
 /*****************************************************************************
@@ -193,5 +193,5 @@ in_button_pressed( Button button_id, Modifier modifier )
 void
 in_colormap_selected( const char *name )
 {
-	g_viewer_controller.colormapSelectByName( name );
+	g_app.controller.colormapSelectByName( name );
 }

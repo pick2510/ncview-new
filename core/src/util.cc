@@ -277,7 +277,7 @@ data_to_pixels( View *v )
 			v->variable->user_max = 0;
 	    	}
 
-	PixelMapSettings pixel_map_settings = g_viewer_session.pixelMapSettings( options );
+	PixelMapSettings pixel_map_settings = g_app.session.pixelMapSettings( options );
 	FrameRenderer::render( scaled_data.data(), new_x_size, new_y_size,
 		fill_value, v->variable->user_min, v->variable->user_max,
 		pixel_map_settings, pixel_transform, v->pixels.data() );

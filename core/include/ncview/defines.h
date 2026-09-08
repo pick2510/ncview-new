@@ -518,7 +518,7 @@ class ViewerSession;
  * `options.<field>` read/write call sites across core/, ui/, and tests/
  * keeps compiling and behaving identically -- no call site needed to
  * change. There is exactly one Options object in the program (the global
- * `options` in ncview.cc), constructed from `g_viewer_session`.
+ * `options` in ncview.cc), constructed from `g_app.session`.
  */
 struct Options {
 	explicit Options( ViewerSession &session );
