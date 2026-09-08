@@ -367,15 +367,80 @@ same precedent `Dataset::checkRanges` already set for calling
 unconditionally part of the operation, not something a caller might want
 to skip or intercept.
 
-The remaining ~44 functions in `view.cc` (~2600 lines) stay free functions
--- splitting them would mean rewriting each one's control flow to
-separate state mutation from interleaved dialog/timer/label logic (some,
-like `view_draw()` and `set_scan_variable()`, have UI calls and even a
-dialog-driven early return woven through 150-270 lines of state logic),
-which is a materially larger and riskier undertaking than either of the
-two moves above -- closer in shape to the full-dependency-injection
-option this project already declined. Not attempted without a concrete
-driver for it.
+**Phase 3** revisited the premise behind stopping at Phase 2. The earlier
+assumption was that a function mixing state with *several* UI calls, or
+with dialog/timer logic woven through its control flow, was too risky to
+move without first splitting it into a state half and a UI half --
+genuinely risky surgery. But moving a function's body *unmodified* --
+however many UI calls, branches, or early returns it contains -- onto
+`View` as a method carries none of that risk, provided the one property
+that actually matters holds: **the function has no `if (view == NULL)
+...` guard of its own.** A guard like that is load-bearing wherever the
+global `view` can genuinely be null when the function is reached (an
+expose event before any variable is selected, a mouse click on an empty
+2-D pane) -- calling a method through a null `unique_ptr` there would be
+undefined behavior, so those functions must stay free. Every other
+function -- regardless of size or how many dialogs/timers/UI calls it
+makes -- converts exactly as mechanically and safely as Phase 1/2's
+simplest cases: rename it, add a `View *view = this;` (or `const View
+*view = this;`) alias so the body's existing `view->foo` text needs no
+further edits, fix call sites. No control flow, branching, or call
+ordering changed anywhere in Phase 3.
+
+This was verified per function by reading its body and tracing every
+call site -- not assumed from size or name. It moved 18 more functions
+onto `View`: `view_apply_cur_dim_place` (`applyCurDimPlace`),
+`view_set_scan_dims` (`setScanDims`), `set_scan_view` (`scanToPlace` --
+distinct from Phase 1's `setScanPlace`: this jumps to an absolute frame
+during navigation/playback, not the one-time initial axis/place setup on
+variable switch), `view_change_blowup` (`changeBlowup`), `view_set_range`
+(`setRange`), `view_set_range_frame` (`setRangeFrame`), `set_range_labels`
+(`setRangeLabels`), `init_saveframes` (`initSaveframes`),
+`set_dataedit_place` (`setDataeditPlace`), `view_data_edit` (`dataEdit`),
+`view_change_dat` (`changeDat`), `view_data_edit_dump` (`dataEditDump`),
+`plot_XY_sc` (`plotXYSc`), `view_set_XY_plot_axis` (`setXYPlotAxis`),
+`view_plot_XY_fmt_x_val` (`plotXYFmtXVal` -- dead code, no callers
+anywhere in the tree, moved anyway since it cost nothing), `view_information`
+(`information`), `redraw_dimension_info` (`redrawDimensionInfo`), and
+`view_check_new_data` (`checkNewData`). External call sites updated
+directly in `viewer_controller.cc`, `ui/src/interface_fltk.cc`,
+`ui/src/main_window.cc`, `ui/src/plot_window.cc`, and
+`tests/test_view_data_edit.cc`.
+
+One real wrinkle surfaced along the way: `checkNewData`'s own
+no-capture timer lambda referred to `view` expecting the *global*, but
+once inside a method the local `View *view = this;` alias shadows it for
+unqualified lookup, so the lambda failed to compile ("view is not
+captured"). Fixed by qualifying that one reference as `::view` to reach
+the global explicitly -- the lambda still runs later, when the timer
+fires, and still reads whatever the global `view` is at that time,
+identical to the pre-conversion behavior.
+
+**What's left** (~22 functions, ~1400 lines) stays free, each for one of
+four concrete reasons, not a general "too risky" judgment:
+- **Has its own load-bearing `view == NULL` guard**, reachable from a
+  context where that's genuinely possible: `view_draw`, `change_view`,
+  `view_current_nt`, `view_change_cur_dim`, `view_set_cur_dim_index`,
+  `view_get_cur_dim_index`, `invalidate_all_saveframes`,
+  `view_report_position`, `set_min_from_curdata`, `set_max_from_curdata`,
+  `plot_XY`, `view_recompute_colorbar`, `view_construct_scalar_coord_str`.
+- **Destroys the very object a method's `this` would refer to**:
+  `invalidate_variable` (calls `view.reset()`).
+- **Isn't actually View-shaped** despite living in `view.cc`: `set_buttons`
+  (pure UI button-widget state), `draw_file_info` (primarily `NCVar*`-shaped),
+  `view_change_transform` (an `Options`-shaped render setting, touches no
+  `view->` field), `view_report_position_vals` (reads a file-static array,
+  not `view`), `mouse_xy_to_data_xy`/`view_get_scaled_size`/
+  `view_calc_minval_float`/`view_calc_maxval_float`/`strip_trailing_zeros`
+  (pure math/string helpers -- "math helpers stay free functions", per
+  the original plan's own rule).
+- **Trivial wrapper or entry point, not worth a method's ceremony**:
+  `redraw_ccontour` (one line, forwards to `view_draw`), `view_data_edit_warn`
+  (one dialog then forwards to `dataEditDump`, touches no `view->` field
+  itself), `set_scan_variable`/`in_variable_selected` (the entry points
+  that construct/replace the view in the first place -- more naturally
+  free-function orchestrators than methods on the object they're
+  building).
 
 ## Post-v0.2.0 defect audits
 
