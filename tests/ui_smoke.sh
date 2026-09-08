@@ -143,6 +143,35 @@ done <<EOF
 $CASES
 EOF
 
+# "print" is checked differently from the golden-screenshot cases above: it
+# runs do_print() to completion -- both the page-layout dialog and the
+# native print dialog are bypassed by NCVIEW_TEST_PRINT_FILE (see
+# printer_options()/in_print() in ui/src/interface_fltk.cc) -- and checks
+# the resulting PostScript file, rather than a screenshot. Runs regardless
+# of --update: there's no golden to (re)generate here, only a real output
+# file to sanity-check.
+print_ps="$WORKDIR/print.ps"
+env -i DISPLAY="$DISPLAY" HOME="$WORKDIR" PATH="$PATH" \
+    NCVIEW_TEST_AUTOSELECT=1 NCVIEW_TEST_DIALOG=print NCVIEW_TEST_PRINT_FILE="$print_ps" \
+    "$NCVIEW_BIN" "$SAMPLE_NC" >"$WORKDIR/print.log" 2>&1 &
+NCVIEW_PID=$!
+sleep 1.5
+kill "$NCVIEW_PID" >/dev/null 2>&1
+sleep 0.2
+kill -9 "$NCVIEW_PID" >/dev/null 2>&1
+wait "$NCVIEW_PID" 2>/dev/null
+NCVIEW_PID=""
+
+if [ ! -s "$print_ps" ]; then
+    echo "ui_smoke: FAIL print (no/empty PostScript output at $print_ps) -- log: $WORKDIR/print.log"
+    FAILED=1
+elif ! head -c 4 "$print_ps" | grep -q '^%!PS'; then
+    echo "ui_smoke: FAIL print (output doesn't start with %!PS) -- file: $print_ps"
+    FAILED=1
+else
+    echo "ui_smoke: pass print"
+fi
+
 if [ "$FAILED" != "0" ] && [ "$UPDATE" != "1" ]; then
     echo "ui_smoke: one or more cases failed; screenshots left in $WORKDIR" >&2
     trap - EXIT # keep WORKDIR around for inspection
