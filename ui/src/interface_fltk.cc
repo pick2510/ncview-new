@@ -63,10 +63,10 @@ void FltkViewerUi::in_initialize( void )
 {
 	// Upstream read this (and similar) from an X application-defaults
 	// resource ("Ncview*blowupDefaultSize: 300", fallback_resources.h);
-	// it's plain core state (view.cc:calculate_blowup divides by it),
+	// it's plain core state (view.cc:View::calculateBlowup() divides by it),
 	// not something routed through a seam function, so ncview_ui just
 	// sets it directly. Leaving it at its zero-initialized default is a
-	// real bug, not a graceful default: calculate_blowup() divides by
+	// real bug, not a graceful default: View::calculateBlowup() divides by
 	// it unconditionally, producing a divide-by-zero -> inf -> UB
 	// float-to-int conversion (observed as options.blowup becoming
 	// INT_MIN on this machine).

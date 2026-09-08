@@ -301,6 +301,69 @@ an explicit `installRecordingViewerUi()` call from each test binary's
 `main()`, which is guaranteed to run after all static initialization
 completes.
 
+### Follow-up: pulling ownership logic out of util.cc and view.cc
+
+Two further passes revisited files the nine steps above deliberately left
+as grab-bags of free functions, moving the pieces that actually own or
+mutate state onto the class that should own it, in each case updating
+every call site directly rather than keeping a compatibility bridge.
+
+**`util.cc`** mixed genuine math/string helpers with the functions that
+build and mutate the variable list -- exactly the logic the original
+`Dataset` design section said should move onto `Dataset` ("`add_var_to_list()`'s
+existing virtual-multi-file-append logic... moves onto `Dataset` verbatim"),
+deferred at step 5 to keep that step's diff reviewable. Moved onto
+`Dataset` as real methods: `addVariable`/`addVariables` (was
+`add_var_to_list`/`add_vars_to_list`), `findVariable` (was `get_var`),
+`cacheScalarCoordInfo`, `calcDimMinmaxes`, `initMinMax`, and
+`getMinMaxOnestep` (kept *public*, not private to `initMinMax`, because it
+turned out to have a second caller in `view.cc`'s `view_check_new_data()`
+-- found by grepping every call site rather than trusting the original
+file's layout). Their file-private helpers (`check_ranges`,
+`copy_info_to_identical_dims`, `equivalent_FDBs`, `new_fdblist`) moved
+with them as `Dataset` implementation details. Left as free functions,
+since they only fill in an already-allocated `NCVar*`'s fields without
+touching the variable list (or, for `virt_to_actual_place`, belong to the
+lower file-IO layer `Dataset` itself wraps): `fill_dim_structs`,
+`handle_dim_mapping` (now non-static, since `Dataset::addVariable()`
+needs it), `is_scannable`, `n_vars_in_list`, `get_group_list`,
+`virt_to_actual_place`.
+
+**`view.cc`** (~3300 lines, ~60 functions) is far more entangled: unlike
+`util.cc`'s clean split, most of its functions mix state mutation with
+direct `in_*`/`x_*`/`do_*` calls (dialogs, timers, cursor state, label
+updates) in the same function body -- exactly what step 6 above deferred
+("No dialogs, timers, or label updates -- those are the controller's
+job"). A function-by-function scan (grepping every function body for a
+direct UI call) found 11 functions that were both (a) genuinely pure
+state -- zero direct UI calls -- and (b) already `static` (file-local to
+`view.cc`, no external callers at all), making them a uniquely low-risk
+subset: `determine_scan_axes`, `initial_determine_scan_axes`,
+`re_determine_scan_axes`, `fill_view_data`, `alloc_view_storage`,
+`init_view`, `set_scan_place`, `initial_set_scan_place`,
+`re_set_scan_place`, `calculate_blowup`, and `view_data_has_missing`.
+These moved onto `View`/`ViewState` (`core/include/ncview/defines.h`) as
+member functions -- `determineScanAxes`, `setScanPlace`,
+`calculateBlowup`, `allocStorage`, `fillViewData`, `hasMissingData`
+public; `initialDetermineScanAxes`, `reDetermineScanAxes`,
+`initialSetScanPlace`, `reSetScanPlace` private, since each had no caller
+outside the one public method it now belongs to -- and `init_view`
+(which allocated a new `View`) became the static factory `View::create()`.
+Adding member functions to `View` doesn't disqualify it from remaining an
+aggregate (`tests/test_pixels.cc`'s `View view{};` keeps compiling): C++17
+only bars user-declared constructors, virtual functions, and
+private/protected *data* members from an aggregate, not member functions.
+
+The remaining ~49 functions in `view.cc` (~2700 lines) stay free functions
+-- splitting them would mean rewriting each one's control flow to
+separate state mutation from interleaved dialog/timer/label logic (some,
+like `view_draw()` and `set_scan_variable()`, have UI calls and even a
+dialog-driven early return woven through 150-270 lines of state logic),
+which is a materially larger and riskier undertaking than either of the
+two moves above -- closer in shape to the full-dependency-injection
+option this project already declined. Not attempted without a concrete
+driver for it.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds

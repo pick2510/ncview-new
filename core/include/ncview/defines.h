@@ -482,6 +482,41 @@ struct View {
 	int	plot_XY_axis,	/* Which axis to plot along in XY plots */
 		plot_XY_nlines;	/* # of XY lines for this variable on current plot */
 	size_t	plot_XY_position[MAX_LINES_PER_PLOT][10];
+
+	/* Formerly free functions in view.cc taking a View* as their first
+	 * parameter -- moved onto the type itself since none of them pop
+	 * dialogs, arm timers, or call any other in_/x_-prefixed UI function
+	 * (view.cc's other ~40-odd functions mix state with UI calls and
+	 * deliberately stayed free -- see PORTING.md's "OOP_redesign:
+	 * view.cc" section for the full triage). All were already `static`
+	 * (file-local to view.cc) with no external callers, so converting
+	 * them is a pure in-file mechanical rename -- no header outside
+	 * view.cc needed updating, and adding these member functions doesn't
+	 * disqualify View from remaining an aggregate (tests/test_pixels.cc's
+	 * `View view{};` keeps compiling): C++17 only bars user-declared
+	 * constructors, virtual functions, and private/protected *data*
+	 * members from an aggregate, not member functions. Bodies live in
+	 * view.cc, right where the free functions they replace used to be. */
+
+	/* Formerly init_view(): allocates and default-initializes a new View
+	 * for 'var'. Caller owns the result. */
+	static View *create( NCVar *var );
+
+	void determineScanAxes( NCVar *var, View *old_view );
+	void setScanPlace( NCVar *var, View *old_view );
+	void calculateBlowup( NCVar *var, int val_to_set_to );
+	void allocStorage();
+	void fillViewData();
+	bool hasMissingData() const;
+
+private:
+	/* Implementation details of determineScanAxes()/setScanPlace() above
+	 * -- each had no callers outside the one public method it now
+	 * belongs to. */
+	void initialDetermineScanAxes( NCVar *var );
+	void reDetermineScanAxes( NCVar *var, View *old_view );
+	void initialSetScanPlace( NCVar *var );
+	void reSetScanPlace( NCVar *var, View *old_view );
 };
 
 /* OOP_redesign plan's name for this struct once it's owned via unique_ptr

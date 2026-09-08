@@ -70,18 +70,8 @@ static NCDim *plot_XY_dim[MAX_PLOT_XY];
 #define	BUTTONS_ALL_OFF		3
 
 /* Prototypes applicable to routines used ONLY in this file */
-static void 		determine_scan_axes( View *view, NCVar *var, View *old_view );
-static void 		initial_determine_scan_axes( View *view, NCVar *var );
-static void 		fill_view_data( View *v );
 static void 		view_set_axis( View *local_view, Dimension dimension, char *new_dim_name );
-static void 		alloc_view_storage( View *view );
-static void 		init_view( View **view, NCVar *var );
 static void 		set_buttons( int to_state );
-static void 		re_determine_scan_axes( View *new_view, NCVar *new_var, View *old_view );
-static void 		set_scan_place( View *new_view, NCVar *var, View *old_view );
-static void 		initial_set_scan_place( View *view, NCVar *var );
-static void 		re_set_scan_place( View *new_view, NCVar *new_var, View *old_view );
-static void		calculate_blowup( View *view, NCVar *var, int val_to_set_to );
 static void 		draw_file_info( NCVar *var );
 static void 		label_dimensions( View *view );
 static void 		show_current_dim_values( View *view );
@@ -92,7 +82,6 @@ static void 		view_data_edit_warn();
 static void 		invalidate_variable( NCVar *var );
 static void 		plot_XY_sc( size_t *start, size_t *count );
 static void 		mouse_xy_to_data_xy( int mouse_x, int mouse_y, int blowup, size_t *data_x, size_t *data_y );
-static int 		view_data_has_missing( View *v );
 static void 		view_construct_scalar_coord_str( char *str, int slen );
 static float 		view_calc_minval_float( float *arr, size_t n );
 static float 		view_calc_maxval_float( float *arr, size_t n );
@@ -133,11 +122,7 @@ set_scan_variable( NCVar *var )
 		/* A brand new variable to display!  Exciting! */
 		if( options.debug )
 			fprintf( stderr, "set_scan_variable: initializing view struct for new variable\n" );
-		{
-		View *raw_new_view = NULL;
-		init_view( &raw_new_view, var );
-		view.reset( raw_new_view );
-		}
+		view.reset( View::create( var ) );
 		set_blowup_type( options.blowup_type );
 
 		/* Figure out what axes to use for X, Y, and Time,
@@ -145,7 +130,7 @@ set_scan_variable( NCVar *var )
 		 */
 		if( options.debug )
 			fprintf( stderr, "...determining scan axes (NEW)\n" );
-		determine_scan_axes( view.get(), var, NULL );
+		view->determineScanAxes( var, nullptr );
 		if( options.debug )
 			fprintf( stderr, "...axes ids: scan=%d y=%d x=%d\n", 
 				view->scan_axis_id, view->y_axis_id, view->x_axis_id );
@@ -167,7 +152,7 @@ set_scan_variable( NCVar *var )
 
 		if( options.debug )
 			fprintf( stderr, "...setting scan place (NEW)\n" );
-		set_scan_place     ( view.get(), var, NULL );
+		view->setScanPlace( var, nullptr );
 
 		/* Is the current field inverted?  If so, flip it back */
 		if( options.debug )
@@ -177,7 +162,7 @@ set_scan_variable( NCVar *var )
 		/* How big should we initially make the picture? */
 		if( options.debug )
 			fprintf( stderr, "...calculating blowup (NEW)\n" );
-		calculate_blowup( view.get(), var, -99999 );	/* last val is flag meaning to do automatic calculation */
+		view->calculateBlowup( var, -99999 );	/* last val is flag meaning to do automatic calculation */
 
 		/* Save the blowup we are using in the var structure so we can
 		 * return to it later if we want
@@ -197,7 +182,7 @@ set_scan_variable( NCVar *var )
 		if( options.debug )
 			fprintf( stderr, "set_scan_variable: initializing view struct for old variable\n" );
 		old_view = view.get();
-		init_view( &new_view, var );
+		new_view = View::create( var );
 
 		/* Figure out what axes to use for X, Y, and Time,
 		 * and set the current place based on those axes and
@@ -205,7 +190,7 @@ set_scan_variable( NCVar *var )
 		 */
 		if( options.debug )
 			fprintf( stderr, "...determining scan axes (PREVIOUS)\n" );
-		determine_scan_axes( new_view, var, old_view );
+		new_view->determineScanAxes( var, old_view );
 		if( var->effective_dimensionality == 1 ) {
 			/* unique_ptr::reset() deletes whatever it previously
 			 * owned (old_view, i.e. the pre-switch view) before
@@ -226,7 +211,7 @@ set_scan_variable( NCVar *var )
 			in_set_cursor_normal();
 			return(0);
 			}
-		set_scan_place( new_view, var, old_view );
+		new_view->setScanPlace( var, old_view );
 
 		/* Calculate new blowup.  If the old var was using the same display dimensions
 		 * as the new var is using, then don't modify the current blowup.  Otherwise,
@@ -248,7 +233,7 @@ set_scan_variable( NCVar *var )
 			if( options.debug )
 				fprintf( stderr, "...axis change, recalculating blowup; old, new X dim=%s, %s; old, new Y dim=%s, %s\n",
 					xdim_old->name.c_str(), xdim_new->name.c_str(), ydim_old->name.c_str(), ydim_new->name.c_str() );
-			calculate_blowup( new_view, var, var->user_set_blowup );
+			new_view->calculateBlowup( var, var->user_set_blowup );
 			/* Save the blowup we are using in the var structure so we can
 			 * return to it later if we want
 			 */
@@ -279,12 +264,12 @@ set_scan_variable( NCVar *var )
 	set_scan_buttons( view.get() );
 
 	/* Allocate storage space for the data */
-	alloc_view_storage( view.get() );
+	view->allocStorage();
 
 	/* Actually read the data in from the file */
 	if( options.debug )
 		fprintf( stderr, "...reading data from file\n" );
-	fill_view_data( view.get() );
+	view->fillViewData();
 
 	if( options.save_frames == true )
 		{
@@ -312,7 +297,7 @@ set_scan_variable( NCVar *var )
 			overlay2use = OVERLAY_P08DEG;
 		else
 			overlay2use = -1;
-		if( (overlay2use != -1) && (! view_data_has_missing( view.get() )))
+		if( (overlay2use != -1) && (! view->hasMissingData()))
 			do_overlay(overlay2use,NULL,true);
 		}
 
@@ -697,7 +682,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	 * running *before* this check (invalidating whatever's cached here
 	 * on every autoscale draw, so this check would always miss while
 	 * autoscale is on). This port moved that block below, after
-	 * fill_view_data(), so it recomputes from the freshly-loaded frame
+	 * View::fillViewData(), so it recomputes from the freshly-loaded frame
 	 * instead of upstream's stale-until-next-frame data -- but that
 	 * leaves a window where a still-cached, currently-displayed frame
 	 * (e.g. redrawn right after toggling autoscale on in the Options
@@ -726,7 +711,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	if( view->data_status == ViewDataStatus::Invalid ) {
 		if( options.debug )
 			printf( "Reading data to contour...\n" );
-		fill_view_data( view.get() );
+		view->fillViewData();
 		}
 	else
 		{
@@ -735,7 +720,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		}
 
 	/* If we need to adjust the range to the current frame, then do so.
-	 * Must run after fill_view_data() above, so it sees the just-loaded
+	 * Must run after View::fillViewData() above, so it sees the just-loaded
 	 * slice rather than whatever the previous frame left in view->data.
 	 */
 	if( must_recalc_range ) {
@@ -1006,35 +991,37 @@ view_check_new_data( int unused )
  * the previous variable was only a 1-d variable; in that case we do not
  * want to limit ourselves to its restrictions if we can avoid them.
  */
-	static void
-determine_scan_axes( View *view, NCVar *var, View *old_view )
+	void
+View::determineScanAxes( NCVar *var, View *old_view )
 {
-	initial_determine_scan_axes( view, var );
+	View *view = this;
 
-	if( view->scan_axis_id != -1 ) 
+	initialDetermineScanAxes( var );
+
+	if( view->scan_axis_id != -1 )
 		view->plot_XY_axis = view->scan_axis_id;
-	else if( view->x_axis_id != -1 ) 
+	else if( view->x_axis_id != -1 )
 		view->plot_XY_axis = view->x_axis_id;
 	/* We can't do an XY plot of dimensions that have a count
 	 * of one.  In that case, try to set it to something else.
 	 */
 	if( view->variable->size[view->plot_XY_axis] == 1 ) {
-		if( (view->scan_axis_id != -1) &&  
+		if( (view->scan_axis_id != -1) &&
 		    (view->variable->size[view->scan_axis_id] > 1))
 			view->plot_XY_axis = view->scan_axis_id;
 
-		else if( (view->x_axis_id != -1) &&  
+		else if( (view->x_axis_id != -1) &&
 		    (view->variable->size[view->x_axis_id] > 1))
 			view->plot_XY_axis = view->x_axis_id;
 
-		else if( (view->y_axis_id != -1) &&  
+		else if( (view->y_axis_id != -1) &&
 		    (view->variable->size[view->y_axis_id] > 1))
 			view->plot_XY_axis = view->y_axis_id;
 		}
 
 	if( (old_view != NULL) && (old_view->variable->effective_dimensionality > 1))
 		{
-		re_determine_scan_axes( view, var, old_view );
+		reDetermineScanAxes( var, old_view );
 
 		/* We can exit the above code with the X and Y dimensions
 		 * the same, if the newly picked variable has less dimensions than
@@ -1043,7 +1030,7 @@ determine_scan_axes( View *view, NCVar *var, View *old_view )
 		 * way if this is the case.
 		 */
 		if( view->x_axis_id == view->y_axis_id )
-			initial_determine_scan_axes( view, var );
+			initialDetermineScanAxes( var );
 
 		/* Don't let an axis be BOTH scan AND x or y */
 		if( view->x_axis_id == view->scan_axis_id )
@@ -1052,18 +1039,19 @@ determine_scan_axes( View *view, NCVar *var, View *old_view )
 			view->scan_axis_id = -1;
 
 		/* Final sanity checks! */
-		if( (view->x_axis_id == -1) || 
+		if( (view->x_axis_id == -1) ||
 		    (view->y_axis_id == -1) ||
 		    (view->x_axis_id > view->variable->n_dims) ||
 		    (view->y_axis_id > view->variable->n_dims))
-			initial_determine_scan_axes( view, var );
+			initialDetermineScanAxes( var );
 		}
 }
 
 /**************************************************************************************/
-	static void
-initial_determine_scan_axes( View *view, NCVar *var )
+	void
+View::initialDetermineScanAxes( NCVar *var )
 {
+	View *view = this;
 	Stringlist	*dimlist;
 	int		n_dims;
 
@@ -1156,9 +1144,10 @@ initial_determine_scan_axes( View *view, NCVar *var )
  * Actually go to the data file and read the data in, putting the result
  * in the view structure.
  */
-	static void
-fill_view_data( View *v )
+	void
+View::fillViewData()
 {
+	View *v = this;
 	int	i;
 
 	if( v->data_status == ViewDataStatus::Valid )
@@ -1520,7 +1509,7 @@ view_set_scan_dims( void )
 		flip_if_inverted( view.get() );
 		redraw_dimension_info();
 		view->data_status = ViewDataStatus::Invalid;
-		alloc_view_storage( view.get() );
+		view->allocStorage();
 		init_saveframes();
 		set_scan_buttons( view.get() );
 		view_draw( true, false ); /* 'true' because we initialized saveframes above */
@@ -1595,9 +1584,10 @@ view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
 }
 
 /**************************************************************************************/
-	static void
-alloc_view_storage( View *view )
+	void
+View::allocStorage()
 {
+	View *view = this;
 	size_t	x_size, y_size, scaled_x_size, scaled_y_size;
 
 	/* Allocate storage space for the data in the view structure. Note:
@@ -1773,7 +1763,7 @@ init_saveframes()
 		fprintf( stderr, "	total storage size:%zu\n", storage_size );
 		}
 
-	/* Unlike alloc_view_storage()'s hard exit(-1) on allocation failure,
+	/* Unlike View::allocStorage()'s hard exit(-1) on allocation failure,
 	 * this path was always meant to degrade gracefully (in-core frame
 	 * caching is an optional speed optimization, not required for
 	 * correctness) -- preserved here by catching std::bad_alloc from
@@ -1809,21 +1799,23 @@ invalidate_all_saveframes()
  * carries it briefly as a local raw pointer before doing the same), which
  * is what actually owns and eventually deletes it -- see set_scan_variable()
  * and invalidate_variable() above. */
-	static void
-init_view( View **view, NCVar *var )
+	View *
+View::create( NCVar *var )
 {
-	(*view) = new View();
-	(*view)->data_status  = ViewDataStatus::Invalid;
-	(*view)->x_axis_id    = -1;
-	(*view)->y_axis_id    = -1;
-	(*view)->scan_axis_id = -1;
-	(*view)->skip         =  1;
+	View *view = new View();
+	view->data_status  = ViewDataStatus::Invalid;
+	view->x_axis_id    = -1;
+	view->y_axis_id    = -1;
+	view->scan_axis_id = -1;
+	view->skip         =  1;
 
-	(*view)->variable  = var;
-	(*view)->var_place.assign( var->n_dims, 0 );
+	view->variable  = var;
+	view->var_place.assign( var->n_dims, 0 );
 
-	(*view)->plot_XY_axis   = -1;
-	(*view)->plot_XY_nlines = 0;
+	view->plot_XY_axis   = -1;
+	view->plot_XY_nlines = 0;
+
+	return( view );
 }
 
 /**************************************************************************************/
@@ -1888,9 +1880,10 @@ set_buttons( int to_state )
 }
 
 /**************************************************************************************/
-	static void
-re_determine_scan_axes( View *new_view, NCVar *new_var, View *old_view )
+	void
+View::reDetermineScanAxes( NCVar *new_var, View *old_view )
 {
+	View *new_view = this;
 	NCVar	*old_var;
 	int	old_n_scannable_dims, i, dim_index;
 	NCDim	*old_dim;
@@ -1936,17 +1929,19 @@ re_determine_scan_axes( View *new_view, NCVar *new_var, View *old_view )
  * the current one; in that case, try to set the new view to the same
  * place as the old view, if possible.
  */
-	static void
-set_scan_place( View *new_view, NCVar *var, View *old_view )
+	void
+View::setScanPlace( NCVar *var, View *old_view )
 {
+	View *new_view = this;
+
 	/* Initially, always set to zero */
-	initial_set_scan_place( new_view, var );
+	initialSetScanPlace( var );
 
 	/* If there is some additional information based on the
 	 * old view, use that.
 	 */
 	if( old_view != NULL )
-		re_set_scan_place( new_view, var, old_view );
+		reSetScanPlace( var, old_view );
 
 	/* All place information for the displayed axes MUST be
 	 * set to zero!!
@@ -1956,9 +1951,10 @@ set_scan_place( View *new_view, NCVar *var, View *old_view )
 }
 
 /**************************************************************************************/
-	static void
-initial_set_scan_place( View *view, NCVar *var )
+	void
+View::initialSetScanPlace( NCVar *var )
 {
+	View *view = this;
 	int	i;
 
 	for( i=0; i<var->n_dims; i++ )
@@ -1967,9 +1963,10 @@ initial_set_scan_place( View *view, NCVar *var )
 }
 
 /**************************************************************************************/
-	static void
-re_set_scan_place( View *new_view, NCVar *new_var, View *old_view )
+	void
+View::reSetScanPlace( NCVar *new_var, View *old_view )
 {
+	View *new_view = this;
 	int	i, dim_index;
 	NCDim	*new_dim;
 	NCVar	*old_var;
@@ -1999,9 +1996,10 @@ re_set_scan_place( View *new_view, NCVar *new_var, View *old_view )
 /* If 'val_to_set_to' is -99999, then the blowup is calculated automatically,
  * otherwise the blowup is set to val_to_set_to
  */
-	static void
-calculate_blowup( View *view, NCVar *var, int val_to_set_to )
+	void
+View::calculateBlowup( NCVar *var, int val_to_set_to )
 {
+	View *view = this;
 	size_t	x_size, y_size;
 	float	fbx, fby, f_x_size, f_y_size, f_blowup;
 	int	ifbx, view_var_is_valid;
@@ -2248,7 +2246,7 @@ view_report_position( int x, int y, unsigned int button_mask )
 		return;
 
 	if( view->data_status == ViewDataStatus::Invalid ) {
-		fill_view_data( view.get() );
+		view->fillViewData();
 		view->data_status = ViewDataStatus::Valid;
 		}
 
@@ -2449,7 +2447,7 @@ set_dataedit_place()
 	size_t	index;
 
 	if( view->data_status == ViewDataStatus::Invalid ) {
-		fill_view_data( view.get() );
+		view->fillViewData();
 		view->data_status = ViewDataStatus::Valid;
 		}
 
@@ -2494,7 +2492,7 @@ set_min_from_curdata()
 		return;
 
 	if( view->data_status == ViewDataStatus::Invalid ) {
-		fill_view_data( view.get() );
+		view->fillViewData();
 		view->data_status = ViewDataStatus::Valid;
 		}
 
@@ -2541,7 +2539,7 @@ set_max_from_curdata()
 		return;
 
 	if( view->data_status == ViewDataStatus::Invalid ) {
-		fill_view_data( view.get() );
+		view->fillViewData();
 		view->data_status = ViewDataStatus::Valid;
 		}
 
@@ -3188,16 +3186,17 @@ mouse_xy_to_data_xy( int mouse_x, int mouse_y, int blowup, size_t *data_x, size_
 /*======================================================================================
  * Return true if there is *any* missing data in the current view, and false otherwise
  */
-	int
-view_data_has_missing( View *v )
+	bool
+View::hasMissingData() const
 {
+	const View *v = this;
 	size_t 	nx, ny, i;
 	float	dat;
 
-	if( (v == NULL) || (v->variable == NULL))
+	if( v->variable == NULL )
 		return(true);
 
-	if( v->x_axis_id < 0 ) 
+	if( v->x_axis_id < 0 )
 		return(true);
 	nx = v->variable->size[v->x_axis_id];
 

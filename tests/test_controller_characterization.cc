@@ -33,7 +33,7 @@ extern void resetStubRecording();
 extern std::unique_ptr<ViewState> &view;
 // Real deployments always set this in the UI's own in_initialize()
 // (ui/src/interface_fltk.cc) before any variable is selected --
-// calculate_blowup() divides by it unconditionally, and leaving it at
+// View::calculateBlowup() divides by it unconditionally, and leaving it at
 // its zero-initialized default turns into a divide-by-zero -> UB
 // float-to-int conversion that shows up here as an absurd blowup value
 // and a failed huge-vector allocation. The stub's in_initialize() is a
