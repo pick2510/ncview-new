@@ -1,5 +1,6 @@
 /*
  * Ncview by David W. Pierce.  A visual netCDF file viewer.
+ * Copyright (C) 2026 Dominik Strebel
  * Copyright (C) 1993-2024 David W. Pierce
  *
  * This program  is free software; you can redistribute it and/or modify

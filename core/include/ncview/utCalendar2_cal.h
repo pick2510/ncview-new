@@ -4,6 +4,7 @@
 
     Version 1.0, released 7 January 2010
 
+    Copyright (C) 2026 Dominik Strebel
     Copyright (C) 2010-2024 David W. Pierce, davidwilliampierce@gmail.com
 
     This program is free software: you can redistribute it and/or modify

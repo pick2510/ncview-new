@@ -5,6 +5,7 @@
 
     Version 1.2, released 8 June 2014
 
+    Copyright (C) 2026 Dominik Strebel
     Copyright (C) 2010-2024 David W. Pierce, davidwilliampierce@gmail.com
 
     This program is free software: you can redistribute it and/or modify
