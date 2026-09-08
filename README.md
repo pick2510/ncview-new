@@ -85,6 +85,8 @@ manually from the Actions tab with that tag name.
 
 ---
 
-Note: the root-level `README`, `COPYRIGHT`, and `CHANGE_LOG` files (no
-`.md` suffix) are UDUNITS-2's own files, kept only because its vendored
-CMake build hardcodes those paths at the repo root.
+Note: after configuring, you may see root-level `README`, `COPYRIGHT`, and
+`CHANGE_LOG` files (no `.md` suffix) appear. Those are UDUNITS-2's own
+files, generated there at configure time (from its own copies) because its
+vendored CMake build hardcodes those paths at the repo root -- not tracked,
+not this project's own files.

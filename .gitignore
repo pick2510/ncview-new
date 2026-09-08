@@ -1,2 +1,10 @@
 /build/
 /build-*/
+
+# Generated at configure time (CMakeLists.txt, right before
+# add_subdirectory(third_party/udunits2)) from the submodule's own copies --
+# UDUNITS-2's vendored build hardcodes these paths at the repo root, but
+# they aren't this project's own files, so they aren't tracked here.
+/README
+/COPYRIGHT
+/CHANGE_LOG

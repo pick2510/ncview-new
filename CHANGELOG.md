@@ -5,6 +5,14 @@ Notable changes to this project, condensed from `PORTING.md`,
 See those two files for full narrative detail and rationale; this is
 the short version.
 
+## [Unreleased]
+
+### Changed
+- The root-level `README`/`COPYRIGHT`/`CHANGE_LOG` files (UDUNITS-2's own,
+  required at that exact path by its vendored CMake build) are no longer
+  committed to the repo -- generated there at configure time instead, from
+  the submodule's own copies, and `.gitignore`'d.
+
 ## [0.3.0] - 2026-09-08
 
 ### Changed

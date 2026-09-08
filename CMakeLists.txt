@@ -274,9 +274,20 @@ endif()
 
 # Upstream's CMakeLists.txt assumes it is the top-level project: its CPack
 # block and its `install(FILES "${CMAKE_SOURCE_DIR}/COPYRIGHT" ...)` resolve
-# CMAKE_SOURCE_DIR to *our* repo root when add_subdirectory'd. We keep root
-# -level README/COPYRIGHT files (copies of udunits2's own) purely so those
-# hardcoded paths resolve; our actual project readme is README.md.
+# CMAKE_SOURCE_DIR to *our* repo root when add_subdirectory'd, so those
+# paths need a README/COPYRIGHT/CHANGE_LOG to exist there. Rather than
+# committing copies of udunits2's own files at our root (where they read as
+# this project's own and clutter the repo listing), generate them here at
+# configure time from the submodule's real copies -- .gitignore'd, not
+# tracked. Our actual project readme is README.md.
+foreach(_udunits2_legal_file README COPYRIGHT CHANGE_LOG)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/udunits2/${_udunits2_legal_file}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/${_udunits2_legal_file}"
+        COPYONLY
+    )
+endforeach()
+
 add_subdirectory(third_party/udunits2)
 
 # UDUNITS-2's own CMakeLists.txt only escapes backslashes in the path it
