@@ -5,6 +5,18 @@ Notable changes to this project, condensed from `PORTING.md`,
 See those two files for full narrative detail and rationale; this is
 the short version.
 
+## [Unreleased]
+
+### Changed
+- Printing now uses the platform's native print dialog (`Fl_Printer`) in both
+  the main window and XY plot windows, instead of ncview's own hand-written
+  PostScript generator shelling out to `lpr`. Fixes printing on Windows,
+  where `mkstemp`/`lpr` never existed, so it silently produced nothing there.
+  ncview's own Printer Options dialog is trimmed to the page-layout settings
+  the native dialog doesn't cover (margins, font, and the include-toggles);
+  where to print (printer vs file, which printer, paper, orientation,
+  copies) is now the native dialog's job.
+
 ## [0.2.3] - 2026-09-07
 
 ### Fixed
