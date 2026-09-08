@@ -276,9 +276,11 @@ int 	read_state_from_file( Stringlist **state );
 Stringlist *get_persistent_state();
 
 /******************************************************************************
- * in interface_glue.c -- toolkit-agnostic logic factored out of upstream's
- * src/interface/interface.c because core itself calls these (not just the
- * UI); see that file's header comment.
+ * Toolkit-agnostic logic factored out of upstream's src/interface/interface.c
+ * because core itself calls these (not just the UI). in_variable_selected
+ * lives in view.cc next to set_scan_variable(); in_button_pressed and
+ * in_colormap_selected live in do_buttons.cc next to the do_*() functions
+ * they dispatch to; in_error lives in util.cc.
  */
 void	in_variable_selected	( const char *var_name );
 void	in_colormap_selected	( const char *name );

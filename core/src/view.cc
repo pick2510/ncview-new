@@ -360,6 +360,26 @@ set_scan_variable( NCVar *var )
 	return( 0 );
 }
 
+/*****************************************************************************
+ * Vector through this routine when a new display variable has been
+ * selected by the user, by pressing some sort of button. Formerly
+ * interface_glue.cc, dissolved into the file that owns set_scan_variable().
+ */
+void
+in_variable_selected( const char *var_name )
+{
+	NCVar	*var;
+
+	if( (var = get_var( var_name )) == NULL ) {
+		fprintf( stderr, "ncview: in_variable_selected: internal error " );
+		fprintf( stderr, "no variable with name >%s< found on variable list\n",
+					var_name );
+		exit( -1 );
+		}
+
+	set_scan_variable( var );
+}
+
 /**************************************************************************************/
 	static void
 set_scan_buttons( View *local_view )

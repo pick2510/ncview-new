@@ -2310,10 +2310,22 @@ void varname_no_groups( const char *varname, char *varname_sans_groups, char *gr
 		}
 
 	/*
-	printf( "UUUU varname_no_groups, varname: >%s< varname_sans_groups: >%s< groupname: >%s<\n", 
+	printf( "UUUU varname_no_groups, varname: >%s< varname_sans_groups: >%s< groupname: >%s<\n",
 		varname,
 		varname_sans_groups,
 		((groupname == NULL) ? "NULL" : groupname));
 	*/
+}
+
+/*****************************************************************************
+ * Indicate an error condition which can be continued from. Routed through
+ * in_dialog (a real ncview_ui responsibility) rather than being one itself.
+ * Formerly interface_glue.cc, dissolved into this file since core's other
+ * error-reporting callers already live here.
+ */
+void
+in_error( const char *message )
+{
+	in_dialog( message, false );
 }
 

@@ -35,9 +35,10 @@
 /******************************************************************************
  * in_* : implemented by src/interface/interface.c upstream, now by ncview_ui.
  *
- * Not here (moved to ncview/protos.h + core/src/interface_glue.cc instead):
- * in_variable_selected, in_button_pressed, in_error -- core itself calls
- * these, so they can't be things only ncview_ui implements. Also not here
+ * Not here (moved to ncview/protos.h + core/src/view.cc/do_buttons.cc/util.cc
+ * instead): in_variable_selected, in_colormap_selected, in_button_pressed,
+ * in_error -- core itself calls these, so they can't be things only
+ * ncview_ui implements. Also not here
  * (upstream had them as trivial one-line forwards to a *_core* function;
  * ncview_ui just calls that core function directly instead): report_position
  * (-> view_report_position), in_change_dat (-> view_change_dat),

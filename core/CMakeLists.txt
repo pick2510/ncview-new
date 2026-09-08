@@ -11,7 +11,6 @@ add_library(ncview_core STATIC
     src/frame_cache.cc
     src/frame_renderer.cc
     src/handle_rc_file.cc
-    src/interface_glue.cc
     src/ncview.cc
     src/overlay.cc
     src/stringlist.cc
