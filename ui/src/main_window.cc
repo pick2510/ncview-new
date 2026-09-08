@@ -452,6 +452,13 @@ MainWindow::MainWindow()
 	add_menu_item( "Edit/Options...",            Button::Options );
 	add_menu_item( "View/Info",                  Button::Info );
 	add_menu_item( "View/Range...",              Button::Range );
+	// Upstream's right-click on the Range button set the color range from
+	// just the current frame (do_range()'s Modifier::M3 path,
+	// view_set_range_frame()) instead of the full dialog -- a real,
+	// distinct action, not just a faster way to reach the same dialog.
+	// There's no right-click gesture on a menu item, so it gets its own
+	// entry instead of trying to reproduce the mouse binding.
+	menu_bar_->add( "View/Range (Current Frame)", 0, &MainWindow::rangeFrameCallback );
 	add_menu_item( "View/Transform",             Button::Transform );
 	add_menu_item( "View/Interp",                Button::BlowupType );
 	add_menu_item( "View/Invert Physical",       Button::InvertPhysical );
@@ -831,7 +838,28 @@ void MainWindow::rebuildButtonBar( int available_width )
 void MainWindow::buttonCallback( Fl_Widget *, void *data )
 {
 	Button id = static_cast<Button>( (int)(intptr_t)data );
-	in_button_pressed( id, Modifier::M1 );
+	// Upstream's Ctrl+click on the transport buttons jumps by a percentage
+	// of the file's frame count instead of one frame (do_rewind/
+	// do_backwards/do_forward/do_fastforward's Modifier::M2 path) -- real,
+	// physical toolbar buttons, so the gesture translates directly, unlike
+	// the menu-item cases below.
+	Modifier mod = Modifier::M1;
+	switch( id ) {
+	case Button::Rewind:
+	case Button::Backwards:
+	case Button::Forward:
+	case Button::Fastforward:
+		if( Fl::event_ctrl() ) mod = Modifier::M2;
+		break;
+	default:
+		break;
+	}
+	in_button_pressed( id, mod );
+}
+
+void MainWindow::rangeFrameCallback( Fl_Widget *, void * )
+{
+	in_button_pressed( Button::Range, Modifier::M3 );
 }
 
 void MainWindow::varChoiceCallback( Fl_Widget *w, void * )

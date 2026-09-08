@@ -214,6 +214,7 @@ private:
 	void recenterVarPack();
 	void rebuildColormapChoice();
 	static void buttonCallback( Fl_Widget *w, void *data );
+	static void rangeFrameCallback( Fl_Widget *w, void *data );
 	static void varChoiceCallback( Fl_Widget *w, void *data );
 	static void dimStepCallback( Fl_Widget *w, void *data );
 	static void dimSliderCallback( Fl_Widget *w, void *data );
