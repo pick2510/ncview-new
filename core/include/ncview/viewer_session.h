@@ -104,6 +104,13 @@ public:
 	FrameCache& frameCache() { return frame_cache_; }
 	const FrameCache& frameCache() const { return frame_cache_; }
 
+	/* The active colormap's pixel index table (PseudoColor remap target;
+	 * see FrameRenderer). Sized to n_colors+n_extra_colors and rebuilt
+	 * whenever a colormap is installed -- see ncview.cc's
+	 * in_install_colormap_by_name() and friends. */
+	std::vector<ncv_pixel>& pixelTransform() { return pixel_transform_; }
+	const std::vector<ncv_pixel>& pixelTransform() const { return pixel_transform_; }
+
 	RenderSettings& renderSettings() { return render_settings_; }
 	PlaybackSettings& playbackSettings() { return playback_settings_; }
 	SessionDisplayPrefs& sessionDisplayPrefs() { return session_display_prefs_; }
@@ -120,6 +127,7 @@ private:
 	Dataset dataset_;
 	std::unique_ptr<ViewState> view_;
 	FrameCache frame_cache_;
+	std::vector<ncv_pixel> pixel_transform_;
 
 	RenderSettings render_settings_;
 	PlaybackSettings playback_settings_;

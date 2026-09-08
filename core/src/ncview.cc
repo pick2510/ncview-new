@@ -79,7 +79,7 @@ ViewerSession g_viewer_session;
 Options	  options( g_viewer_session );
 Dataset   &g_dataset = g_viewer_session.dataset();
 std::vector<std::unique_ptr<NCVar>> &variables = g_dataset.variablesMutable();
-std::vector<ncv_pixel> pixel_transform;
+std::vector<ncv_pixel> &pixel_transform = g_viewer_session.pixelTransform();
 FrameCache &framestore = g_viewer_session.frameCache();
 Stringlist *read_in_state;
 

@@ -59,6 +59,7 @@ extern Dataset &g_dataset;
 extern std::vector<std::unique_ptr<NCVar>> &variables;
 extern std::unique_ptr<ViewState> &view;
 extern FrameCache &framestore;
+extern std::vector<ncv_pixel> &pixel_transform;
 
 /******************************************************************************
  * in ncview.c
