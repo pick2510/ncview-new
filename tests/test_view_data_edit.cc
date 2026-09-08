@@ -18,7 +18,7 @@
 #include "ncview/protos.h"
 #include "test_udunits_helper.h"
 
-extern std::unique_ptr<View> view;
+extern std::unique_ptr<ViewState> &view;
 extern char **g_last_dataedit_lines;
 extern int g_last_dataedit_nx;
 

@@ -40,20 +40,25 @@
 
 #include "ncview/stringlist.h"
 #include "ncview/interface.h"
-#include "ncview/dataset.h"
+#include "ncview/viewer_session.h"
 
 /* Global state, defined in ncview.cc. Upstream had every .c file that
  * needed these declare its own local `extern`; this is the one canonical
  * declaration ncview_ui can use too. */
 extern Options options;
 
-/* Dataset owns the NCVar list and the NetCDFFiles behind it (see
- * ncview/dataset.h). `variables` is a migration bridge -- a reference onto
- * g_dataset's own storage -- so the ~100 existing callsites across core/
- * and ui/ that read/mutate the global `variables` keep compiling and
- * behaving identically. Both are defined together in ncview.cc. */
-extern Dataset g_dataset;
+/* ViewerSession owns the Dataset, the active ViewState, and the FrameCache
+ * (OOP_redesign plan, Step 8). `g_dataset`, `view`, and `framestore` are
+ * migration bridges -- references onto g_viewer_session's own members --
+ * so the many existing callsites across core/, ui/, and tests/ that read
+ * these globals by their original names keep compiling and behaving
+ * identically. All four are defined together in ncview.cc, except `view`,
+ * which is defined in view.cc (its sole owner before this step). */
+extern ViewerSession g_viewer_session;
+extern Dataset &g_dataset;
 extern std::vector<std::unique_ptr<NCVar>> &variables;
+extern std::unique_ptr<ViewState> &view;
+extern FrameCache &framestore;
 
 /******************************************************************************
  * in ncview.c

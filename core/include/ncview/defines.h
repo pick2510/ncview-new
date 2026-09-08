@@ -497,6 +497,33 @@ struct OverlayOptions {
 	std::vector<int>	overlay;
 };
 
+/* OOP_redesign plan, Step 8: ViewerSession's design classifies this
+ * struct's fields into four groups. Storage stays a single struct for now
+ * (see viewer_session.cc's header comment for why splitting it into
+ * separately-owned pieces is deferred) -- these comments record the
+ * classification so it's visible at the field declarations themselves,
+ * not just in the plan document.
+ *
+ *   Render-shaped (feed FrameRenderer::PixelMapSettings, via
+ *   ViewerSession::pixelMapSettings()): blowup, blowup_type,
+ *   shrink_method, transform, invert_colors, invert_physical, n_colors,
+ *   n_extra_colors, display_type, autoscale, min_max_method.
+ *
+ *   Playback settings (the playback *state* -- formerly a do_buttons.cc
+ *   file-static -- is ViewerController::cur_button_, not here):
+ *   frame_delay, delta_step, beep_on_restart, stop_on_restart.
+ *
+ *   Session-lifetime display prefs: save_frames, missval_r/g/b, scale,
+ *   offset, overlay, calendar.
+ *
+ *   CLI/startup-only (set once from argv in parse_options()/
+ *   initialize_misc(), never mutated afterward by the running app):
+ *   dump_frames, small, maxsize_pct, maxsize_width, maxsize_height,
+ *   private_colormap, no_1d_vars, varsel_style, listsel_max,
+ *   enable_group_sel, no_char_dims, no_autoflip, color_by_ndims,
+ *   auto_overlay, want_extra_info, show_sel, debug, t_conv,
+ *   blowup_default_size.
+ */
 struct Options {
 	int	invert_physical,
 		invert_colors,

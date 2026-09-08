@@ -41,7 +41,7 @@ const char *my_overlay_names[] = { "None",
 			"USA states",
 			"custom" };
 
-extern std::unique_ptr<View> view;
+extern std::unique_ptr<ViewState> &view;
 extern Options  options;
 
 static int	my_current_overlay;

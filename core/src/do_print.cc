@@ -46,7 +46,7 @@
 
 #define	ID_FONT_SIZE_SCALE	0.7	/* How much smaller ID font size is than regular */
 
-extern std::unique_ptr<View> view;
+extern std::unique_ptr<ViewState> &view;
 extern Options 	options;
 
 static PrintOptions printopts;

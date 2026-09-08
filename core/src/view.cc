@@ -39,14 +39,16 @@
 
 /* External variables */
 extern	Options options;
-extern  FrameCache framestore;
 
 /* Owns the active ViewState (an alias for View -- see defines.h). A
  * unique_ptr rather than a raw pointer so that every reassignment below
  * (set_scan_variable()'s variable switch, invalidate_variable()'s reset)
  * actually deletes whatever it previously owned instead of leaking it --
- * see those functions for the two sites this used to leak from. */
-std::unique_ptr<View> view;
+ * see those functions for the two sites this used to leak from. Bound to
+ * g_viewer_session's own member (OOP_redesign plan, Step 8) rather than
+ * owning storage directly -- view.cc stays the file that constructs and
+ * mutates it, ViewerSession is just where the storage now lives. */
+std::unique_ptr<ViewState> &view = g_viewer_session.activeView();
 
 /* See comments in routine "view_draw" */
 static int 	lockout_view_changes = false;

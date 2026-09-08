@@ -76,10 +76,11 @@
 #define DEFAULT_AUTO_OVERLAY	true
 
 Options	  options;
-Dataset   g_dataset;
+ViewerSession g_viewer_session;
+Dataset   &g_dataset = g_viewer_session.dataset();
 std::vector<std::unique_ptr<NCVar>> &variables = g_dataset.variablesMutable();
 std::vector<ncv_pixel> pixel_transform;
-FrameCache framestore;
+FrameCache &framestore = g_viewer_session.frameCache();
 Stringlist *read_in_state;
 
 static void init_cmaps_from_data();
