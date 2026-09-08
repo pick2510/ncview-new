@@ -8,8 +8,10 @@
  * FLTK replacement for upstream's src/interface/interface.c +
  * src/interface/x_interface.c.
  */
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <vector>
@@ -19,6 +21,9 @@
 #include <FL/Fl_Double_Window.H>
 #include <FL/Fl_Native_File_Chooser.H>
 #include <FL/Fl_PNG_Image.H>
+#include <FL/Fl_PostScript.H>
+#include <FL/Fl_Printer.H>
+#include <FL/Fl_RGB_Image.H>
 #include <FL/Fl_Table.H>
 #include <FL/Fl_Text_Buffer.H>
 #include <FL/Fl_Text_Display.H>
@@ -236,20 +241,11 @@ void in_set_cur_dim_value( const char *name, const char *string )
 /* ---- 2-D field / colormap ------------------------------------------------ */
 
 namespace {
-// M5: "-frames" (options.dump_frames) dumps every displayed frame to a PNG,
-// e.g. to assemble into a movie. Upstream's x_interface.c did this itself
-// with a direct libpng call inside its x_draw_2d_field(); FLTK already
-// bundles libpng for its own image support (fltk_images/fl_write_png.cxx),
-// so this needs no new dependency -- just an RGB expansion via pix_to_rgb,
-// which do_print.cc's PostScript writer already relies on.
-void dumpFrameToPng( const unsigned char *data, size_t width, size_t height, size_t frameno )
+// Shared by dumpFrameToPng() below and in_print() (further down): expands
+// an index-buffer into tightly packed 8-bit RGB via pix_to_rgb()'s >>8
+// contract (see MainWindow::pixelToRgb).
+std::vector<unsigned char> expandPixelsToRgb( const ncv_pixel *data, size_t width, size_t height )
 {
-	static bool error_state = false;
-	if( error_state ) return;
-
-	char filename[64];
-	snprintf( filename, sizeof(filename), "frame.%05zu.png", frameno );
-
 	std::vector<unsigned char> rgb( width * height * 3 );
 	for( size_t i = 0; i < width * height; i++ ) {
 		int r, g, b;
@@ -258,6 +254,23 @@ void dumpFrameToPng( const unsigned char *data, size_t width, size_t height, siz
 		rgb[i*3+1] = (unsigned char)(g >> 8);
 		rgb[i*3+2] = (unsigned char)(b >> 8);
 	}
+	return rgb;
+}
+
+// M5: "-frames" (options.dump_frames) dumps every displayed frame to a PNG,
+// e.g. to assemble into a movie. Upstream's x_interface.c did this itself
+// with a direct libpng call inside its x_draw_2d_field(); FLTK already
+// bundles libpng for its own image support (fltk_images/fl_write_png.cxx),
+// so this needs no new dependency.
+void dumpFrameToPng( const unsigned char *data, size_t width, size_t height, size_t frameno )
+{
+	static bool error_state = false;
+	if( error_state ) return;
+
+	char filename[64];
+	snprintf( filename, sizeof(filename), "frame.%05zu.png", frameno );
+
+	std::vector<unsigned char> rgb = expandPixelsToRgb( data, width, height );
 	if( fl_write_png( filename, rgb.data(), (int)width, (int)height, 3 ) != 0 ) {
 		fprintf( stderr, "ncview: can't write PNG file %s\n", filename );
 		error_state = true;
@@ -554,10 +567,154 @@ void set_options( void )
 
 Message printer_options( PrintOptions *po )
 {
+	// do_print() calls this dialog before in_print() -- see the
+	// NCVIEW_TEST_PRINT_FILE handling there. Skip this modal too under the
+	// same env var, so the "print" ui_smoke.sh case can run do_print() to
+	// completion headlessly, keeping print_init()'s layout defaults.
+	if( getenv( "NCVIEW_TEST_PRINT_FILE" ) != nullptr )
+		return Message::OK;
 	return instance()->printerOptionsDialog( po );
 }
 
-void printer_options_init( void ) {}
+namespace {
+
+Fl_Font printFont( const std::string &name )
+{
+	if( name == "Courier" ) return FL_COURIER;
+	if( name == "Times" )   return FL_TIMES;
+	return FL_HELVETICA;
+}
+
+// Lays out one printed page -- image, title, axis labels, extra-info
+// block, outline, and ID stamp -- from the metadata do_print.cc built
+// (info) and the page-layout settings from the printer_options() dialog
+// above (po). This is upstream's do_print.c print_header()/
+// print_other_info() PostScript-writing logic, redone as fl_draw() calls;
+// shared between the real Fl_Printer job in in_print() below and the
+// NCVIEW_TEST_PRINT_FILE PostScript-to-file test hook, so both exercise
+// the exact same layout code.
+void renderPrintPage( Fl_Paged_Device &dev, const PrintInfo &info, const PrintOptions &po )
+{
+	int pw, ph;
+	dev.printable_rect( &pw, &ph );
+
+	int x_margin   = (int)(po.page_x_margin * 72.0f);
+	int top_margin = (int)(po.page_upper_y_margin * 72.0f);
+	int bot_margin = (int)(po.page_lower_y_margin * 72.0f);
+	// Never let margins swallow the whole page -- upstream would happily
+	// push the image off the page if they did.
+	if( x_margin < 0 || x_margin * 2 >= pw ) x_margin = pw / 8;
+	if( top_margin < 0 ) top_margin = 0;
+	if( bot_margin < 0 || top_margin + bot_margin >= ph ) { top_margin = ph / 8; bot_margin = ph / 8; }
+
+	int avail_w = std::max( 1, pw - 2 * x_margin );
+	int avail_h = std::max( 1, ph - top_margin - bot_margin );
+
+	Fl_Font font    = printFont( po.font_name );
+	int font_size   = po.font_size > 0 ? po.font_size : 11;
+	int header_size = po.header_font_size > 0 ? po.header_font_size : 16;
+	int leading     = po.leading >= 0 ? po.leading : 3;
+	const float id_font_scale = 0.7f;	/* how much smaller the ID stamp's font is */
+
+	int img_x = x_margin, img_y = top_margin, img_w = avail_w, img_h = avail_h;
+
+	if( !po.test_only && info.width > 0 && info.height > 0 && info.pixels != nullptr ) {
+		std::vector<unsigned char> rgb = expandPixelsToRgb( info.pixels, info.width, info.height );
+		Fl_RGB_Image image( rgb.data(), (int)info.width, (int)info.height, 3 );
+
+		float scale_x = (float)avail_w / (float)info.width;
+		float scale_y = (float)avail_h / (float)info.height;
+		float scale   = scale_x < scale_y ? scale_x : scale_y;
+		img_w = std::max( 1, (int)((float)info.width  * scale) );
+		img_h = std::max( 1, (int)((float)info.height * scale) );
+		img_x = x_margin + (avail_w - img_w) / 2;
+
+		std::unique_ptr<Fl_Image> scaled( image.copy( img_w, img_h ) );
+		scaled->draw( img_x, img_y );
+	}
+
+	if( po.include_outline || po.test_only ) {
+		fl_color( FL_BLACK );
+		fl_rect( img_x, img_y, img_w, img_h );
+		if( po.test_only ) {
+			fl_line( img_x, img_y, img_x + img_w, img_y + img_h );
+			fl_line( img_x, img_y + img_h, img_x + img_w, img_y );
+		}
+	}
+
+	int center_x        = img_x + img_w / 2;
+	int bottom_of_image = img_y + img_h;
+
+	if( !info.title.empty() ) {
+		fl_font( font, header_size );
+		fl_draw( info.title.c_str(), center_x - (int)(fl_width( info.title.c_str() ) / 2), img_y - leading );
+	}
+
+	int label_y = bottom_of_image + font_size + leading;
+	if( !info.x_axis_label.empty() ) {
+		fl_font( font, font_size );
+		fl_draw( info.x_axis_label.c_str(),
+			center_x - (int)(fl_width( info.x_axis_label.c_str() ) / 2), label_y );
+		label_y += font_size + leading;
+	}
+
+	if( !info.extra_info.empty() ) {
+		fl_font( font, font_size );
+		int line_y = label_y + font_size;
+		for( const auto &line : info.extra_info ) {
+			fl_draw( line.c_str(), x_margin, line_y );
+			line_y += leading + font_size;
+		}
+	}
+
+	// The Y-axis label and ID stamp are rotated 90 degrees -- upstream's
+	// "gsave 90 rotate ... show grestore" -- via fl_draw()'s own rotated
+	// overload rather than Fl_Paged_Device::origin()/rotate(), which
+	// rotates the whole graphics state (including anything drawn
+	// afterward) and needs a careful reset; this rotates just the one
+	// string, about the given point, leaving everything else alone.
+	if( !info.y_axis_label.empty() ) {
+		fl_font( font, font_size );
+		int label_w = (int)fl_width( info.y_axis_label.c_str() );
+		fl_draw( 90, info.y_axis_label.c_str(),
+			x_margin - leading - 2, img_y + img_h / 2 + label_w / 2 );
+	}
+
+	if( !info.id_stamp.empty() ) {
+		fl_font( font, std::max( 1, (int)((float)font_size * id_font_scale) ) );
+		fl_draw( 90, info.id_stamp.c_str(), pw - x_margin, bottom_of_image );
+	}
+}
+
+} // namespace
+
+void in_print( const PrintInfo &info, const PrintOptions &po )
+{
+	if( const char *test_file = getenv( "NCVIEW_TEST_PRINT_FILE" ) ) {
+		// Headless test hook (tests/ui_smoke.sh's "print" case): the real
+		// Fl_Printer::begin_job() pops a native, unclosable modal dialog
+		// under Xvfb, so route straight to a PostScript file using the
+		// identical layout code instead.
+		FILE *f = fopen( test_file, "w" );
+		if( f == nullptr ) return;
+		Fl_PostScript_File_Device dev;
+		dev.begin_job( f, 1 );	/* always returns 0; doesn't close f */
+		dev.begin_page();
+		renderPrintPage( dev, info, po );
+		dev.end_page();
+		dev.end_job();
+		fclose( f );
+		return;
+	}
+
+	Fl_Printer printer;
+	if( printer.begin_job( 1 ) != 0 )	/* cancelled, or no printer available */
+		return;
+	printer.begin_page();
+	renderPrintPage( printer, info, po );
+	printer.end_page();
+	printer.end_job();
+}
 
 Message x_range( float old_min, float old_max, float global_min, float global_max, float *new_min, float *new_max, int *allvars )
 {
