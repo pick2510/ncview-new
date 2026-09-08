@@ -30,7 +30,7 @@ extern Message g_range_response;
 extern void resetStubRecording();
 
 // The global under test, defined in core/src/view.cc.
-extern View *view;
+extern std::unique_ptr<View> view;
 // Real deployments always set this in the UI's own in_initialize()
 // (ui/src/interface_fltk.cc) before any variable is selected --
 // calculate_blowup() divides by it unconditionally, and leaving it at

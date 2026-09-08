@@ -480,6 +480,14 @@ struct View {
 	size_t	plot_XY_position[MAX_LINES_PER_PLOT][10];
 };
 
+/* OOP_redesign plan's name for this struct once it's owned via unique_ptr
+ * by the (formerly raw-pointer) global `view` in view.cc, rather than a
+ * type rename -- View's dozens of `View *`/`View **` parameters throughout
+ * view.cc/util.cc/overlay.cc and the by-value `View v{}`/`View view{}`
+ * fixtures in tests/test_pixels.cc and tests/test_view_data_edit.cc stay
+ * exactly as they are; only the global's ownership changed. */
+using ViewState = View;
+
 /*****************************************************************************/
 /* program options */
 

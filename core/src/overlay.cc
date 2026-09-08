@@ -41,7 +41,7 @@ const char *my_overlay_names[] = { "None",
 			"USA states",
 			"custom" };
 
-extern View  	*view;
+extern std::unique_ptr<View> view;
 extern Options  options;
 
 static int	my_current_overlay;
@@ -79,17 +79,17 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 			break;
 
 		case OVERLAY_P8DEG:
-			do_overlay_inner( view, overlay_coasts_p8deg, n_overlay_coasts_p8deg,
+			do_overlay_inner( view.get(), overlay_coasts_p8deg, n_overlay_coasts_p8deg,
 					suppress_screen_changes );
 			break;
 
 		case OVERLAY_P08DEG:
-			do_overlay_inner( view, overlay_coasts_p08deg, n_overlay_coasts_p08deg,
+			do_overlay_inner( view.get(), overlay_coasts_p08deg, n_overlay_coasts_p08deg,
 					suppress_screen_changes );
 			break;
 
 		case OVERLAY_USA:
-			do_overlay_inner( view, overlay_usa, n_overlay_usa,
+			do_overlay_inner( view.get(), overlay_usa, n_overlay_usa,
 					suppress_screen_changes );
 			break;
 
@@ -98,7 +98,7 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 				in_error( "Specified custom overlay filename is not a valid filename!\n" );
 				return;
 				}
-			options.overlay->overlay = gen_overlay( view, custom_filename );
+			options.overlay->overlay = gen_overlay( view.get(), custom_filename );
 			if( ! options.overlay->overlay.empty() ) {
 				options.overlay->doit = true;
 				if( ! suppress_screen_changes ) {

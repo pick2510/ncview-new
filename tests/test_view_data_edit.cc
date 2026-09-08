@@ -18,7 +18,7 @@
 #include "ncview/protos.h"
 #include "test_udunits_helper.h"
 
-extern View *view;
+extern std::unique_ptr<View> view;
 extern char **g_last_dataedit_lines;
 extern int g_last_dataedit_nx;
 
@@ -36,13 +36,16 @@ TEST_CASE("view_data_edit: allocates exactly n_entries+1 slots and fills them co
     var.size = { ny, nx }; // dim 0 = y, dim 1 = x -- see PixelFixture in test_pixels.cc
     var.name = "test_var";
 
-    View v{};
-    v.variable   = &var;
-    v.x_axis_id  = 1;
-    v.y_axis_id  = 0;
-    v.data       = data;
+    // view is a unique_ptr now (Step 6), so it must own a heap object
+    // rather than point at a stack one -- view.reset() below deletes
+    // whatever it owns, which would be undefined behavior on a stack
+    // address.
+    view = std::make_unique<View>();
+    view->variable   = &var;
+    view->x_axis_id  = 1;
+    view->y_axis_id  = 0;
+    view->data       = data;
 
-    view = &v;
     options.invert_physical = true; // so row j in line_array matches row j in `data` directly
 
     g_last_dataedit_lines = nullptr;
@@ -69,5 +72,5 @@ TEST_CASE("view_data_edit: allocates exactly n_entries+1 slots and fills them co
     for (size_t k = 0; k < nx * ny; k++) free(g_last_dataedit_lines[k]);
     free(g_last_dataedit_lines);
     g_last_dataedit_lines = nullptr;
-    view = nullptr;
+    view.reset();
 }

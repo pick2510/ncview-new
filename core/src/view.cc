@@ -41,7 +41,12 @@
 extern	Options options;
 extern  FrameCache framestore;
 
-View  *view = NULL;
+/* Owns the active ViewState (an alias for View -- see defines.h). A
+ * unique_ptr rather than a raw pointer so that every reassignment below
+ * (set_scan_variable()'s variable switch, invalidate_variable()'s reset)
+ * actually deletes whatever it previously owned instead of leaking it --
+ * see those functions for the two sites this used to leak from. */
+std::unique_ptr<View> view;
 
 /* See comments in routine "view_draw" */
 static int 	lockout_view_changes = false;
@@ -126,7 +131,11 @@ set_scan_variable( NCVar *var )
 		/* A brand new variable to display!  Exciting! */
 		if( options.debug )
 			fprintf( stderr, "set_scan_variable: initializing view struct for new variable\n" );
-		init_view( &view, var );
+		{
+		View *raw_new_view = NULL;
+		init_view( &raw_new_view, var );
+		view.reset( raw_new_view );
+		}
 		set_blowup_type( options.blowup_type );
 
 		/* Figure out what axes to use for X, Y, and Time,
@@ -134,7 +143,7 @@ set_scan_variable( NCVar *var )
 		 */
 		if( options.debug )
 			fprintf( stderr, "...determining scan axes (NEW)\n" );
-		determine_scan_axes( view, var, NULL );
+		determine_scan_axes( view.get(), var, NULL );
 		if( options.debug )
 			fprintf( stderr, "...axes ids: scan=%d y=%d x=%d\n", 
 				view->scan_axis_id, view->y_axis_id, view->x_axis_id );
@@ -156,17 +165,17 @@ set_scan_variable( NCVar *var )
 
 		if( options.debug )
 			fprintf( stderr, "...setting scan place (NEW)\n" );
-		set_scan_place     ( view, var, NULL );
+		set_scan_place     ( view.get(), var, NULL );
 
 		/* Is the current field inverted?  If so, flip it back */
 		if( options.debug )
 			fprintf( stderr, "...determining if inverted (NEW)\n" );
-		flip_if_inverted( view );
-	
+		flip_if_inverted( view.get() );
+
 		/* How big should we initially make the picture? */
 		if( options.debug )
 			fprintf( stderr, "...calculating blowup (NEW)\n" );
-		calculate_blowup( view, var, -99999 );	/* last val is flag meaning to do automatic calculation */
+		calculate_blowup( view.get(), var, -99999 );	/* last val is flag meaning to do automatic calculation */
 
 		/* Save the blowup we are using in the var structure so we can
 		 * return to it later if we want
@@ -185,7 +194,7 @@ set_scan_variable( NCVar *var )
 		 */
 		if( options.debug )
 			fprintf( stderr, "set_scan_variable: initializing view struct for old variable\n" );
-		old_view = view;
+		old_view = view.get();
 		init_view( &new_view, var );
 
 		/* Figure out what axes to use for X, Y, and Time,
@@ -196,7 +205,11 @@ set_scan_variable( NCVar *var )
 			fprintf( stderr, "...determining scan axes (PREVIOUS)\n" );
 		determine_scan_axes( new_view, var, old_view );
 		if( var->effective_dimensionality == 1 ) {
-			view = new_view;
+			/* unique_ptr::reset() deletes whatever it previously
+			 * owned (old_view, i.e. the pre-switch view) before
+			 * taking ownership of new_view -- this used to be a
+			 * bare pointer reassignment that leaked old_view. */
+			view.reset( new_view );
 			std::vector<size_t> start( view->variable->n_dims );
 			std::vector<size_t> count( view->variable->n_dims );
 			for( i=0; i<view->variable->n_dims; i++ ) {
@@ -251,26 +264,25 @@ set_scan_variable( NCVar *var )
 		 * heap-backed members (equivalent to the vector clear()s this
 		 * used to do here) and intentionally leaked the malloc'd View
 		 * struct itself on every variable switch. Nothing holds a
-		 * reference to old_view past this point (view is reassigned
-		 * to new_view immediately below), so there's no parity reason
-		 * left to keep leaking it. */
-		delete old_view;
-
-		view = new_view;
+		 * reference to old_view past this point, and view.reset()
+		 * deletes it (the object it currently owns) before taking
+		 * ownership of new_view, so there's no parity reason left to
+		 * keep leaking it. */
+		view.reset( new_view );
 		}
 
 	/* Set the tape-recorder style buttons to enable or disabled
 	 * state, as appropriate for the selected variable and dimensions.
 	 */
-	set_scan_buttons( view );
+	set_scan_buttons( view.get() );
 
 	/* Allocate storage space for the data */
-	alloc_view_storage( view );
+	alloc_view_storage( view.get() );
 
 	/* Actually read the data in from the file */
 	if( options.debug )
 		fprintf( stderr, "...reading data from file\n" );
-	fill_view_data( view );
+	fill_view_data( view.get() );
 
 	if( options.save_frames == true )
 		{
@@ -298,7 +310,7 @@ set_scan_variable( NCVar *var )
 			overlay2use = OVERLAY_P08DEG;
 		else
 			overlay2use = -1;
-		if( (overlay2use != -1) && (! view_data_has_missing( view )))
+		if( (overlay2use != -1) && (! view_data_has_missing( view.get() )))
 			do_overlay(overlay2use,NULL,true);
 		}
 
@@ -306,7 +318,7 @@ set_scan_variable( NCVar *var )
 	if( options.debug )
 		fprintf( stderr, "...converting data to pixels\n" );
 	lockout_view_changes = true;
-	if( data_to_pixels( view ) < 0 ) {
+	if( data_to_pixels( view.get() ) < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );
@@ -712,7 +724,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	if( view->data_status == ViewDataStatus::Invalid ) {
 		if( options.debug )
 			printf( "Reading data to contour...\n" );
-		fill_view_data( view );
+		fill_view_data( view.get() );
 		}
 	else
 		{
@@ -750,7 +762,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 
 	if( options.debug )
 		printf( "Calling data_to_pixels...\n" );
-	if( data_to_pixels( view ) < 0 ) {
+	if( data_to_pixels( view.get() ) < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );
@@ -1487,12 +1499,12 @@ view_set_scan_dims( void )
 	in_set_cursor_busy();
 
 	if( strcmp( cur_y_name, (*new_dim_list)[0].string.c_str() ) != 0 ) {
-		view_set_axis( view, Dimension::Y, (char *)(*new_dim_list)[0].string.c_str() );
+		view_set_axis( view.get(), Dimension::Y, (char *)(*new_dim_list)[0].string.c_str() );
 		changed_something = true;
 		}
 
 	if( strcmp( cur_x_name, (*new_dim_list)[1].string.c_str() ) != 0 ) {
-		view_set_axis( view, Dimension::X, (char *)(*new_dim_list)[1].string.c_str() );
+		view_set_axis( view.get(), Dimension::X, (char *)(*new_dim_list)[1].string.c_str() );
 		changed_something = true;
 		}
 
@@ -1502,13 +1514,13 @@ view_set_scan_dims( void )
 		 * dimension ever comes up in the pop-up box to be able
 		 * to set it that way.  Use the previously saved value.
 		 */
-		view_set_axis( view, Dimension::Scan, scan_dim );
-		flip_if_inverted( view );
+		view_set_axis( view.get(), Dimension::Scan, scan_dim );
+		flip_if_inverted( view.get() );
 		redraw_dimension_info();
 		view->data_status = ViewDataStatus::Invalid;
-		alloc_view_storage( view );
+		alloc_view_storage( view.get() );
 		init_saveframes();
-		set_scan_buttons( view );
+		set_scan_buttons( view.get() );
 		view_draw( true, false ); /* 'true' because we initialized saveframes above */
 		}
 
@@ -1789,10 +1801,12 @@ invalidate_all_saveframes()
 }
 
 /**************************************************************************************/
-/* Initialize a new view structure and set defaults. Note: the View object
- * itself is intentionally leaked here via 'new', exactly as upstream leaked
- * it via 'malloc' -- only its data/pixels/var_place members ever get
- * released, in set_scan_variable() above, on variable change. */
+/* Initialize a new view structure and set defaults. Returns a raw,
+ * heap-allocated View*; every caller immediately hands it to the global
+ * `view` unique_ptr (or, in set_scan_variable()'s variable-switch branch,
+ * carries it briefly as a local raw pointer before doing the same), which
+ * is what actually owns and eventually deletes it -- see set_scan_variable()
+ * and invalidate_variable() above. */
 	static void
 init_view( View **view, NCVar *var )
 {
@@ -2117,8 +2131,8 @@ redraw_dimension_info()
 			in_fill_dim_info( d, please_flip ); 
 			}
 
-	show_current_dim_values( view );
-	label_dimensions( view );
+	show_current_dim_values( view.get() );
+	label_dimensions( view.get() );
 }
 
 /**************************************************************************************/
@@ -2232,7 +2246,7 @@ view_report_position( int x, int y, unsigned int button_mask )
 		return;
 
 	if( view->data_status == ViewDataStatus::Invalid ) {
-		fill_view_data( view );
+		fill_view_data( view.get() );
 		view->data_status = ViewDataStatus::Valid;
 		}
 
@@ -2433,7 +2447,7 @@ set_dataedit_place()
 	size_t	index;
 
 	if( view->data_status == ViewDataStatus::Invalid ) {
-		fill_view_data( view );
+		fill_view_data( view.get() );
 		view->data_status = ViewDataStatus::Valid;
 		}
 
@@ -2478,7 +2492,7 @@ set_min_from_curdata()
 		return;
 
 	if( view->data_status == ViewDataStatus::Invalid ) {
-		fill_view_data( view );
+		fill_view_data( view.get() );
 		view->data_status = ViewDataStatus::Valid;
 		}
 
@@ -2525,7 +2539,7 @@ set_max_from_curdata()
 		return;
 
 	if( view->data_status == ViewDataStatus::Invalid ) {
-		fill_view_data( view );
+		fill_view_data( view.get() );
 		view->data_status = ViewDataStatus::Valid;
 		}
 
@@ -2616,7 +2630,7 @@ view_change_dat( size_t index, float new_val )
 	view->data[x + (x_size)*y] = new_val;
 	init_saveframes();
 	lockout_view_changes = true;
-	if( data_to_pixels( view ) < 0 ) {
+	if( data_to_pixels( view.get() ) < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );
@@ -3122,7 +3136,7 @@ invalidate_variable( NCVar *var )
 {
 	x_set_var_sensitivity( const_cast<char *>(view->variable->name.c_str()), false );
 	set_buttons( BUTTONS_ALL_OFF );
-	view = NULL;
+	view.reset();	/* deletes the View this used to just orphan */
 	options.blowup = 1;
 }
 
