@@ -1023,6 +1023,29 @@ void MainWindow::setLabel( Label label_id, const char *s )
 	// unrelated event happened to trigger a redraw (a click, a resize),
 	// making mouse-over tracking look frozen.
 	labels_[idx]->redraw();
+
+	// ScalarDims (CF scalar-coordinate values, e.g. "XTIME=60.0 minutes
+	// since ...") shares its row with Skip, sitting to Skip's right at
+	// x=170 -- but Skip is blank for most files (it only holds text for
+	// non-scannable extra dimensions), which left ScalarDims looking
+	// indented/centered instead of flush left. Snap it to the row's own
+	// left margin whenever Skip has nothing to show, and back to its
+	// normal offset the moment Skip does. Re-checked from either side
+	// (whichever of the two just changed) since callers may update them
+	// in either order.
+	if( label_id == Label::ScalarDims || label_id == Label::Skip ) {
+		auto *scalar_dims = labels_[static_cast<int>( Label::ScalarDims )];
+		auto *skip = labels_[static_cast<int>( Label::Skip )];
+		if( scalar_dims != nullptr ) {
+			bool skip_empty = ( skip == nullptr || skip->label() == nullptr || skip->label()[0] == '\0' );
+			int new_x = skip_empty ? 10 : 170;
+			int new_w = window()->w() - new_x - 10;
+			if( scalar_dims->x() != new_x || scalar_dims->w() != new_w ) {
+				scalar_dims->resize( new_x, scalar_dims->y(), new_w, scalar_dims->h() );
+				scalar_dims->redraw();
+			}
+		}
+	}
 }
 
 void MainWindow::setSensitive( Button button_id, int state )
