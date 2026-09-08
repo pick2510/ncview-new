@@ -497,86 +497,80 @@ struct OverlayOptions {
 	std::vector<int>	overlay;
 };
 
-/* OOP_redesign plan, Step 8: ViewerSession's design classifies this
- * struct's fields into four groups. Storage stays a single struct for now
- * (see viewer_session.cc's header comment for why splitting it into
- * separately-owned pieces is deferred) -- these comments record the
- * classification so it's visible at the field declarations themselves,
- * not just in the plan document.
- *
- *   Render-shaped (feed FrameRenderer::PixelMapSettings, via
- *   ViewerSession::pixelMapSettings()): blowup, blowup_type,
- *   shrink_method, transform, invert_colors, invert_physical, n_colors,
- *   n_extra_colors, display_type, autoscale, min_max_method.
- *
- *   Playback settings (the playback *state* -- formerly a do_buttons.cc
- *   file-static -- is ViewerController::cur_button_, not here):
- *   frame_delay, delta_step, beep_on_restart, stop_on_restart.
- *
- *   Session-lifetime display prefs: save_frames, missval_r/g/b, scale,
- *   offset, overlay, calendar.
- *
- *   CLI/startup-only (set once from argv in parse_options()/
- *   initialize_misc(), never mutated afterward by the running app):
- *   dump_frames, small, maxsize_pct, maxsize_width, maxsize_height,
- *   private_colormap, no_1d_vars, varsel_style, listsel_max,
- *   enable_group_sel, no_char_dims, no_autoflip, color_by_ndims,
- *   auto_overlay, want_extra_info, show_sel, debug, t_conv,
- *   blowup_default_size.
+/* Forward declaration only -- ncview/viewer_session.h (which fully defines
+ * ViewerSession, and includes this header itself) can't be included here
+ * without a cycle. Options's constructor only needs a reference parameter
+ * type at this point; its body, which needs the full ViewerSession
+ * definition, is defined out-of-line in viewer_session.cc. */
+class ViewerSession;
+
+/* OOP_redesign plan, Step 9a: every field below is a reference member,
+ * bound once (in the constructor, defined in viewer_session.cc) to the
+ * corresponding field of one of ViewerSession's four grouped settings
+ * structs (RenderSettings, PlaybackSettings, SessionDisplayPrefs,
+ * StartupSettings -- see ncview/viewer_session.h for the grouping and the
+ * rationale). Options's storage now genuinely lives on ViewerSession; this
+ * struct is a flat, named view onto it, so every one of the ~300+ existing
+ * `options.<field>` read/write call sites across core/, ui/, and tests/
+ * keeps compiling and behaving identically -- no call site needed to
+ * change. There is exactly one Options object in the program (the global
+ * `options` in ncview.cc), constructed from `g_viewer_session`.
  */
 struct Options {
-	int	invert_physical,
-		invert_colors,
-		t_conv,
-		debug,
-		show_sel,
-		no_autoflip,
-		no_char_dims,
-		private_colormap,
-		want_extra_info,
-		n_colors,
-		n_extra_colors,	/* Supposedly for black, white, etc., but not used much nowadays */
-		small,
-		dump_frames,
-		no_1d_vars,
-		delta_step,	/* if > 0, percent of total frames to step when pressing the
+	explicit Options( ViewerSession &session );
+
+	int	&invert_physical,
+		&invert_colors,
+		&t_conv,
+		&debug,
+		&show_sel,
+		&no_autoflip,
+		&no_char_dims,
+		&private_colormap,
+		&want_extra_info,
+		&n_colors,
+		&n_extra_colors,	/* Supposedly for black, white, etc., but not used much nowadays */
+		&small,
+		&dump_frames,
+		&no_1d_vars,
+		&delta_step,	/* if > 0, percent of total frames to step when pressing the
 				 * 'forward' or 'backward' button and holding down the Ctrl
 				 * key; if < 0, absolute number of frames to step.
 				 */
-		listsel_max,	/* if # of vars is more than this, auto switch from VARSEL_LIST to VARSEL_MENU */
-		color_by_ndims,	/* if 1, then button is color coded by # of effective dims */
-		beep_on_restart,
-		stop_on_restart,
-		auto_overlay,	/* if 1, then tries to figure out if coastlines should automatically be added */
-		blowup,
-		maxsize_pct,	/* -1 if a width/height pair specified instead */
-		maxsize_width,	/* in pixels */
-		maxsize_height,	/* in pixels */
-		blowup_default_size,
-		display_type;	/* This uses std 'X' defines; PseudoColor, DirectColor, etc */
+		&listsel_max,	/* if # of vars is more than this, auto switch from VARSEL_LIST to VARSEL_MENU */
+		&color_by_ndims,	/* if 1, then button is color coded by # of effective dims */
+		&beep_on_restart,
+		&stop_on_restart,
+		&auto_overlay,	/* if 1, then tries to figure out if coastlines should automatically be added */
+		&blowup,
+		&maxsize_pct,	/* -1 if a width/height pair specified instead */
+		&maxsize_width,	/* in pixels */
+		&maxsize_height,	/* in pixels */
+		&blowup_default_size,
+		&display_type;	/* This uses std 'X' defines; PseudoColor, DirectColor, etc */
 
-	Transform	transform;
-	MinMaxMethod	min_max_method;
-	VarselStyle	varsel_style;	/* can be VarselStyle::List or VarselStyle::Menu */
-	ShrinkMethod	shrink_method;
+	Transform	&transform;
+	MinMaxMethod	&min_max_method;
+	VarselStyle	&varsel_style;	/* can be VarselStyle::List or VarselStyle::Menu */
+	ShrinkMethod	&shrink_method;
 
-	std::string	calendar;	/* This OVERRIDES any 'calendar' attribute in the data file; empty means "not set" */
+	std::string	&calendar;	/* This OVERRIDES any 'calendar' attribute in the data file; empty means "not set" */
 
-	BlowupType	blowup_type;	/* can be BlowupType::Replicate or BlowupType::Bilinear */
+	BlowupType	&blowup_type;	/* can be BlowupType::Replicate or BlowupType::Bilinear */
 
-	int	autoscale;	/* If TRUE, then tries to automatically scale colors for EACH frame.  Much slower!! */
+	int	&autoscale;	/* If TRUE, then tries to automatically scale colors for EACH frame.  Much slower!! */
 
-	int	save_frames;	/* If true, try to save frames in core for faster display */
-	float	frame_delay;	/* Normalied to be between 0.0 and 1.0 */
+	int	&save_frames;	/* If true, try to save frames in core for faster display */
+	float	&frame_delay;	/* Normalied to be between 0.0 and 1.0 */
 
-	int	enable_group_sel;	/* TRUE if we have some vars in groups, so interface must incl. grp selection */
+	int	&enable_group_sel;	/* TRUE if we have some vars in groups, so interface must incl. grp selection */
 
-	int	missval_r, missval_g, missval_b;	/* 0-255 values of R, G, B for missing data */
+	int	&missval_r, &missval_g, &missval_b;	/* 0-255 values of R, G, B for missing data */
 
-	float	scale, offset;	/* These do NOT refer to the scale & offset in the netcdf file. They are for changing units of data */
+	float	&scale, &offset;	/* These do NOT refer to the scale & offset in the netcdf file. They are for changing units of data */
 				/* SCALE IS APPLIED FIRST. So to conv C to F, use -scale 1.8 -offset 32 */
 
-	std::unique_ptr<OverlayOptions> overlay;
+	std::unique_ptr<OverlayOptions> &overlay;
 };
 
 /***********************************************************************************************************/

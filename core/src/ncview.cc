@@ -75,8 +75,8 @@
 #define DEFAULT_COLOR_BY_NDIMS	true
 #define DEFAULT_AUTO_OVERLAY	true
 
-Options	  options;
 ViewerSession g_viewer_session;
+Options	  options( g_viewer_session );
 Dataset   &g_dataset = g_viewer_session.dataset();
 std::vector<std::unique_ptr<NCVar>> &variables = g_dataset.variablesMutable();
 std::vector<ncv_pixel> pixel_transform;

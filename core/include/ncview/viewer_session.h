@@ -3,27 +3,25 @@
  *
  * Copyright (C) 2026 Dominik Strebel
  *
- * ViewerSession -- OOP_redesign plan, Step 8. Owns the pieces of runtime
+ * ViewerSession -- OOP_redesign plan, Step 8/9a. Owns the pieces of runtime
  * state that used to be independent globals: the Dataset (Step 5), the
- * active ViewState (Step 6), and the FrameCache (Step 3). A single global
- * ViewerSession instance is constructed in ncview.cc; the legacy globals
- * `g_dataset`, `view`, and `framestore` become references bound to this
- * instance's members (same migration-bridge technique Step 5 used for
- * `variables`), so every existing call site across core/, ui/, and tests/
- * keeps compiling and behaving identically.
+ * active ViewState (Step 6), the FrameCache (Step 3), and now (Step 9a)
+ * the storage behind the global Options struct's ~50 fields, split into
+ * the four groups the plan's ViewerSession section describes.
  *
- * Options field classification: this step's plan section also calls for
- * splitting the ~50-field global Options struct into render/playback/
- * session/startup groups. That classification is recorded as comments on
- * the Options struct itself (see defines.h) rather than duplicated here as
- * a second, unused struct -- Options's storage stays a single global for
- * now, since migrating its ~300+ read/write call sites is a separate,
- * much larger undertaking than this step's scope (see viewer_session.cc's
- * header comment for the full rationale). The one real, verified migration
- * this step makes on the Options side is pixelMapSettings() below: the
- * render-shaped fields' one consumer (FrameRenderer, via util.cc's
- * data_to_pixels()) now goes through ViewerSession instead of being
- * built inline.
+ * A single global ViewerSession instance is constructed in ncview.cc; the
+ * legacy globals `g_dataset`, `view`, and `framestore` are references
+ * bound to this instance's members (the migration-bridge technique Step 5
+ * introduced for `variables`). Options takes the same approach one level
+ * down: rather than becoming a reference to a whole ViewerSession member
+ * (Options's fields don't live together in one place -- they're spread
+ * across all four groups below), the *global Options object itself* is
+ * unchanged in name and field list, but every one of its fields is now a
+ * reference member bound, in its constructor (defines.h declares it,
+ * viewer_session.cc defines it), to the corresponding field in one of the
+ * structs below. So `options.debug`, `options.blowup`, etc. keep reading
+ * and writing exactly as before at all ~300+ existing call sites -- the
+ * storage those references point to now genuinely lives on ViewerSession.
  */
 #pragma once
 
@@ -33,6 +31,65 @@
 #include "ncview/defines.h"
 #include "ncview/frame_cache.h"
 #include "ncview/frame_renderer.h"
+
+/* Feeds FrameRenderer::PixelMapSettings (via ViewerSession::pixelMapSettings()
+ * below) plus the couple of extra render-shaped fields PixelMapSettings
+ * doesn't need directly (blowup, min_max_method). */
+struct RenderSettings {
+	int		blowup = 0;
+	BlowupType	blowup_type{};
+	ShrinkMethod	shrink_method{};
+	Transform	transform{};
+	int		invert_colors = 0;
+	int		invert_physical = 0;
+	int		n_colors = 0;
+	int		n_extra_colors = 0;
+	int		display_type = 0;
+	int		autoscale = 0;
+	MinMaxMethod	min_max_method{};
+};
+
+/* Playback settings. The playback *state* (formerly do_buttons.cc's
+ * file-static cur_button) is ViewerController::cur_button_, not here. */
+struct PlaybackSettings {
+	float	frame_delay = 0;
+	int	delta_step = 0;
+	int	beep_on_restart = 0;
+	int	stop_on_restart = 0;
+};
+
+/* Session-lifetime display preferences. */
+struct SessionDisplayPrefs {
+	int		save_frames = 0;
+	int		missval_r = 0, missval_g = 0, missval_b = 0;
+	float		scale = 0, offset = 0;
+	std::unique_ptr<OverlayOptions>	overlay;
+	std::string	calendar;
+};
+
+/* Set once from argv in parse_options()/initialize_misc(), never mutated
+ * afterward by the running app. */
+struct StartupSettings {
+	int		dump_frames = 0;
+	int		small = 0;
+	int		maxsize_pct = 0;
+	int		maxsize_width = 0;
+	int		maxsize_height = 0;
+	int		private_colormap = 0;
+	int		no_1d_vars = 0;
+	VarselStyle	varsel_style{};
+	int		listsel_max = 0;
+	int		enable_group_sel = 0;
+	int		no_char_dims = 0;
+	int		no_autoflip = 0;
+	int		color_by_ndims = 0;
+	int		auto_overlay = 0;
+	int		want_extra_info = 0;
+	int		show_sel = 0;
+	int		debug = 0;
+	int		t_conv = 0;
+	int		blowup_default_size = 0;
+};
 
 class ViewerSession {
 public:
@@ -47,6 +104,11 @@ public:
 	FrameCache& frameCache() { return frame_cache_; }
 	const FrameCache& frameCache() const { return frame_cache_; }
 
+	RenderSettings& renderSettings() { return render_settings_; }
+	PlaybackSettings& playbackSettings() { return playback_settings_; }
+	SessionDisplayPrefs& sessionDisplayPrefs() { return session_display_prefs_; }
+	StartupSettings& startupSettings() { return startup_settings_; }
+
 	/* Builds FrameRenderer's settings from Options's render-shaped field
 	 * group (transform, invert_colors, invert_physical, n_colors,
 	 * n_extra_colors, display_type). Options itself is passed in rather
@@ -58,4 +120,9 @@ private:
 	Dataset dataset_;
 	std::unique_ptr<ViewState> view_;
 	FrameCache frame_cache_;
+
+	RenderSettings render_settings_;
+	PlaybackSettings playback_settings_;
+	SessionDisplayPrefs session_display_prefs_;
+	StartupSettings startup_settings_;
 };
