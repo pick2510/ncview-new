@@ -7,6 +7,15 @@ the short version.
 
 ## [Unreleased]
 
+### Fixed
+- Ctrl+click on the Rewind/Backwards/Forward/Fastforward transport buttons
+  now accelerates stepping (a percentage of the file's frame count instead
+  of one frame at a time), matching upstream. Added a "View/Range (Current
+  Frame)" menu entry restoring upstream's right-click-on-Range action (set
+  the color range from just the current frame). Both were unreachable since
+  the port's button/menu-item callback always used the default action
+  regardless of mouse button or modifier keys.
+
 ### Changed
 - Printing now uses the platform's native print dialog (`Fl_Printer`) in both
   the main window and XY plot windows, instead of ncview's own hand-written
