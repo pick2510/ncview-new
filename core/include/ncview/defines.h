@@ -73,7 +73,11 @@ enum class Button {
 	Dimset		= 15,
 	Range		= 16,
 	BlowupType	= 17,	/* this is also a label */
-	Skip		= 18,	/* this is also a label */
+	/* No Button::Skip: unlike Label::Skip (still a real, used label slot,
+	 * see main_window.cc), the button counterpart was dead upstream --
+	 * no dispatch case ever handled it (it would hit `default:` ->
+	 * exit(-1) if reached) and nothing referenced it -- removed here per
+	 * the OOP_redesign plan's Step 7/9c cleanup note. */
 	Edit		= 19,
 	Info		= 20,
 	Print		= 21,
