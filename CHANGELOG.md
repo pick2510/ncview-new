@@ -18,6 +18,19 @@ the short version.
   committed to the repo -- generated there at configure time instead, from
   the submodule's own copies, and `.gitignore`'d.
 
+### Fixed
+- Info-row label text sitting off-center in its bordered box (previously
+  compensated with a manual, environment-specific pixel offset that could
+  over- or under-correct depending on the platform's actual font metrics;
+  each label now shares its box's exact rect instead, so FLTK's own default
+  centering lands correctly everywhere).
+- A CF scalar coordinate whose units are a valid UDUNITS time (e.g. WRF's
+  "XTIME", `minutes since ...`) is now formatted as a calendar date, the
+  same way a real time dimension's current value already was, instead of
+  showing the raw `<value> <units>` string. Its label was also visually
+  indented/off-center when the adjacent Skip label had nothing to show;
+  it now sits flush left in that case.
+
 ## [0.3.0] - 2026-09-08
 
 ### Changed
