@@ -236,22 +236,70 @@ Nine steps, each its own commit with full verification:
    with two concrete implementations: `FltkViewerUi` (the real app) and
    `RecordingViewerUi` (tests).
 
-**The result**: `options`, `variables`, `g_dataset`, `view`, and
-`framestore` are no longer 5 independent globals -- they are all facets
-of one object, the global `ViewerSession g_viewer_session`. `Options`'s
-~40 fields are reference members bound to `ViewerSession`-owned storage;
-`g_dataset`/`view`/`framestore` are references onto `ViewerSession`'s own
-`Dataset`/`ViewState`/`FrameCache` members. **The bridge names themselves
-are deliberately still there** -- `options`, `variables`, `g_dataset`,
-`view`, and `framestore` all still work exactly as before at their
-~700+ combined existing call sites across `core/`, `ui/`, and `tests/` --
-this was the load-bearing design choice that made each step safely
-verifiable on its own (the same technique Phase 5's `Dataset`/`variables`
-migration above pioneered): move *ownership*, not *every call site*, per
-step. Purging the bridge names themselves and rewriting every call site
-to go through `g_viewer_session` directly would be a further, much
-larger, primarily cosmetic pass with no remaining ownership question to
-resolve -- not attempted here.
+**The result of these nine steps**: `options`, `variables`, `g_dataset`,
+`view`, `framestore`, and `pixel_transform` were no longer 6 independent
+globals -- they were all facets of one object, the global `ViewerSession
+g_viewer_session`. `Options`'s ~40 fields were reference members bound to
+`ViewerSession`-owned storage; `g_dataset`/`view`/`framestore`/
+`pixel_transform` were references onto `ViewerSession`'s own
+`Dataset`/`ViewState`/`FrameCache`/pixel-index-table members. The bridge
+names themselves were still there, deliberately, at that point -- this was
+the load-bearing design choice that made each step safely verifiable on
+its own (the same technique Phase 5's `Dataset`/`variables` migration
+pioneered): move *ownership*, not *every call site*, per step.
+
+### Removing the bridges: what turned out to be actually possible
+
+A follow-up pass tried to go further and asked whether the bridge names
+themselves -- and the separate `g_viewer_session`/`g_viewer_controller`/
+`g_viewer_ui` composition-root globals that steps 7-9 introduced --
+could be removed entirely, with every call site reading application
+state through an explicitly-injected reference instead of a global (the
+full dependency-injection shape the plan's original architecture diagram
+showed).
+
+**Investigation found this isn't achievable without a much larger, separate
+rewrite.** `do_range()`, `do_pause()`, `in_button_pressed()`, and
+`viewer_ui_bridge.cc`'s ~50 `interface.h` forwarder functions are free
+functions with fixed signatures (the `interface.h` seam contract, and
+`do_buttons.cc`'s action names), called from `view.cc`, `do_print.cc`,
+`ui/src/interface_fltk.cc`'s test hooks (`NCVIEW_TEST_DIALOG`/
+`NCVIEW_TEST_BUTTON`), and `tests/`. A fixed-signature free function has
+exactly one way to reach an object instance in C++: global or static
+state. Eliminating application-level globals entirely would mean
+rewriting that free-function seam itself into something else (e.g. every
+FLTK widget callback carrying an explicit context pointer, plumbed down
+through dozens of call sites) -- a materially larger and riskier
+undertaking than anything in the nine steps above, and a distinct piece
+of work from removing *redundant* bridge names.
+
+**What was actually done instead**: collapse the three differently-named
+composition-root globals (`g_viewer_session`, `g_viewer_controller`,
+`g_viewer_ui`) into one `AppContext` (`core/include/ncview/app_context.h`)
+holding a `ViewerSession`, a `ViewerController`, and a non-owning
+`ViewerUi*`, plus fold `pixel_transform` into `ViewerSession` (it had been
+the one field left out of step 9). Every bridge name now resolves through
+this single `g_app` global instead of three separately-named ones. This is
+an honest, permanent design choice, not leftover migration debris: a
+single, clearly-named composition root is what a C-style callback/seam
+architecture like this one's realistic floor looks like, and further
+"purging" would only relocate the same global under `ui/`'s existing
+`MainWindow` singleton (itself unrelated, pre-existing, and out of scope)
+rather than eliminate anything.
+
+This pass also fixed a static-initialization-order bug it introduced along
+the way: `g_viewer_ui` used to be a bare pointer, constant-initialized to
+`nullptr`, so a static initializer in any other translation unit could
+safely assign to it regardless of construction order. Folding it into
+`AppContext` meant the whole aggregate now requires *dynamic*
+initialization (`ViewerSession`/`Dataset` have non-trivial members), which
+reintroduced the classic ordering hazard: `tests/stub_interface.cc`'s
+former static-initializer trick for installing the `RecordingViewerUi`
+could run before `g_app`'s own constructor, which would then silently
+reset `g_app.ui` back to `nullptr`. Fixed by moving that assignment into
+an explicit `installRecordingViewerUi()` call from each test binary's
+`main()`, which is guaranteed to run after all static initialization
+completes.
 
 ## Post-v0.2.0 defect audits
 
