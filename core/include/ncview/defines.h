@@ -287,13 +287,27 @@ struct NCVar;	/* forward declaration -- NCDim_map_info::var_i_map is a non-ownin
 		 * the NCVar it maps; NCVar itself is defined below since it owns FDBlist/NCDim/
 		 * NCDim_map_info via std::vector<std::unique_ptr<...>>. */
 
+/* Full definition in ncview/dataset.h. FDBlist only ever holds a
+ * non-owning pointer to one -- Dataset owns the actual open file (and
+ * closes it on destruction), and since many variables in the same
+ * physical file end up with their own FDBlist entry all pointing at the
+ * one file Dataset opened for it, ownership can't live on FDBlist itself. */
+class NetCDFFile;
+
 /*****************************************************************************/
 /* This describes the file which the relevant variable lives in */
 struct FDBlist {
-	int	id = 0;		/* internally used ID number */
+	NetCDFFile *file = nullptr;	/* owned by Dataset; see id() below */
 	int	index = 0;	/* starts at 0, increments by 1 for each file associated
 				 * with this variable */
 	std::string	filename;
+
+	/* The netCDF fileid this FDBlist's file was opened with. Defined in
+	 * dataset.cc, where NetCDFFile is a complete type -- kept as a method
+	 * rather than reverting to a plain int field so every existing
+	 * fdb->id-style callsite (there are ~60 of them, all reads) only
+	 * needed `->id` -> `->id()`, not a wider rewrite. */
+	int id() const;
 	std::unique_ptr<NetCDFOptions>	aux_data;	/* For specific datafile implementations */
 	std::vector<size_t>	var_size;	/* Multi-dimensional size of variables which live in this file */
 	float	data_min = 0, data_max = 0; /* for a specific variable in the file */

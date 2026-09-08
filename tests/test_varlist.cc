@@ -176,8 +176,12 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
     CHECK(var->dim[0]->size == 5);
     CHECK(var->dim[0]->timelike == 1); // handle_time_dim() recognized the udunits time axis
 
-    netcdf_fi_close(fid1);
-    netcdf_fi_close(fid2);
+    // Do NOT netcdf_fi_close(fid1/fid2) here: add_var_to_list() now routes
+    // every fileid through g_dataset.trackFile() (OOP_redesign Step 5),
+    // which took ownership of both fds and will close them itself when the
+    // Dataset is destroyed (for the global g_dataset, at process exit) --
+    // closing them again here would be a double-close of an already-closed
+    // fileid.
     std::remove(path1.c_str());
     std::remove(path2.c_str());
 }

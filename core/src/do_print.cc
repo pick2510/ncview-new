@@ -150,18 +150,18 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 	fprintf( stderr, "build_print_info: entering\n" );
 #endif
 	x_dim_name     = const_cast<char *>(view->variable->dim[view->x_axis_id]->name.c_str());
-	x_dim_longname = fi_dim_longname( view->variable->files.front().get()->id, x_dim_name );
-	x_units        = fi_dim_units( view->variable->files.front().get()->id, x_dim_name );
+	x_dim_longname = fi_dim_longname( view->variable->files.front().get()->id(), x_dim_name );
+	x_units        = fi_dim_units( view->variable->files.front().get()->id(), x_dim_name );
 
 	y_dim_name     = const_cast<char *>(view->variable->dim[view->y_axis_id]->name.c_str());
-	y_dim_longname = fi_dim_longname( view->variable->files.front().get()->id, y_dim_name );
-	y_units        = fi_dim_units( view->variable->files.front().get()->id, y_dim_name );
+	y_dim_longname = fi_dim_longname( view->variable->files.front().get()->id(), y_dim_name );
+	y_units        = fi_dim_units( view->variable->files.front().get()->id(), y_dim_name );
 
-	main_long_name = fi_long_var_name( view->variable->files.front().get()->id,
+	main_long_name = fi_long_var_name( view->variable->files.front().get()->id(),
 			view->variable->name );
 	if( main_long_name.empty() )
 		main_long_name = view->variable->name;
-	main_units     = fi_var_units( view->variable->files.front().get()->id, view->variable->name );
+	main_units     = fi_var_units( view->variable->files.front().get()->id(), view->variable->name );
 
 	/***** Main variable name and units ******/
 	if( printopts.include_title ) {
@@ -184,7 +184,7 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 	/***************** Other information *******************/
 	if( printopts.include_extra_info ) {
 		/**** File title ***/
-		file_title = fi_title( view->variable->files.front().get()->id );
+		file_title = fi_title( view->variable->files.front().get()->id() );
 		if( !file_title.empty() )
 			info->extra_info.push_back( file_title );
 
@@ -223,8 +223,8 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 			    (i != view->y_axis_id) &&
 			    (view->variable->dim[i].get() != NULL)) {
 				dim_name     = const_cast<char *>(view->variable->dim[i]->name.c_str());
-				dim_longname = fi_dim_longname( view->variable->files.front().get()->id, dim_name );
-				units        = fi_dim_units( view->variable->files.front().get()->id, dim_name );
+				dim_longname = fi_dim_longname( view->variable->files.front().get()->id(), dim_name );
+				units        = fi_dim_units( view->variable->files.front().get()->id(), dim_name );
 				type         = fi_dim_value( view->variable, i, view->var_place[i],
 							&temp_double, tstr2, &has_bounds, &bound_min, &bound_max, view->var_place.data() );
 				if( type == NC_DOUBLE )
@@ -244,8 +244,8 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 		std::array<size_t, 20> actual_place;
 		virt_to_actual_place( view->variable, view->var_place.data(), actual_place.data(), &fdb );
 		if( (view->scan_axis_id != -1) &&
-		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->x_axis_id ) &&
-		    (fi_recdim_id( view->variable->files.front().get()->id ) != view->y_axis_id))
+		    (fi_recdim_id( view->variable->files.front().get()->id() ) != view->x_axis_id ) &&
+		    (fi_recdim_id( view->variable->files.front().get()->id() ) != view->y_axis_id))
 			snprintf( tstr, 1499, "Frame %ld in ",
 				(long)(actual_place[view->scan_axis_id]+1) );
 		strncat( tstr, "File ", sizeof(tstr) - strlen(tstr) - 1 );

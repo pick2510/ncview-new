@@ -320,7 +320,7 @@ fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
 	virt_to_actual_place( var, virt_start_pos, act_start_pos, &file );
 
 	if( file_type == FILE_TYPE_NETCDF )
-		netcdf_fi_get_data( file->id, const_cast<char *>(var->name.c_str()), act_start_pos,
+		netcdf_fi_get_data( file->id(), const_cast<char *>(var->name.c_str()), act_start_pos,
 			  count, (float *)data, file->aux_data.get() );
 	else
 		{
@@ -356,7 +356,7 @@ fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *da
 		start2[0] = it;
 		virt_to_actual_place( var, start2, act_start_pos, &file );
 		if( file_type == FILE_TYPE_NETCDF )
-			netcdf_fi_get_data( file->id, const_cast<char *>(var->name.c_str()), act_start_pos,
+			netcdf_fi_get_data( file->id(), const_cast<char *>(var->name.c_str()), act_start_pos,
 				  count2, ((float *)data)+(it-virt_start_pos[0])*prod_lower_dims,
 				  	file->aux_data.get() );
 		else
@@ -498,7 +498,7 @@ for( i=0; i<var->n_dims; i++ ) {
 	d = (var->dim[dim_id].get());
 	dim_name  = d->name;
 	if( file_type == FILE_TYPE_NETCDF )
-		ret_val = netcdf_dim_value( file->id, const_cast<char *>(dim_name.c_str()), actual_place,
+		ret_val = netcdf_dim_value( file->id(), const_cast<char *>(dim_name.c_str()), actual_place,
 				return_val_double, return_val_char, virt_place,
 				return_has_bounds, return_bounds_min, return_bounds_max );
 	else
@@ -603,7 +603,7 @@ fi_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 fi_fill_value( NCVar *var, float *fill_value )
 {
 	if( file_type == FILE_TYPE_NETCDF )
-		netcdf_fill_value( var->files.front()->id, const_cast<char *>(var->name.c_str()),
+		netcdf_fill_value( var->files.front()->id(), const_cast<char *>(var->name.c_str()),
 				fill_value, var->files.front()->aux_data.get() );
 	else
 		{

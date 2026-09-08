@@ -76,7 +76,8 @@
 #define DEFAULT_AUTO_OVERLAY	true
 
 Options	  options;
-std::vector<std::unique_ptr<NCVar>> variables;
+Dataset   g_dataset;
+std::vector<std::unique_ptr<NCVar>> &variables = g_dataset.variablesMutable();
 std::vector<ncv_pixel> pixel_transform;
 FrameCache framestore;
 Stringlist *read_in_state;

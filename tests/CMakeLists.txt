@@ -45,6 +45,7 @@ add_executable(ncview_core_tests
     test_calendar.cc
     test_util.cc
     test_file_netcdf.cc
+    test_dataset.cc
     test_pixels.cc
     test_frame_renderer.cc
     test_frame_cache.cc

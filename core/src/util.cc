@@ -48,7 +48,6 @@ extern ut_system *unitsys;
 /*-------------------*/
 
 extern Options   options;
-extern std::vector<std::unique_ptr<NCVar>> variables;
 extern std::vector<ncv_pixel> pixel_transform;
 
 static void handle_time_dim( int fileid, NCVar *v, int dimid );
@@ -333,7 +332,7 @@ add_var_to_list( char *var_name, int file_id, char *filename, int nfiles )
 	/* make a new file description entry for this var/file combo */
 	auto new_fdb_owner = new_fdblist();
 	FDBlist *new_fdb = new_fdb_owner.get();
-	new_fdb->id       = file_id;
+	new_fdb->file     = g_dataset.trackFile( file_id );
 	{
 	size_t *raw_size = fi_var_size( file_id, var_name );
 	int raw_n_dims = fi_n_dims( file_id, var_name );
@@ -508,7 +507,7 @@ cache_scalar_coord_info( const std::vector<std::unique_ptr<NCVar>> &vars )
 						fprintf( stderr, "Coding error, uninitialized pointer to a scalar dim info struct is being used\n" );
 						exit(-1);
 						}
-					netcdf_fi_get_data( tfile->id, const_cast<char *>(dmi->coord_var_name.c_str()), zeros, ones, &fval, NULL );
+					netcdf_fi_get_data( tfile->id(), const_cast<char *>(dmi->coord_var_name.c_str()), zeros, ones, &fval, NULL );
 					if( options.debug ) printf( "In file %d/%d, value of scalar coord \"%s\" is %f %s\n",
 						ifile, nfiles, dmi->coord_var_name.c_str(), fval, dmi->coord_var_units.c_str() );
 					dmi->data_cache[ifile] = fval;
@@ -791,7 +790,7 @@ virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **fil
 	int	i, n_dims;
 
 	f       = var->files.front().get();
-	n_dims  = fi_n_dims( f->id, const_cast<char *>(var->name.c_str()) );
+	n_dims  = fi_n_dims( f->id(), const_cast<char *>(var->name.c_str()) );
 	v_place = *(virt_pl);
 
 	if( v_place >= var->size[0] ) {
@@ -834,7 +833,7 @@ handle_dim_mapping( NCVar *v )
 
 	if( options.debug ) printf( "handle_dim_mapping: entering for var %s\n", v->name.c_str() );
 
-	ncid = v->files.front()->id;
+	ncid = v->files.front()->id();
 
 	/* dim_map_info itself is never empty of entries. If the var has no coordinate
 	 * mappings, then every entry stays a null unique_ptr.
@@ -944,7 +943,7 @@ handle_dim_mapping_scalar( NCVar *v, char *coord_var_name, char *coord_att )
 	 * in view.cc, so an absent-units result must stay empty here rather
 	 * than something that would render as blank text either way -- the
 	 * empty-string convention is unambiguous now that this is std::string. */
-	tmi->coord_var_units = fi_var_units( v->files.front()->id, coord_var_name );
+	tmi->coord_var_units = fi_var_units( v->files.front()->id(), coord_var_name );
 	tmi->scalar_all_same = 0;
 
 	/* Same check handle_time_dim() runs for a real dimension's own units --
@@ -953,7 +952,7 @@ handle_dim_mapping_scalar( NCVar *v, char *coord_var_name, char *coord_att )
 	 * "<value> <units>" string this used to always fall back to. */
 	if( udu_utistime( coord_var_name, const_cast<char *>(tmi->coord_var_units.c_str()) ) ) {
 		tmi->timelike = 1;
-		tmi->calendar = fi_dim_calendar( v->files.front()->id, coord_var_name );
+		tmi->calendar = fi_dim_calendar( v->files.front()->id(), coord_var_name );
 		}
 
 	/* Add this new scalar dim to the array */
@@ -1110,7 +1109,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 			if( map_info->matching_var_dims[i] == 1 ) {
 				if( options.debug )
 					printf( "In variable \"%s\", dimension \"%s\" is mapped by LONGITUDE-like %d-dimensional variable \"%s\"\n",
-					v->name.c_str(), netcdf_dim_id_to_name( v->files.front()->id, v->name, i).c_str(),
+					v->name.c_str(), netcdf_dim_id_to_name( v->files.front()->id(), v->name, i).c_str(),
 					map_info->coord_var_ndims, map_info->coord_var_name.c_str() );
 				v->dim_map_info[i] = std::move( map_info_owner );
 				idx_lon_dim = i;
@@ -1132,7 +1131,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 				idx_lat_dim = i;
 				if( options.debug )
 					printf( "In variable \"%s\", dimension \"%s\" is mapped by LATITUDE-like dimension %d-dimensional variable \"%s\"\n",
-					v->name.c_str(), netcdf_dim_id_to_name( v->files.front()->id, v->name, i).c_str(),
+					v->name.c_str(), netcdf_dim_id_to_name( v->files.front()->id(), v->name, i).c_str(),
 					map_info->coord_var_ndims, map_info->coord_var_name.c_str() );
 				v->dim_map_info[i] = std::move( map_info_owner );
 				break;
@@ -1205,7 +1204,7 @@ fill_dim_structs( NCVar *v )
 
 	if( debug == 1 ) printf( "fill_dim_structs: entering for var %s, which has %d dims\n", v->name.c_str(), v->n_dims );
 
-	fileid = v->files.front()->id;
+	fileid = v->files.front()->id();
 	v->dim.clear();
 	v->dim.resize( v->n_dims );
 	for( i=0; i<v->n_dims; i++ ) {
@@ -1255,7 +1254,7 @@ fill_dim_structs( NCVar *v )
 			 * v->files is a vector here, so just index it instead of
 			 * carrying that bug forward. */
 			for( size_t ifile = 1; ifile < v->files.size(); ifile++ ) {
-				tmp_units = fi_dim_units( v->files[ifile]->id, d->name );
+				tmp_units = fi_dim_units( v->files[ifile]->id(), d->name );
 				if( d->units != tmp_units ) {
 					printf( "** Warning: different time units found in different files.  Trying to compensate...\n" );
 					d->units_change = 1;
@@ -1361,7 +1360,7 @@ equivalent_FDBs( NCVar *v1, NCVar *v2 )
 		return(0); /* files differ */
 
 	for( size_t i=0; i<v1->files.size(); i++ )
-		if( v1->files[i]->id != v2->files[i]->id )
+		if( v1->files[i]->id() != v2->files[i]->id() )
 			return(0); /* files differ */
 
 	return(1);

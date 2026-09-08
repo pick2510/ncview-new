@@ -40,12 +40,20 @@
 
 #include "ncview/stringlist.h"
 #include "ncview/interface.h"
+#include "ncview/dataset.h"
 
 /* Global state, defined in ncview.cc. Upstream had every .c file that
  * needed these declare its own local `extern`; this is the one canonical
  * declaration ncview_ui can use too. */
 extern Options options;
-extern std::vector<std::unique_ptr<NCVar>> variables;
+
+/* Dataset owns the NCVar list and the NetCDFFiles behind it (see
+ * ncview/dataset.h). `variables` is a migration bridge -- a reference onto
+ * g_dataset's own storage -- so the ~100 existing callsites across core/
+ * and ui/ that read/mutate the global `variables` keep compiling and
+ * behaving identically. Both are defined together in ncview.cc. */
+extern Dataset g_dataset;
+extern std::vector<std::unique_ptr<NCVar>> &variables;
 
 /******************************************************************************
  * in ncview.c

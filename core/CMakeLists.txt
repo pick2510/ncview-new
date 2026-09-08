@@ -3,6 +3,7 @@
 # ncview/interface.h seam. See PORTING.md.
 add_library(ncview_core STATIC
     src/calcalcs.cc
+    src/dataset.cc
     src/do_buttons.cc
     src/do_print.cc
     src/epic_time.cc
