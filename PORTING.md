@@ -354,7 +354,20 @@ aggregate (`tests/test_pixels.cc`'s `View view{};` keeps compiling): C++17
 only bars user-declared constructors, virtual functions, and
 private/protected *data* members from an aggregate, not member functions.
 
-The remaining ~49 functions in `view.cc` (~2700 lines) stay free functions
+**Phase 2** widened this to functions that are *also* file-local with no
+external callers and state-mutating, but each makes exactly one direct
+UI call as part of that mutation, rather than zero: `set_scan_buttons`
+(`View::setScanButtons`), `view_set_axis` (`View::setAxis`),
+`show_current_dim_values` (`View::showCurrentDimValues`),
+`label_dimensions` (`View::labelDimensions`), and `flip_if_inverted`
+(`View::flipIfInverted`). The UI call stays inline in the method body
+rather than being split out to a separate controller-side call -- the
+same precedent `Dataset::checkRanges` already set for calling
+`in_dialog()` directly from a state method when the call is small and
+unconditionally part of the operation, not something a caller might want
+to skip or intercept.
+
+The remaining ~44 functions in `view.cc` (~2600 lines) stay free functions
 -- splitting them would mean rewriting each one's control flow to
 separate state mutation from interleaved dialog/timer/label logic (some,
 like `view_draw()` and `set_scan_variable()`, have UI calls and even a

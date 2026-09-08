@@ -509,6 +509,19 @@ struct View {
 	void fillViewData();
 	bool hasMissingData() const;
 
+	/* Phase 2 of the view.cc triage (PORTING.md): also file-local
+	 * (static, no external callers), also state-mutating, but each
+	 * makes exactly one direct UI call as part of that mutation --
+	 * kept inline rather than split into a separate controller-side
+	 * call, the same precedent Dataset::checkRanges (ncview/dataset.h)
+	 * already set for calling in_dialog() directly from a state method
+	 * when the call is small and unconditionally part of the operation. */
+	void setScanButtons();
+	void setAxis( Dimension dimension, char *new_dim_name );
+	void showCurrentDimValues();
+	void labelDimensions();
+	void flipIfInverted();
+
 private:
 	/* Implementation details of determineScanAxes()/setScanPlace() above
 	 * -- each had no callers outside the one public method it now

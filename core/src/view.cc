@@ -70,14 +70,9 @@ static NCDim *plot_XY_dim[MAX_PLOT_XY];
 #define	BUTTONS_ALL_OFF		3
 
 /* Prototypes applicable to routines used ONLY in this file */
-static void 		view_set_axis( View *local_view, Dimension dimension, char *new_dim_name );
 static void 		set_buttons( int to_state );
 static void 		draw_file_info( NCVar *var );
-static void 		label_dimensions( View *view );
-static void 		show_current_dim_values( View *view );
-static void		flip_if_inverted( View *view );
 static void 		set_range_labels( float min, float max );
-static void 		set_scan_buttons( View *local_view );
 static void 		view_data_edit_warn();
 static void 		invalidate_variable( NCVar *var );
 static void 		plot_XY_sc( size_t *start, size_t *count );
@@ -157,7 +152,7 @@ set_scan_variable( NCVar *var )
 		/* Is the current field inverted?  If so, flip it back */
 		if( options.debug )
 			fprintf( stderr, "...determining if inverted (NEW)\n" );
-		flip_if_inverted( view.get() );
+		view->flipIfInverted();
 
 		/* How big should we initially make the picture? */
 		if( options.debug )
@@ -261,7 +256,7 @@ set_scan_variable( NCVar *var )
 	/* Set the tape-recorder style buttons to enable or disabled
 	 * state, as appropriate for the selected variable and dimensions.
 	 */
-	set_scan_buttons( view.get() );
+	view->setScanButtons();
 
 	/* Allocate storage space for the data */
 	view->allocStorage();
@@ -380,9 +375,10 @@ in_variable_selected( const char *var_name )
 }
 
 /**************************************************************************************/
-	static void
-set_scan_buttons( View *local_view )
+	void
+View::setScanButtons()
 {
+	View *local_view = this;
 	static int	set_state;
 	const char	*label    = NULL;
 	char		scalar_coord_str[1024];
@@ -398,7 +394,7 @@ set_scan_buttons( View *local_view )
 		}
 
 	/* If the scan axis is currently appearing as the X or
-	 * Y axis, then disable the buttons which step the 
+	 * Y axis, then disable the buttons which step the
 	 * scan axis (since they are ALL being displayed at
 	 * the moment!)
 	 */
@@ -1490,12 +1486,12 @@ view_set_scan_dims( void )
 	in_set_cursor_busy();
 
 	if( strcmp( cur_y_name, (*new_dim_list)[0].string.c_str() ) != 0 ) {
-		view_set_axis( view.get(), Dimension::Y, (char *)(*new_dim_list)[0].string.c_str() );
+		view->setAxis( Dimension::Y, (char *)(*new_dim_list)[0].string.c_str() );
 		changed_something = true;
 		}
 
 	if( strcmp( cur_x_name, (*new_dim_list)[1].string.c_str() ) != 0 ) {
-		view_set_axis( view.get(), Dimension::X, (char *)(*new_dim_list)[1].string.c_str() );
+		view->setAxis( Dimension::X, (char *)(*new_dim_list)[1].string.c_str() );
 		changed_something = true;
 		}
 
@@ -1505,13 +1501,13 @@ view_set_scan_dims( void )
 		 * dimension ever comes up in the pop-up box to be able
 		 * to set it that way.  Use the previously saved value.
 		 */
-		view_set_axis( view.get(), Dimension::Scan, scan_dim );
-		flip_if_inverted( view.get() );
+		view->setAxis( Dimension::Scan, scan_dim );
+		view->flipIfInverted();
 		redraw_dimension_info();
 		view->data_status = ViewDataStatus::Invalid;
 		view->allocStorage();
 		init_saveframes();
-		set_scan_buttons( view.get() );
+		view->setScanButtons();
 		view_draw( true, false ); /* 'true' because we initialized saveframes above */
 		}
 
@@ -1519,9 +1515,10 @@ view_set_scan_dims( void )
 }
 
 /**************************************************************************************/
-	static void
-view_set_axis( View *local_view, Dimension dimension, char *new_dim_name )
+	void
+View::setAxis( Dimension dimension, char *new_dim_name )
 {
+	View *local_view = this;
 	int	new_id, old_id;
 	NCVar	*v;
 
@@ -2131,14 +2128,15 @@ redraw_dimension_info()
 			in_fill_dim_info( d, please_flip ); 
 			}
 
-	show_current_dim_values( view.get() );
-	label_dimensions( view.get() );
+	view->showCurrentDimValues();
+	view->labelDimensions();
 }
 
 /**************************************************************************************/
-	static void
-show_current_dim_values( View *view )
+	void
+View::showCurrentDimValues()
 {
+	View *view = this;
 	int	dimid, has_bounds;
 	NCVar	*var;
 	Stringlist *scannable_dims;
@@ -2169,9 +2167,10 @@ show_current_dim_values( View *view )
 }
 
 /**************************************************************************************/
-	static void
-label_dimensions( View *view )
+	void
+View::labelDimensions()
 {
+	View *view = this;
 	NCDim	*dim;
 	char	*dim_name;
 
@@ -2197,9 +2196,10 @@ label_dimensions( View *view )
 }
 
 /**************************************************************************************/
-	static void
-flip_if_inverted( View *view )
+	void
+View::flipIfInverted()
 {
+	View *view = this;
 	NCDim	*y_dim;
 
 	if( options.no_autoflip )
