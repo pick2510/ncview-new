@@ -403,7 +403,7 @@ endif()
 # CPack (source/binary tarball)
 # --------------------------------------------------------------------------
 set(CPACK_PACKAGE_NAME "ncview")
-set(CPACK_PACKAGE_VERSION "0.2.3")
+set(CPACK_PACKAGE_VERSION "0.3.0")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A visual netCDF file browser (C++/FLTK port)")
 # ZIP on Windows (no tar/gzip on a bare runner, and it's the platform-native
 # archive format there); TGZ everywhere else.
