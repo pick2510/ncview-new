@@ -229,28 +229,27 @@ void PlotWidget::exportData( FILE *f ) const
 
 } // namespace ncview_ui
 
-/* Fl_PostScript_File_Device pulls in X11/PostScript headers we don't want
- * leaking into the class declaration above; include it only here. */
-#include <FL/Fl_PostScript.H>
+/* Fl_Printer pulls in platform print-dialog headers we don't want leaking
+ * into the class declaration above; include it only here. */
+#include <FL/Fl_Printer.H>
 
 namespace ncview_ui {
 
-void PlotWidget::printToPS( const char *filename ) const
+void PlotWidget::print() const
 {
-	FILE *f = fopen( filename, "w" );
-	if( f == nullptr ) {
-		fl_alert( "Cannot open file \"%s\" for writing!", filename );
+	Fl_Printer printer;
+	if( printer.begin_job( 1 ) != 0 )	/* cancelled, or no printer available */
 		return;
-	}
-	Fl_PostScript_File_Device printer;
-	if( printer.start_job( f, 1 ) == 0 ) {
-		printer.begin_page();
-		printer.draw( const_cast<PlotWidget*>(this), 0, 0 );
-		printer.end_page();
-		printer.end_job();
-	} else {
-		fclose( f );
-	}
+	printer.begin_page();
+	int pw, ph;
+	printer.printable_rect( &pw, &ph );
+	float scale_x = (float)pw / (float)w();
+	float scale_y = (float)ph / (float)h();
+	float scale = scale_x < scale_y ? scale_x : scale_y;
+	if( scale < 1.0f ) printer.scale( scale );
+	printer.print_widget( const_cast<PlotWidget*>(this) );
+	printer.end_page();
+	printer.end_job();
 }
 
 /* ================= PlotWindow ================================================= */
@@ -374,11 +373,7 @@ void PlotWindow::closeCallback( Fl_Widget *, void *data )
 void PlotWindow::printCallback( Fl_Widget *, void *data )
 {
 	auto *pw = static_cast<PlotWindow*>( data );
-	char filename[1024];
-	strcpy( filename, "ncview.ps" );
-	const char *result = fl_input( "File to print to:", filename );
-	if( result == nullptr ) return;
-	pw->plot_->printToPS( result );
+	pw->plot_->print();
 }
 
 void PlotWindow::dumpCallback( Fl_Widget *, void *data )

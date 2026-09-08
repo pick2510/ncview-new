@@ -66,7 +66,7 @@ public:
 	void setMotionCallback( std::function<void(float,float)> cb ) { motion_cb_ = std::move( cb ); }
 
 	void exportData( FILE *f ) const;
-	void printToPS( const char *filename ) const;
+	void print() const;
 
 	int  numLines() const { return (int)lines_.size(); }
 
