@@ -57,18 +57,18 @@ ViewerController::dispatch( Button button_id, Modifier modifier )
 void
 ViewerController::range( Modifier modifier )
 {
-	init_saveframes();
+	view->initSaveframes();
 	if( modifier == Modifier::M3 )
-		view_set_range_frame();
+		view->setRangeFrame();
 	else
-		view_set_range();
+		view->setRange();
 }
 
 /*===========================================================================================*/
 void
 ViewerController::dimset( Modifier modifier )
 {
-	view_set_scan_dims();
+	view->setScanDims();
 }
 
 /*===========================================================================================*/
@@ -79,7 +79,7 @@ ViewerController::restart( Modifier modifier )
 
 	in_timer_clear();
 
-	set_scan_view( 0 );
+	view->scanToPlace( 0 );
 	view_draw    ( true, false );
 
 	in_timer_clear();
@@ -238,27 +238,27 @@ ViewerController::colormapSelectByName( const char *name )
 void
 ViewerController::invertPhysical( Modifier modifier )
 {
-	init_saveframes();
+	view->initSaveframes();
 	if( options.invert_physical )
 		options.invert_physical = false;
 	else
 		options.invert_physical = true;
 	view_draw( true, false );
-	redraw_dimension_info();
+	view->redrawDimensionInfo();
 }
 
 /*===========================================================================================*/
 void
 ViewerController::dataEdit( Modifier modifier )
 {
-	view_data_edit();
+	view->dataEdit();
 }
 
 /*===========================================================================================*/
 void
 ViewerController::invertColormap( Modifier modifier )
 {
-	init_saveframes();
+	view->initSaveframes();
 	if( options.invert_colors )
 		options.invert_colors = false;
 	else
@@ -286,31 +286,31 @@ ViewerController::blowup( Modifier modifier )
 	int view_var_is_valid = true;
 
 	if( modifier == Modifier::M3 )
-		view_change_blowup( -1, true, view_var_is_valid );
+		view->changeBlowup( -1, true, view_var_is_valid );
 
 	else if( modifier == Modifier::M2 ) {
 		/* Double the current blowup -- make image BIGGER */
 		if( options.blowup > 0 )
-			view_change_blowup( options.blowup, true, view_var_is_valid );
+			view->changeBlowup( options.blowup, true, view_var_is_valid );
 		else
-			view_change_blowup( -(options.blowup)/2, true, view_var_is_valid );
+			view->changeBlowup( -(options.blowup)/2, true, view_var_is_valid );
 		}
 
 	else if( modifier == Modifier::M4 ) {
 		/* Halve the current blowup -- make image SMALLER */
 		if( options.blowup > 0 )
-			view_change_blowup( -(options.blowup/2), true, view_var_is_valid );
+			view->changeBlowup( -(options.blowup/2), true, view_var_is_valid );
 		else
-			view_change_blowup( options.blowup, true, view_var_is_valid );
+			view->changeBlowup( options.blowup, true, view_var_is_valid );
 		}
 
 	else
-		view_change_blowup( 1, true, view_var_is_valid );
+		view->changeBlowup( 1, true, view_var_is_valid );
 
 	/* If we are shrinking magnification, then try re-saving
 	 * the frames because now there might be enough room.
 	 */
-	init_saveframes();
+	view->initSaveframes();
 	if( modifier == Modifier::M3 )
 		options.save_frames = true;
 }
@@ -319,7 +319,7 @@ ViewerController::blowup( Modifier modifier )
 void
 ViewerController::transform( Modifier modifier )
 {
-	init_saveframes();
+	view->initSaveframes();
 	if( modifier == Modifier::M3 )
 		view_change_transform( -1 );
 	else
@@ -330,7 +330,7 @@ ViewerController::transform( Modifier modifier )
 void
 ViewerController::blowupType( Modifier modifier )
 {
-	init_saveframes();
+	view->initSaveframes();
 	if( options.blowup_type == BlowupType::Replicate )
 		set_blowup_type( BlowupType::Bilinear );
 	else
@@ -342,7 +342,7 @@ ViewerController::blowupType( Modifier modifier )
 void
 ViewerController::info( Modifier modifier )
 {
-	view_information();
+	view->information();
 }
 
 /*===========================================================================================*/

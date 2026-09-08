@@ -522,6 +522,38 @@ struct View {
 	void labelDimensions();
 	void flipIfInverted();
 
+	/* Phase 3: functions confirmed to have NO internal `view == NULL`
+	 * guard of their own (unlike view_draw/change_view/view_report_position/
+	 * etc., which are called from contexts -- expose events, mouse
+	 * clicks before any variable is selected -- where the global `view`
+	 * can genuinely be null, and so must stay free functions: calling a
+	 * method through a null unique_ptr is undefined behavior, and that
+	 * guard is load-bearing there). Each of these is only ever reached
+	 * once a variable is already selected, so converting them to methods
+	 * (called via `view->...`) is exactly as safe as Phase 1/2's
+	 * conversions -- verified by tracing every call site, not assumed. */
+	void applyCurDimPlace( int dimid, NCDim *dim, size_t place );
+	void setScanDims();
+	/* Formerly set_scan_view(): jumps the scan axis to an absolute frame
+	 * index during normal navigation/playback. Distinct from
+	 * setScanPlace() above (Phase 1), which is the one-time initial
+	 * axis/place setup performed when switching variables. */
+	void scanToPlace( size_t scan_place );
+	void changeBlowup( int delta, int redraw_flag, int view_var_is_valid );
+	void setRange();
+	void setRangeFrame();
+	void setRangeLabels( float min, float max );
+	void initSaveframes();
+	void setDataeditPlace();
+	void dataEdit();
+	void changeDat( size_t index, float new_val );
+	void dataEditDump();
+	void plotXYSc( size_t *start, size_t *count );
+	void setXYPlotAxis( char *label );
+	void plotXYFmtXVal( float val, int dimindex, char *s, size_t s_len );
+	void information();
+	void redrawDimensionInfo();
+
 private:
 	/* Implementation details of determineScanAxes()/setScanPlace() above
 	 * -- each had no callers outside the one public method it now

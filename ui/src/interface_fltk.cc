@@ -92,8 +92,8 @@ void FltkViewerUi::in_initialize( void )
 		if( std::strcmp( d, "range" ) == 0 ) do_range( Modifier::M1 );
 		else if( std::strcmp( d, "options" ) == 0 ) do_options( Modifier::M1 );
 		else if( std::strcmp( d, "dimset" ) == 0 ) do_dimset( Modifier::M1 );
-		else if( std::strcmp( d, "info" ) == 0 ) view_information();
-		else if( std::strcmp( d, "dataedit" ) == 0 ) view_data_edit();
+		else if( std::strcmp( d, "info" ) == 0 ) view->information();
+		else if( std::strcmp( d, "dataedit" ) == 0 ) view->dataEdit();
 		else if( std::strcmp( d, "plot" ) == 0 ) plot_XY();
 		else if( std::strcmp( d, "overlay" ) == 0 ) do_overlay( OVERLAY_P8DEG, nullptr, false );
 		else if( std::strcmp( d, "print" ) == 0 ) {
@@ -418,7 +418,7 @@ namespace {
 // One data-edit window can be open at a time (matches upstream: x_dataedit()
 // runs its own blocking mini event loop, so only one is ever live). The
 // table cells are backed directly by the char** upstream hands us (each
-// entry is a 32-byte buffer from view_data_edit()), so editing a cell just
+// entry is a 32-byte buffer from View::dataEdit()), so editing a cell just
 // rewrites that buffer in place.
 class DataEditTable : public Fl_Table {
 public:
@@ -466,7 +466,7 @@ void dataeditDoneCallback( Fl_Widget *w, void *data )
 
 void dataeditDumpCallback( Fl_Widget *, void * )
 {
-	view_data_edit_dump();
+	view->dataEditDump();
 }
 
 } // namespace
@@ -509,7 +509,7 @@ void FltkViewerUi::x_dataedit( char **text, int nx )
 		float new_val, dummy;
 		if( sscanf( result, "%f %f", &new_val, &dummy ) != 1 ) return;
 
-		view_change_dat( (size_t)index, new_val );
+		view->changeDat( (size_t)index, new_val );
 		snprintf( cells[index], 32, "%-10.5g", new_val );
 		t->redraw();
 	} );

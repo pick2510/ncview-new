@@ -248,7 +248,7 @@ int ImageView::handle( int event )
 			// the data-edit window, if one is open (matches upstream's
 			// Btn2Up/Btn2Motion -> do_set_dataedit_place() translation).
 			if( (event == FL_PUSH || event == FL_DRAG) && Fl::event_button2() )
-				set_dataedit_place();
+				view->setDataeditPlace();
 			return 1;
 		}
 		case FL_MOUSEWHEEL: {

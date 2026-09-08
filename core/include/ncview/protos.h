@@ -215,7 +215,6 @@ void	do_blowup_type	  ( Modifier modifier );
  * in view.c
  */
 int 	set_scan_variable    ( NCVar *var );
-void 	set_scan_view        ( size_t scan_place );
 int 	change_view          ( int delta, int interpretation );
 int	view_draw            ( int allow_saveframes_useage, int force_range_to_frame );
 void 	view_change_cur_dim  ( char *dim_name, Modifier modifier );
@@ -223,31 +222,18 @@ void	view_set_cur_dim_index( const char *dim_name, long place );
 size_t	view_get_cur_dim_index( const char *dim_name );
 void	view_forward         ( void );
 void	view_backward        ( void );
-void	view_change_blowup   ( int delta, int redraw_flag, int view_var_is_valid );
-void	init_saveframes	     ( void );
-void 	redraw_dimension_info( void );
 void 	redraw_ccontour      ( void );
 void	view_check_new_data  ( int unused );
 void	view_report_position ( int x, int y, unsigned int button_mask );
 void 	view_report_position_vals( float xval, float yval, int plot_index );
 void 	plot_XY              ( void );
-void 	set_dataedit_place   ( void );
-void    view_data_edit_dump  ( void );
 void 	set_min_from_curdata ( void );
 void 	set_max_from_curdata ( void );
 void	beep		     ( void );
 void    invalidate_all_saveframes( void );
-void	view_set_XY_plot_axis( char * );
-void	view_plot_XY_fmt_x_val( float val, int dimindex, char *s, size_t slen );
-void 	view_change_dat	     ( size_t index, float new_val );
 void	view_get_scaled_size ( int blowup, size_t old_nx, size_t old_ny, size_t *new_nx, size_t *new_ny );
 void 	view_change_transform( int delta );
 void 	view_recompute_colorbar( void );
-void    view_set_range_frame ( void );
-void    view_set_range       ( void );
-void    view_set_scan_dims   ( void );
-void 	view_data_edit       ( void );
-void 	view_information     ( void );
 long 	view_current_nt      ( void );
 
 /******************************************************************************

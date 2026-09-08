@@ -72,10 +72,8 @@ static NCDim *plot_XY_dim[MAX_PLOT_XY];
 /* Prototypes applicable to routines used ONLY in this file */
 static void 		set_buttons( int to_state );
 static void 		draw_file_info( NCVar *var );
-static void 		set_range_labels( float min, float max );
 static void 		view_data_edit_warn();
 static void 		invalidate_variable( NCVar *var );
-static void 		plot_XY_sc( size_t *start, size_t *count );
 static void 		mouse_xy_to_data_xy( int mouse_x, int mouse_y, int blowup, size_t *data_x, size_t *data_y );
 static void 		view_construct_scalar_coord_str( char *str, int slen );
 static float 		view_calc_minval_float( float *arr, size_t n );
@@ -139,7 +137,7 @@ set_scan_variable( NCVar *var )
 			count[view->x_axis_id] = view->variable->size[view->x_axis_id];
 			if( options.debug )
 				fprintf( stderr, "set_scan_variable (A): about to call plot_XY_sc\n" );
-			plot_XY_sc( start.data(), count.data() );
+			view->plotXYSc( start.data(), count.data() );
 			in_popdown_2d_window();
 			in_set_cursor_normal();
 			return(0);
@@ -201,7 +199,7 @@ set_scan_variable( NCVar *var )
 			count[view->x_axis_id] = view->variable->size[view->x_axis_id];
 			if( options.debug )
 				fprintf( stderr, "set_scan_variable (B): about to call plot_XY_sc\n" );
-			plot_XY_sc( start.data(), count.data() );
+			view->plotXYSc( start.data(), count.data() );
 			in_popdown_2d_window();
 			in_set_cursor_normal();
 			return(0);
@@ -270,7 +268,7 @@ set_scan_variable( NCVar *var )
 		{
 		if( options.debug )
 			fprintf( stderr, "calling init_saveframes from set_scan_variable\n" );
-		init_saveframes();
+		view->initSaveframes();
 		}
 
 	/* Set the min and maxes of the data */
@@ -316,15 +314,15 @@ set_scan_variable( NCVar *var )
 	/* put the dimension information on the screen */
 	if( options.debug )
 		fprintf( stderr, "...putting dimension info on screen\n" );
-	redraw_dimension_info();
+	view->redrawDimensionInfo();
 
 	/* Draw the frame info on the screen */
 	if( options.debug )
 		fprintf( stderr, "...putting frame info on screen, scan_axis_id=%d\n", view->scan_axis_id );
 	if( view->scan_axis_id == -1 ) 
-		set_scan_view( 0L );
+		view->scanToPlace( 0L );
 	else
-		set_scan_view( view->var_place[view->scan_axis_id] );
+		view->scanToPlace( view->var_place[view->scan_axis_id] );
 
 	/* Actually draw the color contour map of the data! */
 	if( options.debug )
@@ -516,7 +514,7 @@ change_view( int delta, int interpretation )
 	if( place < 0L )
 		place = size - 1L;
 
-	set_scan_view( place );
+	view->scanToPlace( place );
 	return( view_draw( true, false ) );
 }
 
@@ -524,8 +522,9 @@ change_view( int delta, int interpretation )
  * Set the time place of the view to the specified location.
  */
 	void
-set_scan_view( size_t scan_place )
+View::scanToPlace( size_t scan_place )
 {
+	View *view = this;
 	char	temp_string[1024], scalar_coord_str[1024];
 	std::string view_place;
 	size_t	size;
@@ -737,7 +736,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 
 		view->variable->user_min = min;
 		view->variable->user_max = max;
-		set_range_labels( min, max );
+		view->setRangeLabels( min, max );
 		view->data_status = ViewDataStatus::Invalid;
 		invalidate_all_saveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is true, it won't happen */
 		view_recompute_colorbar();
@@ -962,7 +961,7 @@ view_check_new_data( int unused )
 				
 			view->variable->user_min = min;
 			view->variable->user_max = max;
-			set_range_labels( min, max );
+			view->setRangeLabels( min, max );
 			view->data_status = ViewDataStatus::Invalid;
 			invalidate_all_saveframes();
 			view_recompute_colorbar();
@@ -1184,8 +1183,9 @@ View::fillViewData()
  * Alter the amount by which we are blowing up pixels
  */
 	void
-view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
+View::changeBlowup( int delta, int redraw_flag, int view_var_is_valid )
 {
+	View *view = this;
 	size_t	x_size, y_size, scaled_x_size, scaled_y_size;
 	char	blowup_label[32];
 	int	changed_size;
@@ -1230,7 +1230,7 @@ view_change_blowup( int delta, int redraw_flag, int view_var_is_valid )
 	if( options.save_frames == true ) {
 		if( options.debug )
 			fprintf( stderr, "calling init_saveframes from view_change_blowup\n" );
-		init_saveframes();
+		view->initSaveframes();
 		}
 
 	if( redraw_flag ) {
@@ -1265,9 +1265,10 @@ redraw_ccontour()
  * (the scan axis's title label if this dim IS the scan axis, or just this
  * dim's own row otherwise), and redraw.
  */
-	static void
-view_apply_cur_dim_place( int dimid, NCDim *dim, size_t place )
+	void
+View::applyCurDimPlace( int dimid, NCDim *dim, size_t place )
 {
+	View *view = this;
 	int	has_bounds;
 	nc_type	type;
 	double	new_dimval, bound_min, bound_max;
@@ -1279,14 +1280,14 @@ view_apply_cur_dim_place( int dimid, NCDim *dim, size_t place )
 		/* This dim's own row is stepping the scan axis itself (e.g.
 		 * "time" shown both as its own dimension row and as the frame
 		 * the animation buttons step through) -- go through
-		 * set_scan_view() so the "frame N/M <date>" title label
+		 * View::scanToPlace() so the "frame N/M <date>" title label
 		 * (Label::ScanPlace) stays in sync, not just this row's own
 		 * display. change_view() (the play/rewind/forward path)
 		 * already does this; the other paths here used to skip it,
 		 * so stepping the scan dimension any other way silently went
 		 * stale.
 		 */
-		set_scan_view( place );
+		view->scanToPlace( place );
 		}
 	else {
 		type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
@@ -1305,7 +1306,7 @@ view_apply_cur_dim_place( int dimid, NCDim *dim, size_t place )
 		fprintf( stderr, "calling init_saveframes from view_apply_cur_dim_place\n" );
 
 	view->data_status = ViewDataStatus::Invalid;
-	init_saveframes();
+	view->initSaveframes();
 
 	view_draw( true, false ); /* 'true' because we initialized saveframes above */
 }
@@ -1360,7 +1361,7 @@ view_change_cur_dim( char *dim_name, Modifier modifier )
 		}
 
 	place = view->var_place[dimid];
-	view_apply_cur_dim_place( dimid, dim, place );
+	view->applyCurDimPlace( dimid, dim, place );
 }
 
 /**********************************************************************
@@ -1397,7 +1398,7 @@ view_set_cur_dim_index( const char *dim_name, long place )
 		place = (long)(view->variable->size[dimid]-1L);
 
 	dim = view->variable->dim[dimid].get();
-	view_apply_cur_dim_place( dimid, dim, (size_t)place );
+	view->applyCurDimPlace( dimid, dim, (size_t)place );
 }
 
 /**********************************************************************
@@ -1431,8 +1432,9 @@ view_get_cur_dim_index( const char *dim_name )
  * the user to make a new selection.
  */
 	void
-view_set_scan_dims( void )
+View::setScanDims()
 {
+	View *view = this;
 	Stringlist *dim_list, *new_dim_list = NULL, *inv_dim_list;
 	int	   changed_something = false;
 	NCVar	   *v;
@@ -1503,10 +1505,10 @@ view_set_scan_dims( void )
 		 */
 		view->setAxis( Dimension::Scan, scan_dim );
 		view->flipIfInverted();
-		redraw_dimension_info();
+		view->redrawDimensionInfo();
 		view->data_status = ViewDataStatus::Invalid;
 		view->allocStorage();
-		init_saveframes();
+		view->initSaveframes();
 		view->setScanButtons();
 		view_draw( true, false ); /* 'true' because we initialized saveframes above */
 		}
@@ -1615,21 +1617,22 @@ View::allocStorage()
  * values from the user, and set them.
  */
 	void
-view_set_range( void )
+View::setRange()
 {
+	View *view = this;
 	float	new_min, new_max;
 	int	allvars;
 	Message	message;
 
 	message = x_range( view->variable->user_min, view->variable->user_max,
-		view->variable->global_min, view->variable->global_max, 
+		view->variable->global_min, view->variable->global_max,
 		&new_min, &new_max, &allvars );
 	if( message == Message::Cancel )
 		return;
 
 	view->variable->user_min = new_min;
 	view->variable->user_max = new_max;
-	set_range_labels( new_min, new_max );
+	view->setRangeLabels( new_min, new_max );
 	view->data_status = ViewDataStatus::Invalid;
 	invalidate_all_saveframes();
 	view_draw( true, false ); /* 'true' because we just invalidated all saveframes */
@@ -1646,9 +1649,10 @@ view_set_range( void )
 }
 
 /**************************************************************************************/
-	static void
-set_range_labels( float min, float max )
+	void
+View::setRangeLabels( float min, float max )
 {
+	View *view = this;
 	std::string units, var_long_name;
 	char	temp_label[4096], extra_label[4096];
 
@@ -1708,7 +1712,7 @@ set_range_labels( float min, float max )
  * frame ONLY, rather than the global min and maxes.
  */
 	void
-view_set_range_frame( void )
+View::setRangeFrame()
 {
 	view_draw( true, true );
 }
@@ -1723,8 +1727,9 @@ beep()
 
 /**************************************************************************************/
 	void
-init_saveframes()
+View::initSaveframes()
 {
+	View *view = this;
 	size_t	storage_size, n_scan_entries, xsize, ysize, n_extra_frames, nt, nx, ny;
 	char	err_message[132];
 
@@ -2008,10 +2013,10 @@ View::calculateBlowup( NCVar *var, int val_to_set_to )
 
 	if( val_to_set_to != -99999 ) {
 		while( options.blowup > val_to_set_to ) {
-			view_change_blowup( -1, false, view_var_is_valid );			
+			view->changeBlowup( -1, false, view_var_is_valid );			
 			}
 		while( options.blowup < val_to_set_to ) {
-			view_change_blowup( 1, false, view_var_is_valid );			
+			view->changeBlowup( 1, false, view_var_is_valid );			
 			}
 		return;
 		}
@@ -2021,7 +2026,7 @@ View::calculateBlowup( NCVar *var, int val_to_set_to )
 	y_size = var->size[view->y_axis_id];
 	while( (options.blowup*x_size < static_cast<size_t>(options.blowup_default_size)) &&
 	       (options.blowup*y_size < static_cast<size_t>(options.blowup_default_size)) ) {
-		view_change_blowup( 1, false, view_var_is_valid );
+		view->changeBlowup( 1, false, view_var_is_valid );
 		}
 
 	/* If picture is too big, reduce it some */
@@ -2033,7 +2038,7 @@ View::calculateBlowup( NCVar *var, int val_to_set_to )
 	fbx = (fbx > fby) ? fbx : fby;
 	if( fbx > 3 ) {
 		ifbx = -(int)fbx;
-		view_change_blowup(ifbx,false, view_var_is_valid);
+		view->changeBlowup(ifbx,false, view_var_is_valid);
 		}
 }
 
@@ -2105,8 +2110,9 @@ draw_file_info( NCVar *var )
 
 /**************************************************************************************/
 	void
-redraw_dimension_info()
+View::redrawDimensionInfo()
 {
+	View *view = this;
 	int	i, please_flip;
 	NCDim	*d, *y_dim;
 	Stringlist *dimlist;
@@ -2380,7 +2386,7 @@ view_construct_scalar_coord_str( char *str, int slen )
 			/* A CF scalar coordinate whose own units parse as a UDUNITS
 			 * time (e.g. WRF's "XTIME", "minutes since ..."). Format it
 			 * as a calendar date the same way a real time dimension's
-			 * current value is (set_scan_view(), above) instead of
+			 * current value is (View::scanToPlace(), above) instead of
 			 * showing the raw "<value> <units>" string -- built via a
 			 * throwaway NCDim carrying just what fmt_time()/udu_fmt_time()
 			 * actually read (name/units/calendar/timelike/time_std); no
@@ -2440,8 +2446,9 @@ view_report_position_vals( float xval, float yval, int plot_index )
 
 /**************************************************************************************/
 	void
-set_dataedit_place()
+View::setDataeditPlace()
 {
+	View *view = this;
 	size_t	data_x, data_y, orig_data_y, x_size, y_size;
 	int	x, y;
 	size_t	index;
@@ -2518,8 +2525,8 @@ set_min_from_curdata()
 	val = view->data[data_x + data_y*x_size];
 
 	view->variable->user_min = val;
-	set_range_labels( val, view->variable->user_max );
-	init_saveframes();
+	view->setRangeLabels( val, view->variable->user_max );
+	view->initSaveframes();
 	view_draw( true, false ); /* 'true' because we just invalidated saveframes */
 
 	view_recompute_colorbar();
@@ -2565,8 +2572,8 @@ set_max_from_curdata()
 	val = view->data[data_x + data_y*x_size];
 
 	view->variable->user_max = val;
-	set_range_labels( val, view->variable->user_max );
-	init_saveframes();
+	view->setRangeLabels( val, view->variable->user_max );
+	view->initSaveframes();
 	view_draw( true, false ); /* 'true' because we just invalidated saveframes */
 
 	view_recompute_colorbar();
@@ -2574,8 +2581,9 @@ set_max_from_curdata()
 
 /**************************************************************************************/
 	void
-view_data_edit( void )
+View::dataEdit()
 {
+	View *view = this;
 	size_t	i, j;
 	int	j2;
 	size_t	x_size, y_size;
@@ -2609,8 +2617,9 @@ view_data_edit( void )
 
 /**************************************************************************************/
 	void
-view_change_dat( size_t index, float new_val )
+View::changeDat( size_t index, float new_val )
 {
+	View *view = this;
 	size_t	x_size, y_size, scaled_x_size, scaled_y_size, x, y;
 
 	view->data_status = ViewDataStatus::Edited;
@@ -2628,9 +2637,9 @@ view_change_dat( size_t index, float new_val )
 		view->data[x + (x_size)*y], new_val );
 
 	view->data[x + (x_size)*y] = new_val;
-	init_saveframes();
+	view->initSaveframes();
 	lockout_view_changes = true;
-	if( data_to_pixels( view.get() ) < 0 ) {
+	if( data_to_pixels( view ) < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );
@@ -2643,8 +2652,9 @@ view_change_dat( size_t index, float new_val )
 
 /**************************************************************************************/
 	void
-view_data_edit_dump( void )
+View::dataEditDump()
 {
+	View *view = this;
 	char	filename[1024], *dim_name, *var_name;
 	int	ncid, dims[2];
 	Message	message;
@@ -2696,10 +2706,10 @@ view_data_edit_warn()
 	Message	message;
 
 	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", true );
-	if( message == Message::Cancel ) 
+	if( message == Message::Cancel )
 		return;
 
-	view_data_edit_dump();
+	view->dataEditDump();
 }
 
 /**************************************************************************************
@@ -2792,7 +2802,7 @@ plot_XY()
 
 	if( options.debug )
 		fprintf( stderr, "plot_XY: about to call plot_XY_sc\n" );
-	plot_XY_sc( start.data(), count.data() );
+	view->plotXYSc( start.data(), count.data() );
 
 	if( options.debug )
 		fprintf( stderr, "plot_XY: exiting\n" );
@@ -2802,8 +2812,9 @@ plot_XY()
  * Set the axis along which to plot to the passed name.
  */
 	void
-view_set_XY_plot_axis( char *label )
+View::setXYPlotAxis( char *label )
 {
+	View *view = this;
 	int		dim_to_plot, i, j;
 	char		message[1024];
 
@@ -2843,16 +2854,17 @@ view_set_XY_plot_axis( char *label )
 		count[view->plot_XY_axis] = view->variable->size[view->plot_XY_axis];
 		if( options.debug )
 			fprintf( stderr, "view_set_XY_plot_axis: about to call plot_XY_sc\n" );
-		plot_XY_sc( start.data(), count.data() );
+		view->plotXYSc( start.data(), count.data() );
 		}
 }
 
 /**************************************************************************************
  * Plot all the data along the specified start and count
  */
-	static void
-plot_XY_sc( size_t *start, size_t *count )
+	void
+View::plotXYSc( size_t *start, size_t *count )
 {
+	View *view = this;
 	size_t	i_size;
 	int	n_misplace=30, n_missing_eliminated;
 	long	i, j, k, n, misplace_index[30];
@@ -3110,8 +3122,9 @@ plot_XY_sc( size_t *start, size_t *count )
 
 /**************************************************************************************/
 	void
-view_plot_XY_fmt_x_val( float val, int dimindex, char *s, size_t s_len )
+View::plotXYFmtXVal( float val, int dimindex, char *s, size_t s_len )
 {
+	View *view = this;
 	NCDim	*dim;
 
 	dim = view->variable->dim[dimindex].get();
@@ -3123,11 +3136,11 @@ view_plot_XY_fmt_x_val( float val, int dimindex, char *s, size_t s_len )
 
 /**************************************************************************************/
 	void
-view_information( void )
+View::information()
 {
-	in_display_stuff( netcdf_att_string( view->variable->files.front().get()->id(),
-						view->variable->name ).c_str(),
-			view->variable->name.c_str() );
+	in_display_stuff( netcdf_att_string( variable->files.front().get()->id(),
+						variable->name ).c_str(),
+			variable->name.c_str() );
 }
 
 /**************************************************************************************/

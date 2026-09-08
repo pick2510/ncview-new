@@ -1,10 +1,10 @@
 // Copyright (C) 2026 Dominik Strebel
 //
-// Regression test for the heap-buffer-overflow found in view_data_edit()
+// Regression test for the heap-buffer-overflow found in View::dataEdit()
 // during Phase 0d's ASan sweep (see modernization.md's "Sanitizer findings"
 // section): it allocated exactly n_entries char* slots but then wrote a
 // terminating NULL at line_array[n_entries], one past the end. This test
-// exercises view_data_edit() directly (its bug is entirely on the core
+// exercises View::dataEdit() directly (its bug is entirely on the core
 // side of the interface.h seam -- x_dataedit() is a no-op stub, see
 // stub_interface.cc) so a plain build catches wrong values and the ASan/
 // UBSan CI job (Phase 0d) catches the overflow itself if it ever returns.
@@ -51,7 +51,7 @@ TEST_CASE("view_data_edit: allocates exactly n_entries+1 slots and fills them co
     g_last_dataedit_lines = nullptr;
     g_last_dataedit_nx    = 0;
 
-    view_data_edit();
+    view->dataEdit();
 
     REQUIRE(g_last_dataedit_lines != nullptr);
     CHECK(g_last_dataedit_nx == (int)nx);
