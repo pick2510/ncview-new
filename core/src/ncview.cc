@@ -37,6 +37,10 @@
 #include "ncview/colormaps_jet.h"
 #include "ncview/colormaps_wheel.h"
 
+/* Post-port addition: matplotlib's viridis, added here alongside the other
+ * contributed colormaps rather than with the M0-ported originals below. */
+#include "ncview/colormaps_viridis.h"
+
 /* the following are original colormaps from ncview */
 #include "ncview/colormaps_3gauss.h"
 #include "ncview/colormaps_3saw.h"
@@ -584,6 +588,7 @@ init_cmaps_from_data()
         init_cmap_from_data( "manga",   cmap_manga   );
         init_cmap_from_data( "jet",     cmap_jet     );
         init_cmap_from_data( "wheel",   cmap_wheel   );
+        init_cmap_from_data( "viridis", cmap_viridis );
 
 /* the following are the rest of the original colormaps from ncview */
 

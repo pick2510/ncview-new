@@ -7,6 +7,10 @@ the short version.
 
 ## [Unreleased]
 
+### Added
+- A `viridis` colormap (matplotlib's default since 2.0), alongside the
+  other built-in colormaps.
+
 ### Changed
 - The root-level `README`/`COPYRIGHT`/`CHANGE_LOG` files (UDUNITS-2's own,
   required at that exact path by its vendored CMake build) are no longer
