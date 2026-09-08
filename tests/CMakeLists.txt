@@ -50,6 +50,7 @@ add_executable(ncview_core_tests
     test_time_fmt.cc
     test_varlist.cc
     test_view_data_edit.cc
+    test_controller_characterization.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE
