@@ -37,9 +37,14 @@
 #include "ncview/colormaps_jet.h"
 #include "ncview/colormaps_wheel.h"
 
-/* Post-port addition: matplotlib's viridis, added here alongside the other
- * contributed colormaps rather than with the M0-ported originals below. */
+/* Post-port addition: matplotlib's perceptually-uniform colormap family,
+ * added here alongside the other contributed colormaps rather than with
+ * the M0-ported originals below. */
 #include "ncview/colormaps_viridis.h"
+#include "ncview/colormaps_plasma.h"
+#include "ncview/colormaps_inferno.h"
+#include "ncview/colormaps_magma.h"
+#include "ncview/colormaps_cividis.h"
 
 /* the following are original colormaps from ncview */
 #include "ncview/colormaps_3gauss.h"
@@ -589,6 +594,10 @@ init_cmaps_from_data()
         init_cmap_from_data( "jet",     cmap_jet     );
         init_cmap_from_data( "wheel",   cmap_wheel   );
         init_cmap_from_data( "viridis", cmap_viridis );
+        init_cmap_from_data( "plasma",  cmap_plasma  );
+        init_cmap_from_data( "inferno", cmap_inferno );
+        init_cmap_from_data( "magma",   cmap_magma   );
+        init_cmap_from_data( "cividis", cmap_cividis );
 
 /* the following are the rest of the original colormaps from ncview */
 

@@ -8,8 +8,9 @@ the short version.
 ## [Unreleased]
 
 ### Added
-- A `viridis` colormap (matplotlib's default since 2.0), alongside the
-  other built-in colormaps.
+- `viridis`, `plasma`, `inferno`, `magma`, and `cividis` colormaps
+  (matplotlib's perceptually-uniform/colorblind-friendly family),
+  alongside the other built-in colormaps.
 
 ### Changed
 - The root-level `README`/`COPYRIGHT`/`CHANGE_LOG` files (UDUNITS-2's own,
