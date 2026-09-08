@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Regression test for the heap-buffer-overflow found in view_data_edit()
 // during Phase 0d's ASan sweep (see modernization.md's "Sanitizer findings"
 // section): it allocated exactly n_entries char* slots but then wrote a

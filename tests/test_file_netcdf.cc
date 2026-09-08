@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Integration tests for core/src/file_netcdf.cc against a real, synthetic
 // netCDF file (written and read back via the plain netCDF C API) -- this is
 // the file-I/O boundary the rest of core's pure-logic tests deliberately

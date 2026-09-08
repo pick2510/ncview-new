@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Headless implementation of the ncview/interface.h seam. Proves
 // ncview_core has no hidden UI dependency: if this file plus ncview_core
 // links (see tests/CMakeLists.txt, which force-links the whole archive),

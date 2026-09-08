@@ -1,6 +1,8 @@
 /*
  * ncview core includes.
  *
+ * Copyright (C) 2026 Dominik Strebel
+ *
  * UI-free replacement for upstream's ncview.includes.h: no X11/Xt/Xaw, no
  * SciPlot, no autotools-generated config.h. HAVE_UDUNITS2 is provided
  * unconditionally via the build system (see core/CMakeLists.txt) since this

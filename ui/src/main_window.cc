@@ -1,3 +1,9 @@
+/*
+ * ui/src/main_window.cc
+ *
+ * Copyright (C) 2026 Dominik Strebel
+ */
+
 #include "ncview_ui/main_window.h"
 
 #include <algorithm>

@@ -1,6 +1,8 @@
 /*
  * ui/src/interface_fltk.cc
  *
+ * Copyright (C) 2026 Dominik Strebel
+ *
  * The free-function side of the ncview/interface.h toolkit seam: every
  * function ncview_core calls (in_*) or that core calls directly by name
  * (set_options, x_range, ...) is implemented here, delegating to the

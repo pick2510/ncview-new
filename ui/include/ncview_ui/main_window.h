@@ -1,6 +1,8 @@
 /*
  * ui/include/ncview_ui/main_window.h
  *
+ * Copyright (C) 2026 Dominik Strebel
+ *
  * The FLTK implementation of ncview's main window. This is the M3 rewrite
  * of upstream's src/interface/x_interface.c (Xt/Xaw) -- same job (own the
  * 2-D field display, colorbar, button bar, labels, dimension controls,

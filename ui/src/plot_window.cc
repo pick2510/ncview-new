@@ -1,6 +1,8 @@
 /*
  * ui/src/plot_window.cc
  *
+ * Copyright (C) 2026 Dominik Strebel
+ *
  * See ncview_ui/plot_window.h for what this replaces (SciPlot.c + plot_xy.c).
  */
 #include "ncview_ui/plot_window.h"

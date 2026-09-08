@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Characterization tests for core/src/util.cc's data_to_pixels() -- the
 // rendering transform at the heart of ncview (data value -> byte pixel,
 // applied per-frame to every 2-D field the app ever draws). Before this

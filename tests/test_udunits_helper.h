@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // initialize_misc() (core/src/ncview.cc) -- upstream's own one-time,
 // process-lifetime setup routine, which ncview_main() calls exactly once --
 // itself calls udu_utinit(NULL) unconditionally. udu_utinit() replaces the

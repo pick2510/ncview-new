@@ -1,6 +1,8 @@
 /*
  * core/include/ncview/interface.h
  *
+ * Copyright (C) 2026 Dominik Strebel
+ *
  * The toolkit seam. ncview_core calls only the functions declared here to
  * talk to the UI; ncview_ui (FLTK) implements every one of them. This is
  * upstream's in_* contract (originally declared inline in ncview.protos.h,

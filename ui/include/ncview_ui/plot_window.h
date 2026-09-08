@@ -1,6 +1,8 @@
 /*
  * ui/include/ncview_ui/plot_window.h
  *
+ * Copyright (C) 2026 Dominik Strebel
+ *
  * The M4 replacement for upstream's src/interface/plot_xy.c +
  * src/interface/SciPlot.c: a small popup window showing one or more XY
  * line plots ("Plot Along Dimension" from the main window's variable

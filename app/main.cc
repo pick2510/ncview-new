@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // The real ncview entry point. Everything else -- reading the state file,
 // parsing args, opening the netCDF files, building the display, and running
 // the event loop -- happens in ncview_main() (core/src/ncview.cc), which

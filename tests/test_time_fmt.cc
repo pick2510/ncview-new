@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Characterization tests for ncview's time-axis formatting and granularity
 // logic: fmt_time() (core/src/util.cc, the single dispatch point core
 // actually calls) and the three time standards it fans out to --

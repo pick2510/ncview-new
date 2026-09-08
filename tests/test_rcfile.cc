@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Characterization tests for the ".ncviewrc" state file round-trip
 // (core/src/handle_rc_file.cc + the Stringlist file format in
 // core/src/stringlist.cc). See modernization.md Phase 0b: Phase 3 replaces

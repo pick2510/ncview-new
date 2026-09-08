@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Unit tests for core/src/stringlist.cc -- the std::vector<StringlistEntry>
 // based string-list type used throughout core for variable/dimension name
 // lists (modernization.md Phase 3 replaced the original intrusive doubly-

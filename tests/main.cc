@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Custom main() (DOCTEST_CONFIG_IMPLEMENT, not _WITH_MAIN) so the process
 // can exit immediately after doctest reports its result. Every other
 // tests/test_*.cc file just #includes doctest.h (without either define) and

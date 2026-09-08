@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Characterization tests for the variable-list machinery in
 // core/src/util.cc: add_var_to_list() (and the internal new_fdblist()
 // helper it calls), get_var(), is_scannable(), and n_vars_in_list(). This

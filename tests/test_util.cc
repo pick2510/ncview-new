@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Unit tests for the pure, global-state-free helpers in core/src/util.cc.
 #include <cstring>
 

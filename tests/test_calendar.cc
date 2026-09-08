@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Dominik Strebel
+//
 // Unit tests for core/src/calcalcs.cc (calendar arithmetic) and
 // core/src/udu.cc (UDUNITS-2 glue) -- the date/time logic ncview relies on
 // to interpret a variable's time dimension.
