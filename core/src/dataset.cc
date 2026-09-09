@@ -47,6 +47,32 @@ int FDBlist::id() const
 
 namespace {
 
+/* Formerly util.cc's new_netcdf(): allocate and default-initialize a new
+ * NetCDFOptions. `new`, not malloc(): the caller (new_fdblist(), directly
+ * below) immediately hands the result to a std::unique_ptr<NetCDFOptions>,
+ * whose default deleter calls `delete`, not `free()`. This was a real
+ * malloc/delete mismatch -- caught by ASan's alloc-dealloc-mismatch check
+ * only once something actually destroyed a Dataset mid-process (Phase 0a
+ * of the "refine the architecture" plan's SessionFixture). Moved here
+ * (Phase 4b, dissolving util.cc) since new_fdblist() is its only caller;
+ * no longer needs external linkage. */
+void new_netcdf( NetCDFOptions **n )
+{
+	(*n) = new NetCDFOptions();
+	(*n)->valid_range_set  = false;
+	(*n)->valid_min_set    = false;
+	(*n)->valid_max_set    = false;
+	(*n)->scale_factor_set = false;
+	(*n)->add_offset_set   = false;
+
+	(*n)->valid_range[0] = 0.0;
+	(*n)->valid_range[1] = 0.0;
+	(*n)->valid_min      = 0.0;
+	(*n)->valid_max      = 0.0;
+	(*n)->scale_factor   = 1.0;
+	(*n)->add_offset     = 0.0;
+}
+
 /* Formerly util.cc's new_fdblist(): allocate a new FDBlist element with
  * its NetCDFOptions aux_data slot initialized. Only used by
  * Dataset::addVariable(). */

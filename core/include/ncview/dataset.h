@@ -28,8 +28,10 @@
  * free-function forwarding shim kept for compatibility. Functions that
  * only fill in fields of an already-allocated NCVar* from netCDF metadata,
  * without touching the variable list itself (fill_dim_structs,
- * handle_dim_mapping, is_scannable, ...), stay free functions in util.cc,
- * called from Dataset's methods the same way anything else calls them.
+ * handle_dim_mapping, is_scannable, ...), stay free functions -- moved to
+ * var_metadata.cc when util.cc was dissolved (Phase 4b of the "refine the
+ * architecture" plan), still called from Dataset's methods the same way
+ * anything else calls them.
  */
 #pragma once
 

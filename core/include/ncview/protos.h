@@ -154,15 +154,17 @@ std::string netcdf_dim_calendar( int fileid, std::string_view dim_name );
 int 	safe_ncvarid( int fileid, char *varname );
 
 /******************************************************************************
- * in util.c, general utility routines
+ * util.cc was dissolved in Phase 4b of the "refine the architecture" plan
+ * -- these declarations remain, but the definitions they refer to now
+ * live in the files each comment below names.
  */
 /* data_to_pixels()/expand_data() moved onto View (View::dataToPixels(),
- * private View::expandData()) in Phase 4b of the "refine the architecture"
- * plan -- see core/src/render_pipeline.cc. close_enough/clip_f have no
- * natural View to attach to and stay free functions, also now defined in
- * render_pipeline.cc. */
+ * private View::expandData()) -- see core/src/render_pipeline.cc.
+ * close_enough/clip_f have no natural View to attach to and stay free
+ * functions, also now defined in render_pipeline.cc. new_netcdf() lost its
+ * external linkage entirely: it moved into an anonymous namespace in
+ * dataset.cc, its only caller. */
 int 	close_enough	   ( float data, float fill );
-void 	new_netcdf         ( NetCDFOptions **n );
 void	clip_f		   ( float *val, float min, float max );
 /* Only called by Dataset::addVariable() (ncview/dataset.h) -- fills in
  * fields of an already-allocated NCVar* from netCDF metadata without
@@ -275,7 +277,9 @@ Stringlist *get_persistent_state();
  * because core itself calls these (not just the UI). in_variable_selected
  * lives in view.cc next to set_scan_variable(); in_button_pressed and
  * in_colormap_selected live in do_buttons.cc next to the do_*() functions
- * they dispatch to; in_error lives in util.cc.
+ * they dispatch to; in_error lives in viewer_ui_bridge.cc (moved there
+ * from util.cc in Phase 4b of the "refine the architecture" plan, since
+ * every other UI-seam function already lives in that file).
  */
 void	in_variable_selected	( const char *var_name );
 void	in_colormap_selected	( const char *name );

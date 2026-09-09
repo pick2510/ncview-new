@@ -266,3 +266,15 @@ void	pix_to_rgb( ncv_pixel pix, int *r, int *g, int *b )
 {
 	g_app.ui->pix_to_rgb( pix, r, g, b );
 }
+
+/* Formerly util.cc's in_error() (Phase 4b, "refine the architecture"
+ * plan): indicates an error condition which can be continued from.
+ * Routed through in_dialog() (this same seam) rather than being one
+ * itself -- kept here since every other UI-seam function lives in this
+ * file, even though it forwards to another free function rather than
+ * directly to g_app.ui. */
+void
+in_error( const char *message )
+{
+	in_dialog( message, false );
+}

@@ -1047,3 +1047,22 @@ void ViewerController::recomputeColorbar( void )
 	if( options.debug )
 		fprintf( stderr, "view_recompute_colorbar: exiting\n" );
 }
+
+/******************************************************************************
+ * Set the style of blowup we want to do. Formerly util.cc's
+ * set_blowup_type() (Phase 4b, "refine the architecture" plan): stays a
+ * free function (no natural View/ViewerController "this" -- it's called
+ * from both ViewerController::blowupType() below and view.cc's
+ * set_scan_variable(), neither of which is the sole owner), moved here
+ * since ViewerController::blowupType() is its primary caller.
+ */
+	void
+set_blowup_type( BlowupType new_type )
+{
+	if( new_type == BlowupType::Replicate )
+		in_set_label( Label::BlowupType, "Repl"   );
+	else
+		in_set_label( Label::BlowupType, "Bi-lin" );
+
+	options.blowup_type = new_type;
+}

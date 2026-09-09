@@ -19,7 +19,6 @@ add_library(ncview_core STATIC
     src/udu.cc
     src/utCalendar2_cal.cc
     src/legal_text.cc
-    src/util.cc
     src/var_metadata.cc
     src/varname_utils.cc
     src/view.cc
