@@ -62,6 +62,7 @@ add_executable(ncview_core_tests
     test_view_navigation.cc
     test_view_draw.cc
     test_view_dims.cc
+    test_multifile.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE
