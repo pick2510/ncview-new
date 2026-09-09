@@ -15,6 +15,7 @@
 // single global RecordingViewerUi instance, and g_app.ui is pointed at
 // it via a namespace-scope initializer below, before any test's main()
 // runs.
+#include <array>
 #include <cstdio>
 #include <cstring>
 #include <functional>
@@ -55,6 +56,16 @@ int g_set_scan_dims_response = 0;
 bool g_have_last_print_info = false;
 PrintInfo g_last_print_info;
 PrintOptions g_last_print_options;
+
+// Captured/scripted by in_create_colormap()/x_seen_colormap_name() for
+// Phase 8's test_colormaps.cc -- see the fuller comment at their use sites
+// below.
+struct CreatedColormap {
+	std::string name;
+	std::array<unsigned char, 256> r, g, b;
+};
+std::vector<CreatedColormap> g_created_colormaps;
+std::vector<std::string> g_seen_colormap_names;
 
 // Scripted printer_options() dialog answer: applied to *po (do_print.cc's
 // file-static printopts, passed by pointer) before printer_options()
@@ -130,6 +141,8 @@ void resetStubRecording()
 	g_last_xy_xvals.clear();
 	g_last_xy_yvals.clear();
 	g_last_xy_x_axis_title.clear();
+	g_created_colormaps.clear();
+	g_seen_colormap_names.clear();
 }
 
 bool timerIsArmed() { return g_timer_armed; }
@@ -148,6 +161,17 @@ bool fireTimer()
 	callback();
 	return true;
 }
+
+// Captured for test_colormaps.cc (Phase 8): in_create_colormap() previously
+// only recorded its own name into g_recorded_calls, discarding the actual
+// name/r/g/b payload -- fine for tests that only care whether a colormap
+// load happened, but ncview.cc's colormap machinery (initialize_colormaps(),
+// init_cmap_from_file()) had zero coverage until this phase, and asserting
+// only "in_create_colormap was called" can't tell a correct load from a
+// silently-wrong one (e.g. an off-by-one in a .ncmap parser). Same category
+// of extension as Phase 4a's printer_options()/in_print() capture.
+// (Declared up near the top of the file, alongside the other captured
+// globals, so resetStubRecording() below can clear them.)
 
 // Captured for test_view_data_edit.cc: view_data_edit() builds this array
 // and hands ownership to x_dataedit(), which upstream's real FLTK dialog
@@ -173,7 +197,13 @@ public:
 	void in_set_label(Label, const char *s) override { g_recorded_calls.push_back(std::string("in_set_label:") + (s ? s : "")); }
 	void in_process_user_input() override { g_recorded_calls.push_back("in_process_user_input"); }
 	void in_draw_2d_field(const unsigned char*, size_t, size_t, size_t) override { g_recorded_calls.push_back("in_draw_2d_field"); }
-	void in_create_colormap(const char*, const ncv_pixel[256], const ncv_pixel[256], const ncv_pixel[256]) override { g_recorded_calls.push_back("in_create_colormap"); }
+	void in_create_colormap(const char *name, const ncv_pixel r[256], const ncv_pixel g[256], const ncv_pixel b[256]) override {
+		g_recorded_calls.push_back("in_create_colormap");
+		CreatedColormap cm;
+		cm.name = name ? name : "";
+		for (int i = 0; i < 256; i++) { cm.r[i] = r[i]; cm.g[i] = g[i]; cm.b[i] = b[i]; }
+		g_created_colormaps.push_back(std::move(cm));
+	}
 	char *in_install_next_colormap(int) override { g_recorded_calls.push_back("in_install_next_colormap"); return nullptr; }
 	int in_set_2d_size(size_t, size_t) override { g_recorded_calls.push_back("in_set_2d_size"); return 0; }
 	void in_set_sensitive(Button, int) override { g_recorded_calls.push_back("in_set_sensitive"); }
@@ -265,7 +295,12 @@ public:
 		g_last_dataedit_lines = text;
 		g_last_dataedit_nx = nx;
 	}
-	int x_seen_colormap_name(const char*) override { g_recorded_calls.push_back("x_seen_colormap_name"); return 0; }
+	int x_seen_colormap_name(const char *name) override {
+		g_recorded_calls.push_back("x_seen_colormap_name");
+		for (const auto &seen : g_seen_colormap_names)
+			if (name != nullptr && seen == name) return 1;
+		return 0;
+	}
 	void x_check_legal_colormap_loaded() override { g_recorded_calls.push_back("x_check_legal_colormap_loaded"); }
 	void x_create_colorbar(float, float, Transform) override { g_recorded_calls.push_back("x_create_colorbar"); }
 	void x_draw_colorbar() override { g_recorded_calls.push_back("x_draw_colorbar"); }

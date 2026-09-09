@@ -39,13 +39,25 @@
 // under test.
 #pragma once
 
+#include <array>
 #include <functional>
+#include <string>
+#include <vector>
 
 #include "ncview/includes.h"
 #include "ncview/protos.h"
 
 // Declared in stub_interface.cc.
 extern std::vector<std::string> g_recorded_calls;
+
+// Captured/scripted by in_create_colormap()/x_seen_colormap_name() -- see
+// stub_interface.cc's own comment. Added for Phase 8's test_colormaps.cc.
+struct CreatedColormap {
+	std::string name;
+	std::array<unsigned char, 256> r, g, b;
+};
+extern std::vector<CreatedColormap> g_created_colormaps;
+extern std::vector<std::string> g_seen_colormap_names;
 extern Message g_dialog_response;
 extern Message g_range_response;
 extern Message g_printer_options_response;

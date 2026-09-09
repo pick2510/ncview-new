@@ -74,6 +74,8 @@ add_executable(ncview_core_tests
     test_overlay.cc
     test_file_layer.cc
     test_file_metadata.cc
+    test_cli_options.cc
+    test_colormaps.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE
