@@ -58,6 +58,10 @@ add_executable(ncview_core_tests
     test_playback.cc
     test_nc_fixture.cc
     test_button_dispatch.cc
+    test_view_null_guards.cc
+    test_view_navigation.cc
+    test_view_draw.cc
+    test_view_dims.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE

@@ -1,0 +1,77 @@
+// Copyright (C) 2026 Dominik Strebel
+//
+// Characterization tests for the ~12 view.cc entry points that each carry
+// their own `if (view == NULL) ...` guard -- "refine the architecture"
+// plan, Phase 2. That guard doesn't mean "View might be null" in general;
+// it means "no variable is selected yet", a session fact, which is why
+// these move onto ViewerSession/ViewerController. Written and verified
+// against the UNMODIFIED free functions first (per this plan's
+// characterization rule), so the exact no-op/early-return behavior each
+// performs today is pinned down before anything moves.
+#include <doctest/doctest.h>
+
+#include "ncview/includes.h"
+#include "ncview/defines.h"
+#include "ncview/protos.h"
+#include "support/session_fixture.h"
+#include "test_udunits_helper.h"
+
+using ncview_test::SessionFixture;
+
+// The global under test, defined in core/src/view.cc.
+extern std::unique_ptr<ViewState> &view;
+
+TEST_CASE("view.cc null guards: every relocated entry point is a documented no-op with no variable selected") {
+    SessionFixture fx;
+    ensure_ncview_misc_initialized();
+
+    REQUIRE(view == nullptr);
+
+    SUBCASE("view_current_nt returns 0") {
+        CHECK(view_current_nt() == 0);
+    }
+    SUBCASE("change_view returns 0 and does not crash") {
+        CHECK(change_view(1, FRAMES) == 0);
+        CHECK(view == nullptr);
+    }
+    SUBCASE("view_draw returns 0 and does not crash") {
+        CHECK(view_draw(true, false) == 0);
+        CHECK(view == nullptr);
+    }
+    SUBCASE("view_change_cur_dim reports an error and does not crash") {
+        char dim_name[] = "time";
+        view_change_cur_dim(dim_name, Modifier::M1);
+        CHECK(view == nullptr);
+    }
+    SUBCASE("view_set_cur_dim_index reports an error and does not crash") {
+        view_set_cur_dim_index("time", 0);
+        CHECK(view == nullptr);
+    }
+    SUBCASE("view_get_cur_dim_index returns 0") {
+        CHECK(view_get_cur_dim_index("time") == 0);
+    }
+    SUBCASE("invalidate_all_saveframes is a silent no-op") {
+        invalidate_all_saveframes();
+        CHECK(view == nullptr);
+    }
+    SUBCASE("view_report_position is a silent no-op") {
+        view_report_position(1, 1, 0);
+        CHECK(view == nullptr);
+    }
+    SUBCASE("set_min_from_curdata is a silent no-op") {
+        set_min_from_curdata();
+        CHECK(view == nullptr);
+    }
+    SUBCASE("set_max_from_curdata is a silent no-op") {
+        set_max_from_curdata();
+        CHECK(view == nullptr);
+    }
+    SUBCASE("plot_XY is a silent no-op") {
+        plot_XY();
+        CHECK(view == nullptr);
+    }
+    SUBCASE("view_recompute_colorbar is a silent no-op") {
+        view_recompute_colorbar();
+        CHECK(view == nullptr);
+    }
+}
