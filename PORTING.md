@@ -1198,6 +1198,61 @@ verification (4-gate + ASan/UBSan/LSan + shuffled order at seeds 1 and
 42) clean; `grep -rn` confirms no reference to the old file-scope static
 survives outside an explanatory comment.
 
+## Phase 5c: dedupe the colorbar's copy of the transform formula
+
+`ui/src/main_window.cc`'s `Colorbar::draw()` hand-copied
+`FrameRenderer::render()`'s transform/invert/scale arithmetic
+(`core/src/frame_renderer.cc`). Two problems: it hardcoded `10` where
+core uses `settings.n_extra_colors` (both are 10 today, so this was
+latent, not a live bug), and its explanatory comment pointed at
+`util.cc:data_to_pixels`, a file Phase 4b had already deleted.
+
+Extracted the shared per-sample step into `FrameRenderer::colorIndex<T>`
+(`core/include/ncview/frame_renderer.h`): given a normalized value, a
+`Transform`, `invert_colors`, `n_colors` and `n_extra_colors`, returns the
+color index. **It's a template, not a plain function, and that wasn't
+the first thing tried.** The first attempt shared one non-templated
+function (`double` parameter, `float` internal storage to keep
+`render()`'s arithmetic byte-for-byte identical to its pre-extraction
+form) and called it from both sites. That broke 11 of `ui_smoke.sh`'s 13
+goldens: `Colorbar::draw()` had always computed in pure `double` with no
+intermediate narrowing, and forcing it onto `render()`'s float precision
+shifted one pixel column's color index by 1 at a transform/invert
+truncation boundary (`Transform::Low`, `invert_colors=true`,
+`normalized≈0.9` was the one `tests/test_frame_renderer.cc` caught before
+`ui_smoke.sh` confirmed the visual effect — diffed with ImageMagick down
+to a single 1×21 differing column in the "initial" golden). The plan
+explicitly ruled out introducing behavior changes beyond the
+`n_extra_colors` fix, and a precision change is one, however small.
+Templating `colorIndex<T>` (`render()` instantiates `T=float`,
+`Colorbar::draw()` instantiates `T=double`) keeps one function body as
+the actual source of truth while letting each call site keep its
+original arithmetic type — genuine deduplication without a behavior
+change on either side.
+
+`Colorbar::draw()` now calls `FrameRenderer::colorIndex<double>(...)`
+with the real `options.n_extra_colors` instead of the hardcoded `10`
+(a no-op today, live if `-ne` is ever wired up), and its stale comment
+now points at `frame_renderer.cc`. A second, unrelated stale `util.cc`
+reference was found and fixed in the same file while here
+(`main_window.cc`'s anonymous-namespace `lookup()` helper's comment).
+
+Two new `tests/test_frame_renderer.cc` cases: one confirms `render()`
+actually delegates to `colorIndex<float>` (not a re-drifted inline copy)
+by comparing its output against a direct call for every `Transform` ×
+`invert_colors` combination; the other reproduces `Colorbar::draw()`'s
+pre-extraction double-precision formula independently and checks
+`colorIndex<double>` agrees at every input — this second test is the one
+that would catch the float/double regression above if it ever came back.
+167→169 tests, 4484→4596 assertions. Full verification (4-gate +
+ASan/UBSan/LSan + shuffled order at seeds 1 and 42) clean, including all
+13 `ui_smoke.sh` goldens byte-identical; `grep -rn` confirms no duplicate
+of the arithmetic and no remaining reference to the deleted `util.cc`
+survives.
+
+This completes Phase 5 (5a/5b/5c) as scoped in the round-3 reassessment.
+Phase 6 (the `fi_*`/`netcdf_*` collapse) is unblocked.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
