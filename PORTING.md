@@ -1779,6 +1779,102 @@ survives in `ncview.cc`. 216->240 tests, 5733->6614 assertions.
 CI) are both available next, fully specified, per the plan file's status
 table.
 
+## Phase 9: the dialog-hook table, the M4-dialogs split, `ui_smoke.sh` coverage, and one pure-logic extraction
+
+`ui/` has zero unit-test coverage of any kind -- the only UI coverage is
+`tests/ui_smoke.sh`'s screenshot goldens. Round 3's inventory of this
+area had three wrong premises (corrected before Phase 9 started, in the
+plan file); this phase re-verified everything against the current tree
+before acting, per the plan's standing rule, rather than trusting either
+the original stale sketch or its round-3 correction blindly.
+
+**The `NCVIEW_TEST_DIALOG` strcmp chain** (`ui/src/interface_fltk.cc`)
+is converted to a `{name, std::function<void()>}` table, matching
+`NCVIEW_TEST_BUTTON`'s existing table just below it. Not a uniform
+function-pointer table like the button one, though: the 8 dialog
+actions have genuinely different call shapes (some take a `Modifier`,
+some take none, `"print"` defers to the next event-loop tick via
+`Fl::add_timeout`), so each table entry is a `std::function` closure
+rather than a bare function pointer plus a shared enum dispatch. No
+behavior change: all 13 pre-existing `ui_smoke.sh` goldens, including
+the 7 `dialog_*` cases this hook drives, stay byte-identical.
+
+**`MainWindow`'s split, decided with evidence rather than assumed.**
+Read all 37 `MainWindow::` methods (~1,309 of `main_window.cc`'s 1,725
+lines) and grepped every one of the four "M4 dialogs" methods
+(`setOptionsDialog`/`rangeDialog`/`scanDimsDialog`/`printerOptionsDialog`,
+~265 lines) for every `MainWindow` member variable (`win_`, `image_`,
+`colorbar_`, `dim_rows_`, `button_bar_`, `var_pack_`,
+`colormap_choice_`, `menu_bar_`): zero hits. Each of the four builds its
+own local `Fl_Window`, runs a blocking modal `Fl::wait()` loop, and
+returns through its parameters -- already effectively free functions
+wearing `MainWindow::` qualification, and marked off with their own
+`/* ===== M4 dialogs ===== */` section comment in the original file.
+That's a genuine cluster boundary, unlike the rest of the class (layout/
+construction, widget callbacks, label/dim-info setters, colormap
+management, field display), which is tightly bound to those same shared
+members the same way `view.cc`'s round-4 survey found `View`'s methods
+bound to its data -- method-heavy but cohesive, not a god-object, so
+*that* remainder correctly stays in one file rather than being split
+further for its own sake. Moved the four dialogs verbatim (pure "move,
+don't split" file motion, no signature or behavior change) into new
+`ui/src/main_window_dialogs.cc`; `main_window.cc` drops from 1,721 to
+1,430 lines. Also dropped the five FLTK dialog-widget `#include`s
+(`Fl_Check_Button`, `Fl_Float_Input`, `Fl_Native_File_Chooser`,
+`Fl_Return_Button`, `Fl_Round_Button`) that only the moved methods used.
+
+**`ui_smoke.sh` expanded from 13 to 15 golden cases.** `button_colormap`
+(`NCVIEW_TEST_BUTTON=colormap`, previously untested, visually distinct
+from every existing golden) was straightforward. `var_1d` -- a real gap;
+every existing case selects `sample.cdl`'s 3-D `temp`, so the 1-D
+display path (ncview auto-opens an XY line-plot window instead of the
+2-D color-contour field) had zero screenshot coverage -- took a false
+start worth recording: adding a second (1-D) variable directly to the
+shared `sample.cdl` seemed simplest, but `ui_smoke.sh` itself caught the
+problem immediately -- every one of the 13 *existing* goldens failed,
+because the new variable added a dimensionality bucket to the
+variable-selector dropdown, visibly changing every screenshot for a
+reason unrelated to what each of those cases actually tests. Reverted
+before committing anything, per the "goldens must stay byte-identical"
+rule this exists to enforce; used a separate minimal fixture
+(`tests/ui_smoke/sample_1d.cdl`, one variable, no lat/lon) instead. A
+resize case (needs `xdotool`, not currently a harness dependency) and a
+genuine multi-file case (the harness's single-`SAMPLE_NC` invocation
+model would need extending) are deferred -- bigger lifts than this
+pass's remaining scope, noted rather than silently dropped.
+
+**One pure-logic extraction, matching Phase 5c's precedent.** While
+reading `MainWindow` for the split decision above, found
+`cbarNormalize`/`cbarNlevFromStep`/`cbarGenlevs` -- an anonymous-
+namespace "nice round numbers" (1/2/5 x10^n) tick-level picker feeding
+`Colorbar::draw()`'s axis labels. Pure arithmetic on doubles/ints, zero
+FLTK or widget dependency, unlike everything else in the file --
+exactly the shape of thing `ui/`'s complete lack of a unit-test binary
+leaves permanently untestable unless it moves. Extracted to
+`FrameRenderer::niceTickLevels()` (`core/include/ncview/frame_renderer.h`
+/ `core/src/frame_renderer.cc`, alongside Phase 5c's `colorIndex()`,
+same rationale). Also considered `computeButtonBarRows()`
+(`main_window.cc`, already commented "pure/no side effects"), but it's
+genuinely UI-layout-specific -- coupled to `kButtonSpecs`, a
+`ui/`-local button-width table -- rather than a reusable numeric
+algorithm, so it stayed put; extracting it would relocate UI layout
+data into `core` for no real testability gain. Verified byte-for-byte
+via `ui_smoke.sh`: all 15 goldens (both new ones included) stayed
+pixel-identical after the extraction. Two new
+`tests/test_frame_renderer.cc` cases cover the degenerate-input
+contract (`nlevels < 2`, `maxdat <= mindat`) and correct 1/2/5-step
+selection across six representative ranges.
+
+Verified after each of this phase's three commits: clean `-Werror`
+build; `ctest` normal + `--order-by=rand` (seeds 3, 44);
+`ncview_core_linkcheck` exit 0; `ui_smoke.sh`'s goldens byte-identical
+at every stage (13, then 15 once the two new ones landed); a scratch
+ASan/UBSan/LSan build clean; `grep -rn` confirms no stale reference to
+any moved/renamed symbol. 240->242 tests, 6614->6647 assertions.
+
+**Phase 9 is now complete.** Only Phase 10 (coverage/fuzz CI tooling)
+remains in the entire plan.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
