@@ -125,7 +125,27 @@ public:
 	void in_set_cur_dim_value(const char*, const char*) override { g_recorded_calls.push_back("in_set_cur_dim_value"); }
 	void in_set_cursor_busy() override { g_recorded_calls.push_back("in_set_cursor_busy"); }
 	void in_set_cursor_normal() override { g_recorded_calls.push_back("in_set_cursor_normal"); }
-	int in_set_scan_dims(const Stringlist*, const char*, const char*, Stringlist **new_dim_list) override { g_recorded_calls.push_back("in_set_scan_dims"); if (new_dim_list) *new_dim_list = nullptr; return g_set_scan_dims_response; }
+	// Echoes back the current X/Y axes ("Y-axis first, then X-axis", per
+	// View::setScanDims()'s own contract comment) as an "accept
+	// unchanged" answer, rather than leaving *new_dim_list null: found
+	// while writing test_button_dispatch.cc (Phase 1) that
+	// setScanDims()'s cancel check (`scan_dims_result ==
+	// static_cast<int>(Message::Cancel)`) is documented dead code -- an
+	// upstream quirk where the real returned status is never actually
+	// Message::Cancel's numeric value -- so it *always* falls through to
+	// dereferencing *new_dim_list, unconditionally, regardless of what
+	// this stub returns. A real UI's dialog always populates the list on
+	// every path that survives that point; this stub needs to as well or
+	// every call crashes.
+	int in_set_scan_dims(const Stringlist*, const char *cur_x_name, const char *cur_y_name, Stringlist **new_dim_list) override {
+		g_recorded_calls.push_back("in_set_scan_dims");
+		if (new_dim_list) {
+			*new_dim_list = nullptr;
+			if (cur_y_name) stringlist_add_string(new_dim_list, cur_y_name);
+			if (cur_x_name) stringlist_add_string(new_dim_list, cur_x_name);
+		}
+		return g_set_scan_dims_response;
+	}
 	void in_change_min(const char*) override { g_recorded_calls.push_back("in_change_min"); }
 	void in_flush() override { g_recorded_calls.push_back("in_flush"); }
 	int in_popup_XY_graph(size_t, int, double*, double*, const char*, const char*, const char*, const char*, const Stringlist*) override { g_recorded_calls.push_back("in_popup_XY_graph"); return 0; }
