@@ -905,6 +905,93 @@ point (the original Phases 4-9 sketches) needs re-scoping against the
 tree as it looks now before starting -- see the plan file's "Later
 phases" section.
 
+## Reassessment round 2, and Phase 4a: coverage for overlay.cc and do_print.cc
+
+A second re-scoping pass (2026-09-09, in plan mode) checked what Phase 3
+actually touched before trusting the stale Phase 4-9 sketches: it left
+`util.cc`, `overlay.cc`, `do_print.cc` and `handle_rc_file.cc` alone
+(bar two dead-code deletions in `util.cc`), so the original inventory's
+findings about those four files still held, re-verified directly. Chose
+"coverage first, then dissolve `util.cc`" as the next fully-specified
+phase over the `fi_*`/`netcdf_*` collapse, the `ui/` split, and CI
+coverage/fuzzing -- all deferred again. See the plan file's "Reassess
+here, round 2" section.
+
+**4a**: `overlay.cc` (673 lines) and `do_print.cc` (273 lines) both had
+zero direct tests. Most of `overlay.cc`'s helpers (`gen_xform`,
+`gen_overlay_internal`, `gen_overlay_internal_mapped`, `do_overlay_inner`,
+`overlay_find_closest_pt`/`_inner`) are `static` -- every test goes
+through the public entry points (`do_overlay`/`gen_overlay`,
+`overlay_names`/`overlay_current`/`overlay_init`/
+`determine_overlay_base_dir`; `do_print`) instead. `build_print_info()`
+(`do_print.cc`, also `static`) is likewise only reachable through
+`do_print()`.
+
+Extended `RecordingViewerUi` (`tests/stub_interface.cc`) two ways, the
+same category of change as Phase 0b's timer queue and the existing
+dialog-response globals: `printer_options()` now applies a scriptable
+`std::function<void(PrintOptions&)>` (`g_printer_options_override`) to
+the `PrintOptions` it's handed, simulating a user editing one field in
+the real dialog, instead of discarding the pointer entirely; `in_print()`
+now captures the `PrintInfo`/`PrintOptions` it's given
+(`g_last_print_info`/`g_last_print_options`) instead of discarding both
+arguments, so a test can assert on what `build_print_info()` actually
+produced.
+
+**Two real fixture gaps, not production bugs**, both found via SIGSEGV
+while writing `test_overlay.cc` and understood before being "fixed" in
+the test helper rather than in production code:
+- `gen_xform()` reads `NCDim::values` directly. That array is only ever
+  populated by `Dataset::calcDimMinmaxes()`, normally run once by
+  `ncview.cc`'s `initialize_file_interface()` during real startup.
+  Nothing before this test needed `NCDim::values` populated, so no
+  existing selection helper called it -- confirmed correct in production
+  by tracing the real startup sequence; the test fixture now calls it
+  too.
+- `do_overlay()`'s redraw path (`data_to_pixels()`, `util.cc`)
+  substitutes `fill_value` into every overlay-masked pixel before
+  rendering, then indexes `pixel_transform[0]` for it. A real ncview
+  always has a colormap installed before the first draw
+  (`initialize_colormaps()`); no existing test fixture did, because
+  nothing before this test ever triggered a real draw with an active
+  overlay mask. The test helper now sets up a minimal identity
+  `pixel_transform`, the same way `test_pixels.cc` already does for its
+  own direct `FrameRenderer` tests.
+
+`gen_xform()`'s antimeridian/pole test needed real, hand-chosen
+coordinate values (lon ascending -180..170, lat descending 90..-90) --
+`NcFixture`'s `.coord()` always fills 0,1,2,...,n-1, so this file
+hand-rolls its fixture via raw netCDF calls, the same pattern
+`test_multifile.cc` (Phase 3c) already established for cases `NcFixture`
+doesn't cover. Along the way, working out the expected index for a
+"near the pole/antimeridian" test point surfaced a real, worth-pinning
+quirk in `gen_overlay()`'s point-placement check
+(`if ((i>0) && (j>0)) overlay[...] = 1;`, `overlay.cc`): a point whose
+nearest grid cell is index 0 on *either* axis is silently never marked,
+even though `gen_xform()` resolved it correctly -- `>` where `>=` would
+include it. Also confirmed `gen_xform()` never actually returns the `-2`
+sentinel `gen_overlay()`/`gen_overlay_internal()` check for (`if (i==-2)
+return {};`) -- it only ever returns `-1` (out of range) or a valid
+index, making that check dead code from a since-changed version. Neither
+is fixed here: this phase is coverage, not a behavior change, and both
+are now pinned by a test that would fail if either changed silently.
+
+The 2-D-mapped-coordinate branch (`gen_overlay_internal_mapped()`, the
+only caller of `overlay_find_closest_pt()`) is **not** covered: it needs
+a variable with curvilinear (2-D lat/lon) coordinates, which `NcFixture`
+doesn't build and nothing else in the tree does either. Building that is
+its own piece of work (useful for curvilinear-grid coverage generally,
+not just this one function), not a Phase 4a side quest.
+
+Test count: 113 -> 131 tests, 2162 -> 3841 assertions. Full verification
+(4-gate + ASan/UBSan/LSan + 2-seed shuffle) clean.
+
+**Next: 4b** -- dissolve `util.cc` into the four modules the inventory
+already identified (render pipeline, `Dataset`-adjacent metadata setup,
+time formatting, string helpers), now that the two previously-zero-
+coverage files it's adjacent to (`overlay.cc`, `do_print.cc`) have real
+tests.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
