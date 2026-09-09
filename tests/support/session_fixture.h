@@ -39,6 +39,8 @@
 // under test.
 #pragma once
 
+#include <functional>
+
 #include "ncview/includes.h"
 #include "ncview/protos.h"
 
@@ -48,6 +50,10 @@ extern Message g_dialog_response;
 extern Message g_range_response;
 extern Message g_printer_options_response;
 extern int g_set_scan_dims_response;
+extern bool g_have_last_print_info;
+extern PrintInfo g_last_print_info;
+extern PrintOptions g_last_print_options;
+extern std::function<void(PrintOptions &)> g_printer_options_override;
 extern void resetStubRecording();
 
 // The fake one-shot timer queue (stub_interface.cc) -- lets a test drive

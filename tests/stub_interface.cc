@@ -46,6 +46,26 @@ Message g_range_response = Message::OK;
 Message g_printer_options_response = Message::OK;
 int g_set_scan_dims_response = 0;
 
+// Captured by in_print() below so Phase 4a's do_print.cc tests can assert
+// on what build_print_info() actually produced, rather than only that
+// in_print was called. PrintInfo::pixels is a borrowed pointer (see its
+// own doc comment in defines.h) -- copying the struct copies the pointer
+// value, not the data; only valid to read (never dereferenced by these
+// tests) until the next do_print()/draw() call.
+bool g_have_last_print_info = false;
+PrintInfo g_last_print_info;
+PrintOptions g_last_print_options;
+
+// Scripted printer_options() dialog answer: applied to *po (do_print.cc's
+// file-static printopts, passed by pointer) before printer_options()
+// returns, the same way a real dialog would apply the user's edits --
+// lets a test flip one printopts.include_* flag without any accessor
+// into do_print.cc's file-static state. Mirrors the std::function-based
+// scripting the timer queue above already uses. Defaults to a no-op, so
+// do_print() runs with print_init()'s plain defaults unless a test sets
+// this.
+std::function<void(PrintOptions &)> g_printer_options_override;
+
 // --- Fake timer queue ---------------------------------------------------
 // "Refine the architecture" plan, Phase 0b: in_timer_set() used to just
 // record its own name and drop the callback, which is why playback
@@ -72,6 +92,10 @@ void resetStubRecording()
 	g_range_response = Message::OK;
 	g_printer_options_response = Message::OK;
 	g_set_scan_dims_response = 0;
+	g_have_last_print_info = false;
+	g_last_print_info = PrintInfo();
+	g_last_print_options = PrintOptions();
+	g_printer_options_override = nullptr;
 	g_pending_timer_callback = nullptr;
 	g_pending_timer_delay_ms = 0;
 	g_timer_armed = false;
@@ -170,8 +194,17 @@ public:
 	Message in_choose_save_file(const char*, const char*, char*, size_t) override { g_recorded_calls.push_back("in_choose_save_file"); return Message::Cancel; }
 
 	void set_options() override { g_recorded_calls.push_back("set_options"); }
-	Message printer_options(PrintOptions*) override { g_recorded_calls.push_back("printer_options"); return g_printer_options_response; }
-	void in_print(const PrintInfo&, const PrintOptions&) override { g_recorded_calls.push_back("in_print"); }
+	Message printer_options(PrintOptions *po) override {
+		g_recorded_calls.push_back("printer_options");
+		if (g_printer_options_override) g_printer_options_override(*po);
+		return g_printer_options_response;
+	}
+	void in_print(const PrintInfo &info, const PrintOptions &po) override {
+		g_recorded_calls.push_back("in_print");
+		g_last_print_info = info;
+		g_last_print_options = po;
+		g_have_last_print_info = true;
+	}
 	Message x_range(float min, float max, float, float, float *ret_min, float *ret_max, int *allvars) override {
 		g_recorded_calls.push_back("x_range");
 		// Even on Message::OK, write through *ret_min/*ret_max/*allvars (as
