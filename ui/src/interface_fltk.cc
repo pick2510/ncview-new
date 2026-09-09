@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -89,21 +90,28 @@ void FltkViewerUi::in_initialize( void )
 			in_variable_selected( v->name.c_str() );
 	}
 	if( const char *d = getenv( "NCVIEW_TEST_DIALOG" ) ) {
-		if( std::strcmp( d, "range" ) == 0 ) g_app.controller.range( Modifier::M1 );
-		else if( std::strcmp( d, "options" ) == 0 ) g_app.controller.optionsDialog( Modifier::M1 );
-		else if( std::strcmp( d, "dimset" ) == 0 ) g_app.controller.dimset( Modifier::M1 );
-		else if( std::strcmp( d, "info" ) == 0 ) view->information();
-		else if( std::strcmp( d, "dataedit" ) == 0 ) view->dataEdit();
-		else if( std::strcmp( d, "plot" ) == 0 ) g_app.controller.plotXY();
-		else if( std::strcmp( d, "overlay" ) == 0 ) do_overlay( OVERLAY_P8DEG, nullptr, false );
-		else if( std::strcmp( d, "print" ) == 0 ) {
+		// Same {name, action} table style as NCVIEW_TEST_BUTTON below --
+		// wrapped in std::function since, unlike the button table's uniform
+		// in_button_pressed(id, modifier) dispatch, these 8 actions have
+		// genuinely different call shapes (some take a Modifier, some take
+		// none, "print" defers to the next event-loop tick).
+		static const struct { const char *name; std::function<void()> action; } kDialogs[] = {
+			{ "range",    []{ g_app.controller.range( Modifier::M1 ); } },
+			{ "options",  []{ g_app.controller.optionsDialog( Modifier::M1 ); } },
+			{ "dimset",   []{ g_app.controller.dimset( Modifier::M1 ); } },
+			{ "info",     []{ view->information(); } },
+			{ "dataedit", []{ view->dataEdit(); } },
+			{ "plot",     []{ g_app.controller.plotXY(); } },
+			{ "overlay",  []{ do_overlay( OVERLAY_P8DEG, nullptr, false ); } },
 			// do_print() reads the printopts defaults that ncview_main()
 			// sets up via print_init() -- which runs *after* in_initialize()
 			// returns (see ncview.cc). Defer to the first event-loop tick so
 			// the manual "print" test hook sees the same state a real
 			// button press would.
-			Fl::add_timeout( 0.0, []( void * ) { do_print(); } );
-		}
+			{ "print",    []{ Fl::add_timeout( 0.0, []( void * ) { do_print(); } ); } },
+		};
+		for( const auto &e : kDialogs )
+			if( std::strcmp( d, e.name ) == 0 ) { e.action(); break; }
 	}
 	if( const char *b = getenv( "NCVIEW_TEST_BUTTON" ) ) {
 		// Drives any button through the exact same in_button_pressed() path
