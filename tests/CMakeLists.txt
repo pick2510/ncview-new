@@ -47,6 +47,9 @@ add_executable(ncview_core_tests
     test_file_netcdf.cc
     test_dataset.cc
     test_pixels.cc
+    test_shrink.cc
+    test_expand.cc
+    test_dim_mapping.cc
     test_frame_renderer.cc
     test_frame_cache.cc
     test_rcfile.cc
