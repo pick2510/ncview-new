@@ -164,7 +164,10 @@ public:
 	void in_display_stuff(const char*, const char*) override { g_recorded_calls.push_back("in_display_stuff"); }
 	void in_set_edit_place(size_t, int, int, int, int) override { g_recorded_calls.push_back("in_set_edit_place"); }
 	void in_indicate_active_var(const char *name) override { g_recorded_calls.push_back(std::string("in_indicate_active_var:") + (name ? name : "")); }
-	void in_indicate_active_dim(Dimension, const char*) override { g_recorded_calls.push_back("in_indicate_active_dim"); }
+	void in_indicate_active_dim(Dimension d, const char *name) override {
+		const char *which = d == Dimension::X ? "X" : d == Dimension::Y ? "Y" : d == Dimension::Scan ? "Scan" : "None";
+		g_recorded_calls.push_back(std::string("in_indicate_active_dim:") + which + ":" + (name ? name : ""));
+	}
 	void in_parse_args(int*, char**) override { g_recorded_calls.push_back("in_parse_args"); }
 	void in_initialize() override { g_recorded_calls.push_back("in_initialize"); }
 	void in_set_label(Label, const char *s) override { g_recorded_calls.push_back(std::string("in_set_label:") + (s ? s : "")); }
@@ -177,7 +180,7 @@ public:
 	Message in_dialog(const char*, int) override { g_recorded_calls.push_back("in_dialog"); return g_dialog_response; }
 	void in_var_set_sensitive(const char*, int) override { g_recorded_calls.push_back("in_var_set_sensitive"); }
 	void in_fill_dim_info(const NCDim*, int) override { g_recorded_calls.push_back("in_fill_dim_info"); }
-	void in_set_cur_dim_value(const char*, const char*) override { g_recorded_calls.push_back("in_set_cur_dim_value"); }
+	void in_set_cur_dim_value(const char *name, const char *val) override { g_recorded_calls.push_back(std::string("in_set_cur_dim_value:") + (name ? name : "") + ":" + (val ? val : "")); }
 	void in_set_cursor_busy() override { g_recorded_calls.push_back("in_set_cursor_busy"); }
 	void in_set_cursor_normal() override { g_recorded_calls.push_back("in_set_cursor_normal"); }
 	// Echoes back the current X/Y axes ("Y-axis first, then X-axis", per
