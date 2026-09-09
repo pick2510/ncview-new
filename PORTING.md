@@ -814,12 +814,46 @@ Verified: 113 tests / 2162 assertions (up from 107/1759), full 4-gate
 suite including all 13 `ui_smoke.sh` goldens byte-identical, two
 `--order-by=rand` seeds, and a clean scratch ASan/UBSan/LSan build.
 
-**Next: 3d** -- delete the confirmed dead code the inventory found
-(four dangling `protos.h` declarations, the unreachable `udu.cc` stub
-block, several zero-caller functions), then 3e/3f (pure file motion:
-`ViewerController`/`ViewerSession` method bodies out of `view.cc` into
-the files named after their classes, and `ncview.cc`'s license text into
-its own file).
+## Phase 3d: delete the confirmed dead code
+
+No behavior change; every removal individually re-verified for zero
+callers before deletion, rather than trusted from the inventory as-is
+(see the correction below for why that mattered).
+
+Removed: `file.cc`'s `fi_confirm`/`fi_writable`/`fi_has_dim_values`
+(dead wrapper layer -- any real caller already reaches the `netcdf_*`
+backend directly); `file_netcdf.cc`'s `netcdf_fi_writable` (orphaned the
+moment `fi_writable` goes, since that was its only caller) and
+`netcdf_vartype` (already zero callers); `util.cc`'s
+`warn_if_file_exits` and `get_group_list`; `stringlist_add_string_ordered`
+(its own doc comment already said "Nothing in this codebase calls this
+function" -- confirmed and removed rather than left as a documented
+oddity); `udu.cc:332-355`'s `#else` stub block
+(`udu_utinit`/`udu_utistime`/`udu_calc_tgran`/`udu_fmt_time` no-ops),
+unreachable since `core/CMakeLists.txt` unconditionally defines
+`HAVE_UDUNITS2`; and four `protos.h` declarations with no definition
+anywhere in the tree at all -- `fi_n_dim_entries`, `n_strings_in_list`,
+`sl_cat`, `interp`. Also made `view.cc`'s `beep()` and `overlay.cc`'s
+`gen_overlay_internal_mapped()`/`overlay_find_closest_pt_inner()`
+`static` -- each had external linkage, no header declaration, and no
+caller outside its own file.
+
+**A correction to the inventory this phase started from.** It flagged
+`util.cc`'s `month_name[12]` as unused. It isn't: `fmt_time()`'s
+`TimeStandard::Months` branch reads `month_name[month]`. Caught by
+grepping for the symbol before deleting it, not by trusting the earlier
+report -- the same discipline that caught Phase 3b's wrong "descriptor
+leak" claim. Left alone.
+
+Verified: clean `-Werror` build, the same 113 tests / 2162 assertions
+unchanged, `ncview_core_linkcheck` exit 0 (the direct check that none of
+these deletions left a dangling reference), all 13 `ui_smoke.sh` goldens
+byte-identical, two `--order-by=rand` seeds, and a clean scratch
+ASan/UBSan/LSan build.
+
+**Next: 3e/3f** -- pure file motion: `ViewerController`/`ViewerSession`
+method bodies out of `view.cc` into the files named after their classes,
+and `ncview.cc`'s license text into its own file.
 
 ## Post-v0.2.0 defect audits
 
