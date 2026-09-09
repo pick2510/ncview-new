@@ -1486,6 +1486,133 @@ error-message text that was never a symbol reference to begin with.
 169→199 tests, 4596→5080 assertions across the whole phase (both halves
 combined).
 
+## Reassess here, round 4: what Phase 6 actually left behind
+
+Two parallel surveys verified Phase 6's actual end state independently
+(re-reading the code, not trusting its own completion report) and
+re-checked `view.cc`, which Phase 3e/3f explicitly deferred splitting
+further pending its own re-argument later. Full detail lives in the plan
+file's "Reassess here, round 4" section; summary:
+
+- Phase 6 is confirmed genuinely done: `file.cc` is 161 lines (4
+  functions), the 13 migrated forwarders are one-line `NetCDFFile`
+  methods, and the `file_netcdf.cc`<->`file.cc` circular dependency is
+  confirmed gone (zero remaining `fi_*`/`NetCDFFile` references in
+  `file_netcdf.cc`). What's left uncollapsed: 17 direct `netcdf_*`
+  bypasses outside `dataset.cc`, and `epic_time.cc`, which was never
+  migrated at all -- both flagged as Phase 7b, not fixed here.
+- `view.cc` (2,602 lines, largest file in the tree) has real but bounded
+  coupling between its five clusters -- not a god-object needing urgent
+  breakup, so a structural split remains plausible later but wasn't
+  forced. What the survey actually found instead: `View::checkNewData`
+  (189 lines, file-growth polling) was promised a test in Phase 3b's own
+  writeup and it was never written once the leak lead 3b was chasing
+  turned out false; `plotXYSc` (256 lines, the largest `View::` method)
+  and the UI-label cluster (~300 lines) were also at zero coverage.
+
+Chosen: test the neglected `view.cc` clusters first (7a), then close
+Phase 6's small residue (7b).
+
+## Phase 7a: characterize `view.cc`'s neglected clusters
+
+Three new test files, all landing against completely unmodified code
+(this is new coverage, not a refactor -- there's no "before" behavior
+to preserve, just real behavior being pinned for the first time).
+
+**`tests/test_view_check_new_data.cc`** -- `View::checkNewData()`
+(file-growth polling). Hand-rolled a growable fixture (`NC_UNLIMITED`
+time dim, like `test_multifile.cc`'s own reasoning for the same thing)
+since `NcFixture` only ever writes fixed-size dims. Covers growth
+detected (extends `size[0]`/`var_size[0]`/`timestep_2_fdb`, advances the
+current frame by exactly the new timestep count, sets an informative
+title label), no-growth (re-arms the 1-second timer via 0b's fake timer
+queue), and the `new_frame_times`/`new_frame_nframes` history statics
+across repeated growth calls. One fixture-only correction along the way:
+`Dataset::cacheScalarCoordInfo()` must be called explicitly before
+selecting a variable in a test (production does this once, at startup,
+in `ncview.cc:792`) -- without it, `timestep_2_fdb` starts empty rather
+than pre-sized to the initial timestep count, which the first draft of
+this test's assertions silently mis-indexed into.
+
+**`tests/test_view_xy_plot.cc`** -- `View::setXYPlotAxis()`/`plotXYSc()`
+(256 lines, the largest `View::` method), driven through their real UI
+entry point, `ViewerController::plotXY()`, rather than calling
+`plotXYSc()` directly by hand. Extended `RecordingViewerUi`'s
+`in_query_pointer_position()` with a scriptable `g_query_pointer_x/y`
+pair (previously hardcoded to (0,0)) and `in_popup_XY_graph()` with a
+capture of its arguments (`g_last_xy_n/dimindex/xvals/yvals`) -- both
+mirror patterns Phase 4a already established (`g_printer_options_override`,
+`g_last_print_info`), and the capture is the *only* way a test can
+observe `plot_XY_xvals`/`yvals`/`dim[]`, which are file-static (internal
+linkage) inside `view.cc`.
+
+Two real findings, both pinned as-is (this is a coverage phase, not a
+behavior-change one):
+- `plot_XY_axis` already defaults to the scan axis right after variable
+  selection (`determineScanAxes()`, `view.cc:726-729`) -- `plotXY()`'s
+  "Error! I have no valid axis to plot along!" branch reads like a real
+  precondition a caller must satisfy first, but isn't reachable through
+  normal selection at all.
+- `plotXY()`'s edge-of-image clamp runs *before* the screen-to-data Y
+  inversion (`view.cc:968-969` then `:976-977`), so an off-the-bottom
+  click clamps to data row 0, not the last row, under the default
+  (non-inverted) orientation -- clamping to size-1 and then inverting
+  that lands back on 0.
+
+**`tests/test_view_labels.cc`** -- `View::redrawDimensionInfo()`/
+`showCurrentDimValues()`/`labelDimensions()` and
+`View::constructScalarCoordStr()` (a 0-D CF scalar coordinate, e.g.
+WRF's `XTIME`). Extended `RecordingViewerUi`'s
+`in_indicate_active_dim()`/`in_set_cur_dim_value()` to record their
+arguments instead of just the bare call name (matching `in_set_label`'s
+existing pattern). `constructScalarCoordStr()` is private; reached only
+through its one caller, `View::scanToPlace()`, itself only reachable
+through the public `stepView()` entry point.
+
+Real finding: `constructScalarCoordStr()`'s "displaying_along_time_dim"
+range-format branch (`view.cc:1863`, fires when dimension index 0 is
+used as an X or Y image axis) can never be reached under default axis
+assignment. `scanToPlace()` itself no-ops whenever `scan_axis_id==-1`
+(`view.cc:436-437`), and a variable only lacks a scan axis when its
+last two dims consume the whole variable (exactly the 2-dim case where
+dim 0 *would* be an image axis) -- so the one condition that would make
+dim 0 an X/Y axis is exactly the condition that stops `scanToPlace()`
+(and everything downstream of it) from ever running. Reaching that
+branch legitimately needs a manual axis reassignment (`setAxis()`) on
+top of a 3+-dim variable; documented in the fixture's comment rather
+than built around with an artificial reassignment, since this is a
+coverage phase, not the branch's owning phase.
+
+**A pre-existing order-dependence found incidentally, NOT introduced by
+this phase and NOT fixed here (out of scope for a `view.cc` coverage
+pass):** running the full suite with `--order-by=rand --rand-seed=99`
+gives 5734 assertions where every other seed and the default order give
+5733 -- reproducible, and confirmed present at `bf95708` (the commit
+immediately before this phase's first commit, via a throwaway worktree
+built from that commit) so it predates Phase 7a entirely. Isolated to
+`tests/test_do_print.cc`'s `"do_print: cancelling the printer_options
+dialog skips in_print entirely"` test, whose final assertion count is
+`g_recorded_calls.size()` at that point (it loops `CHECK(s != "in_print")`
+once per recorded call) -- meaning some earlier test, depending on
+execution order, is recording one extra UI call before this test runs
+that isn't being cleared between test cases the way `g_recorded_calls`
+itself is. Root cause not identified beyond that; flagged for whoever
+next touches `test_do_print.cc` or the `do_print.cc`/`Dataset::checkRanges`
+interaction, rather than guessed at further here. Neither ordering fails
+outright (`0 failed` both times) -- this is silent flakiness in what a
+passing run asserts, not a crash, which is exactly the class of bug the
+shuffled-order gate exists to surface.
+
+167->216 tests overall across 7a's three files (147 tests / 3982
+assertions was this plan's count at the start of Phase 4b; the plan file
+has the exact running totals), full verification (4-gate + ASan/UBSan/LSan
++ shuffled order across multiple seeds) clean at every commit except for
+the pre-existing flakiness just described, which is independent of any
+change in this phase.
+
+**Next: 7b** -- close Phase 6's residue (the 17 remaining direct
+`netcdf_*` bypasses, and `epic_time.cc`, never migrated).
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
