@@ -426,12 +426,18 @@ parse_options( int argc, char *argv[] )
 }
 
 /***********************************************************************************************/
+/* Every options field and framestore default this port sets before first use,
+ * split out from initialize_misc() below so it can be re-run on its own
+ * (see tests/support/session_fixture.h) without repeating
+ * udu_utinit(NULL) -- test_udunits_helper.h documents why calling that a
+ * second time silently breaks every already-cached ut_unit comparison.
+ * Idempotent and side-effect-free otherwise (no I/O, no process-global
+ * state besides options/framestore themselves), so safe to call as often
+ * as needed.
+ */
 	void
-initialize_misc()
+reset_session_defaults()
 {
-	print_disclaimer();
-
-	udu_utinit( NULL );
 	options.invert_physical  = DEFAULT_INVERT_PHYSICAL;
 	options.invert_colors    = DEFAULT_INVERT_COLORS;
 	options.blowup           = DEFAULT_BLOWUP;
@@ -472,6 +478,16 @@ initialize_misc()
 
 	framestore = FrameCache();
 
+}
+
+/***********************************************************************************************/
+	void
+initialize_misc()
+{
+	print_disclaimer();
+
+	udu_utinit( NULL );
+	reset_session_defaults();
 }
 
 /***********************************************************************************************/

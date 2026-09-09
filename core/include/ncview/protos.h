@@ -71,6 +71,10 @@ extern std::vector<ncv_pixel> &pixel_transform;
  * process entry point (and so this library never defines `main` itself). */
 int	ncview_main		    ( int argc, char **argv );
 void	initialize_misc		    ( void );
+/* The options-fields-and-framestore-defaulting part of initialize_misc(), split
+ * out so it can be re-run without repeating udu_utinit(NULL) -- see its
+ * definition in ncview.cc and tests/support/session_fixture.h. */
+void	reset_session_defaults	    ( void );
 Stringlist *parse_options           ( int argc,  char *argv[] );
 void 	initialize_file_interface   ( Stringlist *input_files );
 void	initialize_display_interface( void );

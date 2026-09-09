@@ -442,6 +442,60 @@ four concrete reasons, not a general "too risky" judgment:
   free-function orchestrators than methods on the object they're
   building).
 
+## Refine the architecture and deepen the test suite (Phase 0a)
+
+The nine `OOP_redesign` steps and the `util.cc`/`view.cc` follow-up above
+fixed *ownership* in the files they touched, but most of `core/src` is
+still upstream's free-function style, and the test suite (72 doctest
+cases against ~16,000 lines of `core/`) hadn't kept pace. A new,
+larger plan picks that up (see the session notes for the full phase
+breakdown); this entry covers its first landed piece, Phase 0a: test
+state isolation.
+
+Every doctest `TEST_CASE` in `ncview_core_tests` runs in the same
+process, sharing one `g_app`. Until now that was managed by convention
+(`test_varlist.cc`'s "each test needs a unique variable name" rule), which
+doesn't scale as later phases add many more test cases that select
+variables and open files. `tests/support/session_fixture.h` adds
+`SessionFixture`, an RAII type that move-assigns a fresh
+`ViewerSession()` into `g_app.session` in place (preserving every bridge
+reference bound to its sub-objects) and clears the UI-recording double's
+state, on both construction and destruction -- so a `TEST_CASE` gets a
+clean `Dataset`/`View`/`FrameCache` regardless of what ran before it, and
+one that throws mid-test still restores it on unwind. `tests/support/
+scratch_home.h` factors the `$HOME`-redirect helper `test_rcfile.cc` had
+already built (`ScratchHome`) out into shared infrastructure. Proven by
+`tests/test_session_fixture.cc` and by re-running the whole suite under
+`--order-by=rand` across 8 seeds with no order dependence.
+
+Building this surfaced two real, previously-invisible bugs, both because
+`SessionFixture` is the first code path that ever destroys a live
+`Dataset` mid-process -- every previous test run left teardown to process
+exit, and `tests/main.cc` deliberately calls `std::_Exit()`/
+`TerminateProcess()` (`fast_exit.h`, to route around an HDF5-cleanup hang
+on Windows CI) specifically to *skip* static destructors:
+
+- **`initialize_misc()` (`ncview.cc`) was two responsibilities welded
+  together**: `udu_utinit(NULL)` (unsafe to call a second time --
+  `test_udunits_helper.h` documents why) and everything else
+  (`options.*` defaults, allocating `options.overlay`, resetting
+  `framestore`) -- the latter is exactly what per-test isolation needs to
+  re-run and the former is exactly what it must not. Split into
+  `reset_session_defaults()` (idempotent, called by both
+  `initialize_misc()` and `SessionFixture`) and a slimmed
+  `initialize_misc()` that calls `udu_utinit(NULL)` once, then it.
+- **`new_netcdf()` (`util.cc`) allocated a `NetCDFOptions` with `malloc()`,
+  but its one caller (`Dataset`'s `new_fdblist()`) hands the result to a
+  `std::unique_ptr<NetCDFOptions>`**, whose default deleter calls
+  `delete`. A real malloc/delete mismatch, caught immediately by ASan's
+  alloc-dealloc-mismatch check once a `Dataset` was actually torn down
+  mid-run. Fixed by allocating with `new` instead.
+
+Both are one-line-cause, narrowly-scoped fixes to code this phase didn't
+otherwise touch -- found and fixed because the new isolation
+infrastructure finally exercised a destruction path nothing had before,
+not because either was being hunted for.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds

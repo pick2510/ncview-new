@@ -54,10 +54,17 @@ add_executable(ncview_core_tests
     test_varlist.cc
     test_view_data_edit.cc
     test_controller_characterization.cc
+    test_session_fixture.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/doctest
+    # So test files can #include "support/session_fixture.h",
+    # "support/scratch_home.h", etc. -- shared test-only infrastructure
+    # under tests/support/ (see the "refine the architecture" plan's
+    # Phase 0a), analogous to how test_udunits_helper.h is already
+    # included unqualified from tests/ itself.
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_link_libraries(ncview_core_tests PRIVATE ncview_core ncview_sanitize_flags)
 add_dependencies(ncview_core_tests ncview_core_linkcheck)

@@ -95,12 +95,22 @@ close_enough( float data, float fill )
 }
 
 /******************************************************************************
- * Allocate space for a NetCDFOptions structure.
+ * Allocate space for a NetCDFOptions structure. `new`, not malloc(): the
+ * one caller (Dataset::new_fdblist(), dataset.cc) immediately hands the
+ * result to a std::unique_ptr<NetCDFOptions>, whose default deleter calls
+ * `delete`, not `free()`. This was a real malloc/delete mismatch --
+ * caught by ASan's alloc-dealloc-mismatch check only once something
+ * actually destroyed a Dataset mid-process (tests/support/
+ * session_fixture.h's SessionFixture, "refine the architecture" plan's
+ * Phase 0a): every previous test run left the global Dataset's teardown
+ * to process exit, but tests/main.cc's ncviewTestsFastExit() calls
+ * std::_Exit()/TerminateProcess() specifically to skip static destructors
+ * (see fast_exit.h), so the mismatched delete had never actually run.
  */
 	void
 new_netcdf( NetCDFOptions **n )
 {
-	(*n) = (NetCDFOptions *)malloc( sizeof( NetCDFOptions ));
+	(*n) = new NetCDFOptions();
 	(*n)->valid_range_set  = false;
 	(*n)->valid_min_set    = false;
 	(*n)->valid_max_set    = false;
