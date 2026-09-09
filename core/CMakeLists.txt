@@ -7,6 +7,8 @@ add_library(ncview_core STATIC
     src/do_buttons.cc
     src/do_print.cc
     src/epic_time.cc
+    src/cli_options.cc
+    src/colormap_library.cc
     src/file.cc
     src/file_netcdf.cc
     src/frame_cache.cc
