@@ -518,9 +518,31 @@ already reset.
 `fastforward` arm a timer and advance one frame per fired callback,
 `pause` clears the pending timer (and a stale `fireTimer()` afterward is
 correctly a no-op), and `restart` seeks to frame 0 without itself arming
-one. The rest of Phase 0b (a shared NetCDF fixture builder, scripted
-dialog answers beyond what already existed, pixel goldens) is still
-open.
+one.
+
+### Phase 0b (continued): a shared NetCDF fixture builder
+
+`test_varlist.cc`, `test_time_fmt.cc`, `test_dataset.cc`,
+`test_controller_characterization.cc`, and now `test_playback.cc` each
+hand-rolled their own ~30-line "create a temp file, `nc_def_dim` a few
+axes, `nc_def_var` a time coordinate with units, `nc_def_var` the data
+variable, `nc_put_var`, `nc_close`" sequence -- only the shapes and
+values actually differed between them. `tests/support/nc_fixture.h` adds
+`NcFixture`, a chainable RAII builder covering that common shape (`.dim`,
+`.timeAxis`, `.coord` for a plain lat/lon-style coordinate, `.var` with a
+pluggable data generator, `.missing` for a real `_FillValue` attribute),
+deferring the actual `nc_create`/define-mode/data-mode sequence to the
+first call to `.path()`/`.openForCore()` so the chain reads
+declaratively regardless of what order things are added in.
+`tests/test_nc_fixture.cc` proves the files it builds load correctly
+(shape, time-axis recognition, generator output, fill values, and that
+two fixtures with the same variable name in different files don't
+collide); `test_playback.cc` was migrated onto it as the first real
+caller. The remaining hand-rolled builders in the other four files are
+left as-is for now -- migrating a file that already has passing tests
+carries its own small risk for no behavior change, so it's deferred
+until one of them needs a genuine change anyway. Pixel goldens
+(`tests/support/pgm.h`) are still open.
 
 ## Post-v0.2.0 defect audits
 

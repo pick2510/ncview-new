@@ -9,81 +9,34 @@
 // rewind()/fastforward()'s Modifier::M1 paths only advance the movie
 // because their own timer callback re-arms itself and steps the frame
 // again, exactly the behavior nothing could previously observe.
-#include <cstdio>
-#include <filesystem>
-#include <string>
-#include <unistd.h>
-
 #include <doctest/doctest.h>
 
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
+#include "support/nc_fixture.h"
 #include "support/session_fixture.h"
 #include "test_udunits_helper.h"
 
+using ncview_test::NcFixture;
 using ncview_test::SessionFixture;
 
 namespace {
 
-// A (time, lat, lon) variable with enough frames for playback to have
-// somewhere to go -- mirrors test_controller_characterization.cc's own
-// make_sample_file()/select_fresh_variable() shape.
-std::string make_sample_file(const char *var_name, int nt, int nlat, int nlon) {
-    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_playback_XXXXXX").string();
-    int fd = mkstemp(&tmpl[0]);
-    REQUIRE(fd >= 0);
-    close(fd);
-    std::string path = tmpl;
-
-    int ncid;
-    REQUIRE(nc_create(path.c_str(), NC_CLOBBER, &ncid) == NC_NOERR);
-    int dim_time, dim_lat, dim_lon;
-    REQUIRE(nc_def_dim(ncid, "time", nt, &dim_time) == NC_NOERR);
-    REQUIRE(nc_def_dim(ncid, "lat", nlat, &dim_lat) == NC_NOERR);
-    REQUIRE(nc_def_dim(ncid, "lon", nlon, &dim_lon) == NC_NOERR);
-
-    int var_time, var_lat, var_lon, var_data;
-    REQUIRE(nc_def_var(ncid, "time", NC_DOUBLE, 1, &dim_time, &var_time) == NC_NOERR);
-    std::string units = "days since 2000-01-01";
-    REQUIRE(nc_put_att_text(ncid, var_time, "units", units.size(), units.c_str()) == NC_NOERR);
-    REQUIRE(nc_def_var(ncid, "lat", NC_FLOAT, 1, &dim_lat, &var_lat) == NC_NOERR);
-    REQUIRE(nc_def_var(ncid, "lon", NC_FLOAT, 1, &dim_lon, &var_lon) == NC_NOERR);
-    int dims[3] = {dim_time, dim_lat, dim_lon};
-    REQUIRE(nc_def_var(ncid, var_name, NC_FLOAT, 3, dims, &var_data) == NC_NOERR);
-    REQUIRE(nc_enddef(ncid) == NC_NOERR);
-
-    std::vector<double> tvals(nt);
-    for (int i = 0; i < nt; i++) tvals[i] = (double)i;
-    REQUIRE(nc_put_var_double(ncid, var_time, tvals.data()) == NC_NOERR);
-    std::vector<float> latvals(nlat, 0.0f), lonvals(nlon, 0.0f);
-    REQUIRE(nc_put_var_float(ncid, var_lat, latvals.data()) == NC_NOERR);
-    REQUIRE(nc_put_var_float(ncid, var_lon, lonvals.data()) == NC_NOERR);
-    std::vector<float> data(nt * nlat * nlon);
-    for (size_t i = 0; i < data.size(); i++) data[i] = (float)i;
-    REQUIRE(nc_put_var_float(ncid, var_data, data.data()) == NC_NOERR);
-    REQUIRE(nc_close(ncid) == NC_NOERR);
-    return path;
-}
-
-int open_for_core(const std::string &path) {
-    Stringlist *files = nullptr;
-    stringlist_add_string(&files, path.c_str());
-    determine_file_type(files);
-    stringlist_delete_entire_list(files);
-    return netcdf_fi_initialize(const_cast<char *>(path.c_str()));
-}
-
-// Loads and selects a fresh (time, lat, lon) variable with `nt` frames,
-// leaving `view` populated and its scan axis on time (axis 0).
-std::string select_playback_variable(const char *var_name, int nt) {
+// Loads and selects a (time, lat, lon) variable with `nt` frames from an
+// already-built NcFixture, leaving `view` populated and its scan axis on
+// time (axis 0). The fixture's own destructor cleans up the underlying
+// file -- callers don't remove it themselves.
+void select_playback_variable(NcFixture &nc, const char *var_name, int nt) {
     ensure_ncview_misc_initialized();
     options.blowup_default_size = 300;
-    std::string path = make_sample_file(var_name, nt, 2, 2);
-    int fid = open_for_core(path);
-    g_dataset.addVariable(var_name, fid, path.c_str(), 1);
+    nc.dim("time", nt).dim("lat", 2).dim("lon", 2)
+      .timeAxis("time", "days since 2000-01-01")
+      .coord("lat").coord("lon")
+      .var(var_name, {"time", "lat", "lon"});
+    int fid = nc.openForCore();
+    g_dataset.addVariable(var_name, fid, nc.path().c_str(), 1);
     in_variable_selected(var_name);
-    return path;
 }
 
 size_t current_frame() {
@@ -96,7 +49,8 @@ size_t current_frame() {
 
 TEST_CASE("playback: rewind arms a timer that steps backward one frame at a time") {
     SessionFixture fx;
-    std::string path = select_playback_variable("playback_rewind", 5);
+    NcFixture nc;
+    select_playback_variable(nc, "playback_rewind", 5);
     // Land on a middle frame first so rewind has somewhere to go.
     g_app.controller.restart(Modifier::M1);
     change_view(2, FRAMES);
@@ -109,13 +63,12 @@ TEST_CASE("playback: rewind arms a timer that steps backward one frame at a time
     REQUIRE(fireTimer());
     CHECK(current_frame() == 0);
     CHECK(timerIsArmed()); // the fired callback re-armed itself
-
-    std::remove(path.c_str());
 }
 
 TEST_CASE("playback: fastforward arms a timer that steps forward one frame at a time") {
     SessionFixture fx;
-    std::string path = select_playback_variable("playback_fastforward", 5);
+    NcFixture nc;
+    select_playback_variable(nc, "playback_fastforward", 5);
     g_app.controller.restart(Modifier::M1);
     REQUIRE(current_frame() == 0);
 
@@ -129,13 +82,12 @@ TEST_CASE("playback: fastforward arms a timer that steps forward one frame at a 
 
     REQUIRE(fireTimer());
     CHECK(current_frame() == 3);
-
-    std::remove(path.c_str());
 }
 
 TEST_CASE("playback: pause clears any pending timer") {
     SessionFixture fx;
-    std::string path = select_playback_variable("playback_pause", 5);
+    NcFixture nc;
+    select_playback_variable(nc, "playback_pause", 5);
     g_app.controller.restart(Modifier::M1);
     g_app.controller.fastforward(Modifier::M1);
     REQUIRE(timerIsArmed());
@@ -146,13 +98,12 @@ TEST_CASE("playback: pause clears any pending timer") {
     // A stale, already-fired callback must not silently resume playback:
     // there is nothing pending to fire.
     CHECK_FALSE(fireTimer());
-
-    std::remove(path.c_str());
 }
 
 TEST_CASE("playback: restart seeks to frame 0 and does not itself arm a timer") {
     SessionFixture fx;
-    std::string path = select_playback_variable("playback_restart", 5);
+    NcFixture nc;
+    select_playback_variable(nc, "playback_restart", 5);
     g_app.controller.restart(Modifier::M1);
     change_view(3, FRAMES);
     REQUIRE(current_frame() == 3);
@@ -163,8 +114,6 @@ TEST_CASE("playback: restart seeks to frame 0 and does not itself arm a timer") 
     // than arming a new one -- the button handlers that follow it
     // (rewind()/fastforward()) are the ones responsible for arming.
     CHECK_FALSE(timerIsArmed());
-
-    std::remove(path.c_str());
 }
 
 TEST_CASE("playback: fireTimer() is a documented no-op when nothing is armed") {

@@ -56,6 +56,7 @@ add_executable(ncview_core_tests
     test_controller_characterization.cc
     test_session_fixture.cc
     test_playback.cc
+    test_nc_fixture.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE
