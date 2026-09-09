@@ -70,6 +70,7 @@ add_executable(ncview_core_tests
     test_do_print.cc
     test_overlay.cc
     test_file_layer.cc
+    test_file_metadata.cc
     stub_interface.cc
 )
 target_include_directories(ncview_core_tests PRIVATE
