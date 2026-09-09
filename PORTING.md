@@ -851,9 +851,59 @@ these deletions left a dangling reference), all 13 `ui_smoke.sh` goldens
 byte-identical, two `--order-by=rand` seeds, and a clean scratch
 ASan/UBSan/LSan build.
 
-**Next: 3e/3f** -- pure file motion: `ViewerController`/`ViewerSession`
-method bodies out of `view.cc` into the files named after their classes,
-and `ncview.cc`'s license text into its own file.
+## Phase 3e: move ViewerController/ViewerSession method bodies out of view.cc
+
+Pure file motion -- no signature or logic change, so (unlike every other
+phase) no new tests. Phase 2 moved 12 free functions' *names* onto
+`ViewerSession`/`ViewerController`, but their *bodies* stayed in
+`view.cc`; `viewer_controller.cc` was 360 lines while its 9 largest
+methods lived in a file named `view.cc`. Moved: the 9
+`ViewerController::` bodies (`stepView`/`draw`/`changeCurDim`/
+`setCurDimIndex`/`reportPosition`/`setMinFromCurdata`/
+`setMaxFromCurdata`/`plotXY`/`recomputeColorbar`) to
+`viewer_controller.cc`; the 3 `ViewerSession::` bodies (`currentNt`/
+`curDimIndex`/`invalidateAllSaveframes`) to `viewer_session.cc`.
+
+Four `view.cc`-local helpers are called from both sides of the new TU
+boundary: `lockout_view_changes` (also read by `View::changeDat`, which
+stays), `invalidate_variable`, `mouse_xy_to_data_xy`,
+`view_data_edit_warn` (each also called by a `View::` method that
+stays). New `core/src/view_internal.h` -- private to `core/src`, not in
+`protos.h`, not installed -- declares these; each keeps its *definition*
+in `view.cc`, next to its other, staying caller. `beep()` needed no such
+treatment: its only caller, `stepView()`, moved out entirely, so `beep()`
+moved with it into `viewer_controller.cc` instead of being shared.
+
+`view.cc`: 2602 lines (down from ~3349 pre-Phase-2). `viewer_controller.cc`:
+1049 (up from 360). `viewer_session.cc`: 158 (up from 78).
+
+Verified: clean `-Werror` rebuild from scratch, both `ctest` targets
+(113/113 doctest cases unchanged, all 13 `ui_smoke.sh` goldens
+byte-identical), `ncview_core_linkcheck` exit 0, two `--order-by=rand`
+seeds, and a clean scratch ASan/UBSan/LSan build.
+
+## Phase 3f: lift ncview.cc's license text into its own file
+
+`useage()`/`print_no_warranty()`/`print_copying()` moved verbatim to a
+new `core/src/legal_text.cc`. `print_copying()`'s verbatim GPLv3 text
+alone was 630 of `ncview.cc`'s 1615 lines (39%); `useage()`'s help text
+and `print_no_warranty()` added another ~50 -- confirmed by checking
+what each function actually touched (grepped for anything besides
+`fprintf`/`printf`/`exit`; found nothing) rather than assuming from the
+inventory. `print_disclaimer()` stays in `ncview.cc`: it reads
+`PROGRAM_ID` and is genuinely part of the startup sequence, not static
+text. Declarations stay in `protos.h`'s existing "in ncview.c" block --
+this phase is the `.cc` split, not a header reorg (that idea is
+explicitly deferred; see the plan file).
+
+`ncview.cc`: 1615 -> 894 lines. `legal_text.cc`: 755 lines.
+
+Same verification as 3e, same result: clean, all counts unchanged.
+
+**Phase 3 (3a-3f) is now complete.** Per the plan, everything past this
+point (the original Phases 4-9 sketches) needs re-scoping against the
+tree as it looks now before starting -- see the plan file's "Later
+phases" section.
 
 ## Post-v0.2.0 defect audits
 
