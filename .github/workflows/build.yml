@@ -80,6 +80,16 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      # Order dependence in the test suite (shared g_app state a test
+      # forgot to reset) fails silently under doctest's default fixed
+      # order -- this plan has been re-running with --order-by=rand
+      # locally after every phase; do it here too instead of relying on
+      # someone remembering to. Invoked directly (not via ctest) because
+      # ctest has no supported way to forward extra args to the test
+      # command it runs.
+      - name: Test (shuffled order)
+        run: ./build/tests/ncview_core_tests --order-by=rand
+
       # ui_smoke.sh leaves its scratch dir (actual screenshots, logs) behind
       # under /tmp on failure instead of cleaning it up -- upload it so a
       # future regression's actual-vs-golden diff can be inspected directly
@@ -134,6 +144,9 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Test (shuffled order)
+        run: ./build/tests/ncview_core_tests --order-by=rand
 
       - name: Package
         run: cmake --build build --target package -j"$(sysctl -n hw.ncpu)"
@@ -192,6 +205,9 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      - name: Test (shuffled order)
+        run: ./build/tests/ncview_core_tests.exe --order-by=rand
+
       - name: Package
         run: cmake --build build --target package -j
 
@@ -237,6 +253,9 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Test (shuffled order)
+        run: ./build/tests/ncview_core_tests --order-by=rand
 
   # A single portable binary for HPC clusters, whose sysadmin-controlled
   # module systems routinely can't offer a matching netCDF/HDF5, or any
