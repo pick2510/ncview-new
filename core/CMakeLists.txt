@@ -19,6 +19,7 @@ add_library(ncview_core STATIC
     src/utCalendar2_cal.cc
     src/legal_text.cc
     src/util.cc
+    src/varname_utils.cc
     src/view.cc
     src/viewer_controller.cc
     src/viewer_session.cc
