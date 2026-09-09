@@ -11,17 +11,103 @@ endif()
 
 include(GNUInstallDirs)
 
-# On systems with a Homebrew/Linuxbrew install on PATH, its pkg-config binary
-# ignores the system pkgconfig directories by default (they're not baked into
-# its own default search path). third_party/fltk's pango/cairo/X11 detection
-# below then resolves some modules (e.g. pangocairo) against Homebrew's
-# copies and others (e.g. pangoxft, which Homebrew's pango doesn't ship) or
-# nothing (mismatched .so of the same name found via the linker's own search
-# path instead) against the system's -- silently mixing two incompatible
-# library stacks and producing undefined-reference link errors. Prepending
-# the system pkgconfig directories here makes pkg-config prefer them so every
-# pango/cairo/glib module resolves from the same (system) stack consistently.
-if(CMAKE_HOST_UNIX AND NOT APPLE)
+# ---------------------------------------------------------------------------
+# Homebrew / Linuxbrew isolation (macOS and Linux both).
+#
+# A brew install puts a full parallel stack of libraries, headers and
+# pkg-config files on the machine and puts its own bin/ ahead of the system
+# one on PATH. From there:
+#   - CMake's find_package()/find_library()/find_path() derive extra search
+#     prefixes from PATH (stripping a trailing /bin or /sbin off each entry)
+#     and from CMAKE_SYSTEM_PREFIX_PATH, which CMake itself seeds with
+#     /opt/homebrew on Apple Silicon;
+#   - pkg-config honors PKG_CONFIG_PATH;
+#   - gcc/clang honor CPATH/C_INCLUDE_PATH/CPLUS_INCLUDE_PATH/LIBRARY_PATH
+#     directly, independent of any CMake variable.
+# Any of these can resolve one dependency (e.g. pangocairo) against brew's
+# copy and another (e.g. pangoxft, which brew's pango doesn't ship, or a
+# bare -lfoo the linker resolves via its own search order) against the
+# system's -- silently mixing two incompatible library stacks and producing
+# undefined-reference link errors or subtly wrong runtime behavior. Detect
+# the brew prefix once, up front, and exclude it from every one of those
+# lookup mechanisms, for this project and for the third_party/fltk and
+# third_party/udunits2 subprojects it configures below.
+find_program(_ncview_brew_executable brew)
+if(_ncview_brew_executable)
+    execute_process(
+        COMMAND "${_ncview_brew_executable}" --prefix
+        OUTPUT_VARIABLE _ncview_brew_prefix
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+endif()
+if(NOT _ncview_brew_prefix)
+    # No `brew` on PATH to ask (e.g. a PATH that carries brew's lib/include
+    # via some other inherited *_PATH variable but not its bin/) -- fall
+    # back to the well-known install locations.
+    foreach(_ncview_brew_candidate /opt/homebrew /home/linuxbrew/.linuxbrew)
+        if(IS_DIRECTORY "${_ncview_brew_candidate}")
+            set(_ncview_brew_prefix "${_ncview_brew_candidate}")
+            break()
+        endif()
+    endforeach()
+endif()
+unset(_ncview_brew_executable CACHE)
+
+if(_ncview_brew_prefix)
+    get_filename_component(_ncview_brew_prefix "${_ncview_brew_prefix}" ABSOLUTE)
+    message(STATUS "Detected Homebrew/Linuxbrew at ${_ncview_brew_prefix} -- excluding it from library/header search")
+
+    # Covers CMake's own prefix-based find_*() search. Needs CMake 3.23; a
+    # no-op on this project's older-supported 3.21/3.22, where the
+    # environment-variable scrubbing below is what carries the fix.
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.23)
+        list(APPEND CMAKE_IGNORE_PREFIX_PATH "${_ncview_brew_prefix}")
+    endif()
+
+    # Covers what find_*() can't: pkg-config and the compiler driver's own
+    # search, both consulted straight from the environment. Strip only the
+    # brew-prefixed entries out of each -- anything else already on these
+    # (e.g. a project-specific vcpkg toolchain dir) is left alone.
+    function(_ncview_scrub_env_path_var _varname _prefix)
+        if(NOT DEFINED ENV{${_varname}})
+            return()
+        endif()
+        string(REPLACE ":" ";" _entries "$ENV{${_varname}}")
+        string(LENGTH "${_prefix}" _prefix_len)
+        set(_kept "")
+        foreach(_entry IN LISTS _entries)
+            set(_under_prefix FALSE)
+            string(LENGTH "${_entry}" _entry_len)
+            if(_entry_len GREATER_EQUAL _prefix_len)
+                string(SUBSTRING "${_entry}" 0 ${_prefix_len} _head)
+                if(_head STREQUAL _prefix)
+                    if(_entry_len EQUAL _prefix_len)
+                        set(_under_prefix TRUE)
+                    else()
+                        string(SUBSTRING "${_entry}" ${_prefix_len} 1 _next_char)
+                        if(_next_char STREQUAL "/")
+                            set(_under_prefix TRUE)
+                        endif()
+                    endif()
+                endif()
+            endif()
+            if(NOT _under_prefix)
+                list(APPEND _kept "${_entry}")
+            endif()
+        endforeach()
+        list(JOIN _kept ":" _joined)
+        set(ENV{${_varname}} "${_joined}")
+    endfunction()
+
+    foreach(_ncview_env_var PKG_CONFIG_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH LIBRARY_PATH)
+        _ncview_scrub_env_path_var("${_ncview_env_var}" "${_ncview_brew_prefix}")
+    endforeach()
+    unset(_ncview_env_var)
+
+    # Belt-and-suspenders for pkg-config specifically: make sure the
+    # system's own pkgconfig directories are on PKG_CONFIG_PATH even if
+    # scrubbing left it empty (pkg-config's compiled-in default search path
+    # normally covers this already, but not on every distro/packaging).
     foreach(_ncview_sys_pkgconfig_dir
             /usr/lib64/pkgconfig
             /usr/lib/x86_64-linux-gnu/pkgconfig
@@ -39,6 +125,8 @@ if(CMAKE_HOST_UNIX AND NOT APPLE)
     unset(_ncview_sys_pkgconfig_dirs)
     unset(_ncview_sys_pkgconfig_path)
 endif()
+unset(_ncview_brew_candidate)
+unset(_ncview_brew_prefix)
 
 # core/modernization.md Phase 0a: surface every warning the compiler already
 # has an opinion about, without failing the build on them yet (see
