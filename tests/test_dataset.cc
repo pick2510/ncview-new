@@ -37,14 +37,14 @@ std::string make_empty_file() {
 }
 
 int open_file(const std::string &path) {
-    // fi_close() (called by NetCDFFile's destructor) dispatches on file.cc's
-    // module-static file_type and exit(-1)s outright if it was never set --
-    // determine_file_type() is the only way to set it from outside file.cc,
-    // and it must run before any NetCDFFile in this file gets destroyed, or
-    // the whole test binary aborts rather than failing one assertion. Doing
-    // it here (once per open, same as test_file_netcdf.cc's open_sample_file())
-    // makes every TEST_CASE below self-contained regardless of what other
-    // test files ran (or were filtered out) first.
+    // NetCDFFile::close() (Phase 6) now calls netcdf_fi_close() directly
+    // rather than going through file.cc's file_type-dispatching fi_close()
+    // -- so this determine_file_type() call is no longer load-bearing for
+    // NetCDFFile destruction specifically. Kept anyway (harmless) since
+    // other functions this test file may exercise still dispatch through
+    // file.cc, and to keep every TEST_CASE below self-contained regardless
+    // of what other test files ran (or were filtered out) first, same as
+    // test_file_netcdf.cc's open_sample_file().
     Stringlist *files = nullptr;
     stringlist_add_string(&files, path.c_str());
     determine_file_type(files);

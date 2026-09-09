@@ -8,7 +8,7 @@
 #include "ncview/dataset.h"
 
 #include "ncview/includes.h"
-#include "ncview/protos.h"	/* fi_close() */
+#include "ncview/protos.h"	/* netcdf_fi_close() */
 
 #ifdef HAVE_UDUNITS2
 #include "udunits2.h"
@@ -19,8 +19,21 @@ extern Options options;
 
 void NetCDFFile::close()
 {
+	/* netcdf_fi_close(), not fi_close(): NetCDFFile is already
+	 * irrevocably the netCDF backend (it's in the name), so routing its
+	 * own close through file.cc's file_type dispatch buys nothing and
+	 * costs a real invariant -- fi_close() exit(-1)s unless
+	 * determine_file_type() has already run in this process, which
+	 * every existing production caller happens to guarantee (fi_close()
+	 * was previously reachable only via Dataset::trackFile(), itself
+	 * only reachable via fi_initialize(), which is only ever called
+	 * after determine_file_type()). NetCDFFile::open() (Phase 6) can
+	 * construct a NetCDFFile without that ever having run -- caught by
+	 * a shuffled-order ctest run exit(-1)ing outright the first time a
+	 * NetCDFFile opened via open() destructed before any other test in
+	 * the process had called determine_file_type(). */
 	if( fileid_ >= 0 ) {
-		fi_close( fileid_ );
+		netcdf_fi_close( fileid_ );
 		fileid_ = -1;
 		}
 }

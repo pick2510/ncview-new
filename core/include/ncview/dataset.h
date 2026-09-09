@@ -4,9 +4,14 @@
  * Copyright (C) 2026 Dominik Strebel
  *
  * NetCDFFile: move-only RAII ownership of one nc_open'd file, closing it
- * exactly once on destruction via the existing fi_close()/netcdf_fi_close()
- * machinery (file.cc/file_netcdf.cc). Before this, no file ncview opened
- * was ever closed -- fi_close() had zero callers anywhere in core/ui.
+ * exactly once on destruction via netcdf_fi_close() (file_netcdf.cc)
+ * directly -- not via file.cc's file_type-dispatching fi_close(), since
+ * NetCDFFile is already committed to being the netCDF backend and
+ * routing through that dispatch layer bought nothing (Phase 6 of the
+ * "refine the architecture" plan) while requiring determine_file_type()
+ * to have already run in-process, which open() below doesn't guarantee.
+ * Before this class existed, no file ncview opened was ever closed --
+ * fi_close() had zero callers anywhere in core/ui.
  *
  * Dataset: owns every NCVar (replacing the global `variables`) and every
  * NetCDFFile a session has opened. A single physical file is opened once
