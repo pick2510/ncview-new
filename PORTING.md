@@ -1084,6 +1084,89 @@ tests needed). Full verification (4-gate + ASan/UBSan/LSan + shuffled
 order at seeds 1, 7, 42, 99) clean at every commit along the way, not
 just at the end.
 
+## Reassessment round 3, and Phase 5a: characterizing the file-I/O layer
+
+A three-way parallel survey of `file.cc`/`file_netcdf.cc`, the three
+remaining "small module-state files" (`overlay.cc`, `handle_rc_file.cc`,
+`do_print.cc`), and `ncview.cc`/`ui/`/CI, run against the stale Phase
+5/6/8 sketches written before Phase 4b existed. **All three sketches were
+materially wrong**, corrected directly from the current code rather than
+patched from memory:
+
+- The `fi_*`/`netcdf_*` bypass is **14 call sites, not 5** (`view.cc`,
+  `dataset.cc`, `var_metadata.cc`, `epic_time.cc`), and the layering is
+  **circular** -- `file_netcdf.cc` calls back *up* into `file.cc`'s
+  `fi_scannable_dims()` (`file_netcdf.cc:200`) and `fi_n_dims()` (`:455`,
+  `:552`). Every `fi_*()` forwarder dispatches on a `file_type` static
+  that only ever holds `FILE_TYPE_NETCDF`, with `fprintf`+`exit(-1)` as
+  the only alternative branch -- a single-backend layer with a dead
+  switch, not an abstraction over two backends. None of the 16 `fi_*()`
+  entry points had a single direct test; every existing test reaches past
+  them to `netcdf_*()`.
+- `handle_rc_file.cc` has **one** `Stringlist**` out-parameter, not a
+  pair, and **zero** file-scope state -- the old Phase 5 sketch's premise
+  ("module state, becomes a `PersistentState` class") didn't survive
+  contact with the actual file. Its real defects are two `exit(-1)` calls
+  inside a library function and an untested error ladder.
+- `do_print.cc`'s `static PrintOptions printopts` is the one genuinely
+  ownerless module-static of the three (`overlay.cc`'s `my_current_overlay`
+  has a getter; `handle_rc_file.cc` has none at all) -- the sketch had
+  called `do_print.cc` "lowest value; do last or skip."
+- Three of Phase 8's four premises about `ui/` were also wrong:
+  `DimValueSlider` is a 16-line anonymous-namespace class, not a peer of
+  `MainWindow` (which is ~1,309 of `main_window.cc`'s 1,725 lines alone);
+  `plot_window.cc` holds two classes, so it isn't the one-class-per-file
+  model the sketch pointed at; and `interface_fltk.cc`'s `Button`-enum
+  test-hook table is already done -- the remaining `strcmp` chain is a
+  different hook (`NCVIEW_TEST_DIALOG`).
+
+Chosen for this round: characterize the `fi_*` layer (5a, this section),
+then give `do_print.cc`'s `printopts` an owner (5b) and dedupe
+`Colorbar::draw()`'s copy of `FrameRenderer`'s transform formula (5c) --
+both still pending. The `fi_*`/`netcdf_*` collapse (Phase 6), `ncview.cc`'s
+zero-coverage `parse_options()`/colormap code (Phase 7), and the `ui/`
+split (Phase 8) are all deferred again, re-derived rather than resumed
+from their stale sketches. Full detail in the plan file's "Reassess here,
+round 3" section.
+
+`tests/test_file_layer.cc` (Phase 5a) pins the `fi_*()` dispatch layer
+before Phase 6 gets to delete any of it: the 13 pure forwarders against
+their `netcdf_*()` counterparts, `fi_dim_calendar`'s command-line-override
+branch, `fi_initialize`'s open+`addVariables` path, `determine_file_type`'s
+accept path (the reject path `exit(-1)`s, so it can't be tested
+in-process -- a deliberate, documented gap), `fi_recdim_id`'s missing
+`file_type` guard (pinned as-is, not "fixed"), and the circular call-back
+in both directions.
+
+Two things this pass confirmed by reading the code rather than assuming:
+
+- `Dataset::addVariable()`'s `nfiles` parameter is threaded all the way
+  through from `fi_initialize()` but **never read** in the function body
+  (`dataset.cc`). The plan had asked to "assert the `nfiles` argument's
+  effect" -- there isn't one to assert, so the new test pins that two
+  otherwise-identical opens with different `nfiles` values produce an
+  identical `NCVar`, rather than testing for a difference that doesn't
+  exist. Left as-is (5a is tests-only); worth a comment for whoever
+  eventually touches `fi_initialize()`'s signature.
+- `netcdf_fill_aux_data()`/`fi_fill_aux_data()` unconditionally dereference
+  `fdb->aux_data.get()` once the target variable has any attributes, with
+  **no null check**. This is only safe in production because
+  `new_fdblist()` (`dataset.cc`, the sole real caller) always pre-allocates
+  `aux_data` first. Confirmed by reproducing the SIGSEGV directly: the
+  first draft of the new forwarder-equivalence test built a bare,
+  default-constructed `FDBlist` (leaving `aux_data` null) and crashed the
+  test binary the moment it called either function against a variable
+  with `units`/`long_name` attributes. Fixed in the test fixture (pre-
+  allocate `aux_data`, matching `new_fdblist()`), **not** in production
+  code -- 5a characterizes, it doesn't refactor. Flagged here as a latent
+  defect (unreachable today, since every real caller pre-allocates) worth
+  a defensive check whenever Phase 6 touches this function, rather than a
+  live bug needing an immediate fix.
+
+147 -> 167 tests, 3982 -> 4484 assertions (20 new characterization cases).
+Full verification (4-gate + ASan/UBSan/LSan + shuffled order at seeds 1
+and 42) clean.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
