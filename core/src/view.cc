@@ -450,7 +450,7 @@ View::scanToPlace( size_t scan_place )
 	view_place = "frame " + std::to_string(scan_place+1) + "/" + std::to_string(size) + " ";
 
 	/* type is the data type of the dimension--can be float or character */
-	type = fi_dim_value( view->variable, view->scan_axis_id, scan_place, &new_dimval,
+	type = g_dataset.dimValue( view->variable, view->scan_axis_id, scan_place, &new_dimval,
 			temp_string, &has_bounds, &bound_min, &bound_max, view->var_place.data() );
 	if( type == NC_DOUBLE ) {
 		if( dim->timelike && options.t_conv ) {
@@ -903,7 +903,7 @@ View::fillViewData()
 		printf( "\\) %s\n", v->variable->files.front()->filename.c_str() );
 		}
 
-	fi_get_data( v->variable, v->var_place.data(), count.data(), v->data.data() );
+	g_dataset.getData( v->variable, v->var_place.data(), count.data(), v->data.data() );
 
 	v->data_status = ViewDataStatus::Valid;
 }
@@ -1012,7 +1012,7 @@ View::applyCurDimPlace( int dimid, NCDim *dim, size_t place )
 		view->scanToPlace( place );
 		}
 	else {
-		type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
+		type  = g_dataset.dimValue( view->variable, dimid, place, &new_dimval, temp_string,
 			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 		if( type == NC_DOUBLE ) {
 			if( dim->timelike && options.t_conv ) {
@@ -1751,7 +1751,7 @@ View::showCurrentDimValues()
 
 		place = view->var_place[dimid];
 
-		type  = fi_dim_value( view->variable, dimid, place, &new_dimval, temp_string,
+		type  = g_dataset.dimValue( view->variable, dimid, place, &new_dimval, temp_string,
 			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 		if( type == NC_DOUBLE )
 			snprintf( temp_string, 1023, "%lg", new_dimval );
@@ -2250,7 +2250,7 @@ View::plotXYSc( size_t *start, size_t *count )
 			virt_cursor_place[i] = view->var_place[i];
 		virt_cursor_place[dim_to_plot] = i_size;
 
-		type = fi_dim_value( view->variable, dim_to_plot, i_size, &temp_double, 
+		type = g_dataset.dimValue( view->variable, dim_to_plot, i_size, &temp_double, 
 				temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_place );
 		if( type == NC_DOUBLE )
 			plot_XY_xvals[i_size] = temp_double;
@@ -2266,7 +2266,7 @@ View::plotXYSc( size_t *start, size_t *count )
 			plot_XY_xvals[i] = (double)i;
 
 	/* Get the y values (values to be plotted) */
-	fi_get_data( view->variable, start, count, tmp_yvals );
+	g_dataset.getData( view->variable, start, count, tmp_yvals );
 
 	/* Eliminate the missing values */
 	j = 0;
@@ -2374,7 +2374,7 @@ View::plotXYSc( size_t *start, size_t *count )
 		if( (i != dim_to_plot) && (view->variable->dim[i].get() != NULL)) {
 			if( have_done_one )
 				strncat( legend, ", ", sizeof(legend) - strlen(legend) - 1 );
-			type = fi_dim_value( view->variable, i, *(start+i), &temp_double, temp_string,
+			type = g_dataset.dimValue( view->variable, i, *(start+i), &temp_double, temp_string,
 					&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 			if( type == NC_DOUBLE ) {
 				snprintf( temp2_string, 127, "%lg", temp_double );

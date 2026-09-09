@@ -235,7 +235,7 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 				dim_name     = const_cast<char *>(view->variable->dim[i]->name.c_str());
 				dim_longname = fi_dim_longname( view->variable->files.front().get()->id(), dim_name );
 				units        = fi_dim_units( view->variable->files.front().get()->id(), dim_name );
-				type         = fi_dim_value( view->variable, i, view->var_place[i],
+				type         = g_dataset.dimValue( view->variable, i, view->var_place[i],
 							&temp_double, tstr2, &has_bounds, &bound_min, &bound_max, view->var_place.data() );
 				if( type == NC_DOUBLE )
 					snprintf( tstr, 1499, "Current %s: %lg", dim_longname.c_str(), temp_double );

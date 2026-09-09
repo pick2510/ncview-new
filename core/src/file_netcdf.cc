@@ -1416,8 +1416,9 @@ void netcdf_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 			{
 			/* Get the units for the dimvar. Empty means "no units
 			 * attribute" -- callers now test fdb->recdim_units.empty()
-			 * rather than comparing to NULL (see file.cc's
-			 * fi_dim_value_convert()). */
+			 * rather than comparing to NULL (see dataset.cc's
+			 * dimValueConvert(), formerly file.cc's fi_dim_value_convert()
+			 * before Phase 6 moved it). */
 			fdb->recdim_units = netcdf_var_units( gid, unlimdim_name );
 			}
 		}

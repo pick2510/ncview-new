@@ -55,7 +55,7 @@ TEST_CASE("NcFixture: the default Ramp generator fills data in row-major order")
 
     size_t start[2] = {0, 0}, count[2] = {2, 3};
     std::vector<float> data(6);
-    fi_get_data(var, start, count, data.data());
+    g_dataset.getData(var, start, count, data.data());
     for (size_t i = 0; i < 6; i++) CHECK(data[i] == (float)i);
 }
 
@@ -74,12 +74,12 @@ TEST_CASE("NcFixture: a Constant generator plus missing() sets a real _FillValue
     REQUIRE(var != nullptr);
 
     float fill = 0.0f;
-    fi_fill_value(var, &fill);
+    g_dataset.fillValue(var, &fill);
     CHECK(fill == doctest::Approx(-999.0f));
 
     size_t start[1] = {0}, count[1] = {4};
     std::vector<float> data(4);
-    fi_get_data(var, start, count, data.data());
+    g_dataset.getData(var, start, count, data.data());
     for (float v : data) CHECK(v == doctest::Approx(2.5f));
 }
 

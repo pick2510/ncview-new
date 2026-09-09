@@ -3,9 +3,11 @@
 // Tests for the multi-file ("virtual variable") read path -- the feature
 // the program exists for, and per the "refine the architecture" plan's
 // 2026-09-09 inventory, the largest untested surface in the tree. Every
-// existing fi_get_data() test (test_nc_fixture.cc) uses a single-file
-// variable, so fi_get_data()'s is_virtual/count[0]>1 branch that delegates
-// to fi_get_data_iterate() (core/src/file.cc) had never executed; likewise
+// existing g_dataset.getData() test (test_nc_fixture.cc) uses a single-file
+// variable, so g_dataset.getData()'s is_virtual/count[0]>1 branch that delegates
+// to Dataset::getDataIterate() (core/src/dataset.cc, formerly file.cc's
+// free-function fi_get_data_iterate() before Phase 6 moved it) had never
+// executed; likewise
 // virt_to_actual_place()'s (core/src/util.cc) multi-file branch and
 // fi_dim_value_convert()'s (core/src/file.cc) cross-file time-unit
 // reconciliation.
@@ -110,7 +112,7 @@ int open_for_core(const std::string &path) {
 // path core itself uses, with each file's data offset by a distinguishing
 // multiple of 1000 so a value's origin file is obvious from its magnitude.
 // All three files share the same time units, so this fixture is for the
-// fi_get_data_iterate()/virt_to_actual_place()/cacheScalarCoordInfo()
+// Dataset::getDataIterate()/virt_to_actual_place()/cacheScalarCoordInfo()
 // tests, not the cross-file-units reconciliation test (which needs its
 // own 2-file fixture with deliberately different units).
 struct ThreeFileSeries {
@@ -160,18 +162,18 @@ constexpr float ThreeFileSeries::kDataOffsets[3];
 
 } // namespace
 
-TEST_CASE("fi_get_data: a read spanning a file boundary exercises fi_get_data_iterate") {
+TEST_CASE("Dataset::getData: a read spanning a file boundary exercises getDataIterate") {
     ensure_ncview_misc_initialized();
     ThreeFileSeries series("multifile_boundary_read");
     NCVar *var = series.var;
 
     // virtual timesteps 2,3,4: file0's last timestep + file1's both
-    // timesteps. count[0]==3 > 1, so fi_get_data() must delegate to
-    // fi_get_data_iterate() (file.cc:307) rather than the single-file path.
+    // timesteps. count[0]==3 > 1, so g_dataset.getData() must delegate to
+    // Dataset::getDataIterate() (dataset.cc) rather than the single-file path.
     size_t start[3] = {2, 0, 0};
     size_t count[3] = {3, 2, 2};
     std::vector<float> data(3 * 2 * 2);
-    fi_get_data(var, start, count, data.data());
+    g_dataset.getData(var, start, count, data.data());
 
     for (int t = 0; t < 3; t++)
         for (int i = 0; i < 2; i++)
@@ -183,7 +185,7 @@ TEST_CASE("fi_get_data: a read spanning a file boundary exercises fi_get_data_it
             }
 }
 
-TEST_CASE("fi_get_data: a read covering the whole series matches every file's values") {
+TEST_CASE("Dataset::getData: a read covering the whole series matches every file's values") {
     ensure_ncview_misc_initialized();
     ThreeFileSeries series("multifile_whole_series_read");
     NCVar *var = series.var;
@@ -191,7 +193,7 @@ TEST_CASE("fi_get_data: a read covering the whole series matches every file's va
     size_t start[3] = {0, 0, 0};
     size_t count[3] = {9, 2, 2};
     std::vector<float> data(9 * 2 * 2);
-    fi_get_data(var, start, count, data.data());
+    g_dataset.getData(var, start, count, data.data());
 
     for (int t = 0; t < 9; t++)
         for (int i = 0; i < 2; i++)
@@ -203,7 +205,7 @@ TEST_CASE("fi_get_data: a read covering the whole series matches every file's va
             }
 }
 
-TEST_CASE("fi_get_data: reads starting and ending mid-file resolve to the right values") {
+TEST_CASE("Dataset::getData: reads starting and ending mid-file resolve to the right values") {
     ensure_ncview_misc_initialized();
     ThreeFileSeries series("multifile_midfile_read");
     NCVar *var = series.var;
@@ -213,7 +215,7 @@ TEST_CASE("fi_get_data: reads starting and ending mid-file resolve to the right 
     size_t start[3] = {4, 0, 0};
     size_t count[3] = {3, 2, 2};
     std::vector<float> data(3 * 2 * 2);
-    fi_get_data(var, start, count, data.data());
+    g_dataset.getData(var, start, count, data.data());
 
     for (int t = 0; t < 3; t++)
         for (int i = 0; i < 2; i++)
@@ -268,7 +270,7 @@ TEST_CASE("Dataset::cacheScalarCoordInfo: timestep_2_fdb maps every virtual time
     }
 }
 
-TEST_CASE("fi_dim_value: reconciles a timelike dim's value across files with different units") {
+TEST_CASE("Dataset::dimValue: reconciles a timelike dim's value across files with different units") {
     ensure_ncview_misc_initialized();
 
     // Two files, deliberately different time units on the same timelike
@@ -304,7 +306,7 @@ TEST_CASE("fi_dim_value: reconciles a timelike dim's value across files with dif
     int has_bounds;
     double bound_min, bound_max;
     size_t cursor[3] = {3, 0, 0};
-    nc_type type = fi_dim_value(var, /*dim_id=*/0, /*virt_place=*/3, &val, cval,
+    nc_type type = g_dataset.dimValue(var, /*dim_id=*/0, /*virt_place=*/3, &val, cval,
                                  &has_bounds, &bound_min, &bound_max, cursor);
 
     CHECK(type == NC_DOUBLE);

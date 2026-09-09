@@ -96,7 +96,6 @@ int 	fi_initialize    ( char *name );
 Stringlist *fi_list_vars ( int fileid );
 int	fi_n_dims	 ( int fileid, char *var_name );
 size_t	*fi_var_size	 ( int fileid, char *var_name );
-void 	fi_get_data      ( NCVar *var, size_t *start_pos, size_t *count, void *data );
 void 	fi_close         ( int fileid );
 void	determine_file_type( Stringlist *input_files );
 Stringlist *fi_scannable_dims( int fileid, char *var_name );
@@ -106,13 +105,9 @@ std::string fi_var_units    ( int fileid, std::string_view var_name );
 std::string fi_dim_units    ( int fileid, std::string_view dim_name );
 std::string fi_dim_calendar ( int fileid, std::string_view dim_name );
 std::string fi_dim_longname ( int fileid, std::string_view dim_name );
-nc_type fi_dim_value     ( NCVar *v, int dim_id, size_t place, double *ret_val_double, char *ret_val_char,
-				int *return_has_bounds, double *return_bounds_min, double *return_bounds_max,
-				size_t *complete_ndim_virt_place );
 std::string fi_dim_id_to_name( int fileid, std::string_view var_name, int dim_id );
 int 	fi_dim_name_to_id( int fileid, char *var_name, char *dim_name );
 void 	fi_fill_aux_data ( int id, char *var_name, FDBlist *fdb );
-void 	fi_fill_value	 ( NCVar *var, float *fillval );
 int 	fi_recdim_id     ( int fileid );
 
 /******************************************************************************

@@ -45,6 +45,8 @@
 #include <string>
 #include <vector>
 
+#include <netcdf.h>	/* nc_type, for dimValue() below */
+
 #include "ncview/defines.h"
 #include "ncview/stringlist.h"
 
@@ -143,7 +145,33 @@ public:
 	void getMinMaxOnestep( NCVar *var, size_t n_other, size_t tstep, float *data,
 	                        float *min, float *max, int verbose );
 
+	/* Formerly file.cc's fi_get_data()/fi_get_data_iterate(): reads
+	 * 'var's data at the given virtual start/count, transparently
+	 * spanning file boundaries for a multi-file (is_virtual) variable.
+	 * Moved onto Dataset (Phase 6 of the "refine the architecture"
+	 * plan) rather than NetCDFFile since it operates across however many
+	 * files 'var' actually lives in, not on one open file. */
+	void getData( NCVar *var, size_t *virt_start_pos, size_t *count, void *data );
+
+	/* Formerly file.cc's fi_dim_value(): the value of dimension 'dim_id'
+	 * at virtual position 'virt_place' for 'var', translating virtual to
+	 * actual place and reconciling cross-file time-unit differences
+	 * (dimValueConvert(), dataset.cc) internally. Same file-spanning
+	 * reasoning as getData() for why this is a Dataset method. */
+	nc_type dimValue( NCVar *var, int dim_id, size_t virt_place, double *return_val_double,
+	                   char *return_val_char, int *return_has_bounds, double *return_bounds_min,
+	                   double *return_bounds_max, size_t *complete_ndim_virt_place );
+
+	/* Formerly file.cc's fi_fill_value(): sets *fill_value from the
+	 * first file 'var' lives in, if the file format defines one. */
+	void fillValue( NCVar *var, float *fill_value );
+
 private:
+	/* getData()'s helper for is_virtual variables with count[0] > 1 --
+	 * formerly file.cc's static fi_get_data_iterate(), moved along with
+	 * getData() as an implementation detail (no other caller). */
+	void getDataIterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data );
+
 	/* Declared before variables_ so it's destroyed AFTER variables_ --
 	 * member destruction runs in reverse declaration order, and nothing
 	 * should still be holding an FDBlist::file pointer once these

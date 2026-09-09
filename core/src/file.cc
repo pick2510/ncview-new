@@ -34,14 +34,8 @@
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 
-#ifdef HAVE_UDUNITS2
-#include "ncview/utCalendar2_cal.h"
-#endif
-
 static int   file_type;
 extern Options options;
-
-static void fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data );
 
 /************************************************************************************/
 /* Do all file opening and initialization for the passed filename.
@@ -262,84 +256,6 @@ fi_dim_name_to_id( int fileid, char *var_name, char *dim_name )
 	return( netcdf_dim_name_to_id( fileid, var_name, dim_name ));
 }
 
-/************************************************************************************/
-/* Fill out a pointer to the data for the passed variable from the
- * indicated file.  The data is assumed to be multi-dimensional
- * (it has to be at least 2 dimensions, else it isn't displayable!)
- * and starts at the position given by start_pos[0...N-1], with
- * counts of count[0...N-1].  The pointer MUST ALREADY point to 
- * storage large enough to hold the data!  Note that this routine
- * translates the 'start' place from a virtual location to an 
- * actual location for you, so you don't have to worry about that.
- * I.e., if you have a variable spread out over many files, you just
- * index it as if it were in one file and let the translation routine
- * take care of figuring out where it actually is.
- */
-	void
-fi_get_data( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
-{
-	FDBlist	*file;
-
-	/* Check to see if we should loop over the timelike indices
-	 */
-	if( (var->is_virtual == true) && (count[0] > 1) ) {
-		fi_get_data_iterate( var, virt_start_pos, count, data );
-		return;
-		}
-
-	std::vector<size_t> act_start_pos_buf( var->n_dims );
-	size_t *act_start_pos = act_start_pos_buf.data();
-	virt_to_actual_place( var, virt_start_pos, act_start_pos, &file );
-
-	if( file_type == FILE_TYPE_NETCDF )
-		netcdf_fi_get_data( file->id(), const_cast<char *>(var->name.c_str()), act_start_pos,
-			  count, (float *)data, file->aux_data.get() );
-	else
-		{
-		fprintf( stderr, "?unknown file_type passed to fi_get_data: %d\n",
-			file_type );
-		exit( -1 );
-		}
-}
-
-/*****************************************************************************
- * This is called when a variable lives in multiple files AND we
- * want data from more than one file.  We must iterate over the files.
- */
-	void
-fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
-{
-	size_t	it, start2[MAX_NC_DIMS], count2[MAX_NC_DIMS], prod_lower_dims;
-	FDBlist	*file;
-	int	i;
-
-	std::vector<size_t> act_start_pos_buf( var->n_dims );
-	size_t *act_start_pos = act_start_pos_buf.data();
-
-	prod_lower_dims = 1L;
-	for( i=1; i<var->n_dims; i++ ) {
-		start2[i] = virt_start_pos[i];
-		count2[i] = count[i];
-		prod_lower_dims *= count[i];
-		}
-
-	count2[0] = 1L;
-	for( it=virt_start_pos[0]; it<(virt_start_pos[0]+count[0]); it++ ) {
-		start2[0] = it;
-		virt_to_actual_place( var, start2, act_start_pos, &file );
-		if( file_type == FILE_TYPE_NETCDF )
-			netcdf_fi_get_data( file->id(), const_cast<char *>(var->name.c_str()), act_start_pos,
-				  count2, ((float *)data)+(it-virt_start_pos[0])*prod_lower_dims,
-				  	file->aux_data.get() );
-		else
-			{
-			fprintf( stderr, "?unknown file_type passed to fi_get_data: %d\n",
-				file_type );
-			exit( -1 );
-			}
-		}
-}
-
 /************************************************************************************
  * Close the relevant file 
  */
@@ -369,130 +285,6 @@ fi_dim_longname( int fileid, std::string_view dim_name )
 		exit( -1 );
 		}
 	return( netcdf_dim_longname( fileid, dim_name ) );
-}
-
-/**************************************************************************************
- * May ALTER the value of dimval if warranted!!
- */
-void fi_dim_value_convert( double *dimval, FDBlist *file, NCVar *var, NCDim *d )
-{
-#ifdef HAVE_UDUNITS2
-	double converted_dimval;
-	int	year0, month0, hour0, min0, day0, err;
-	double	sec0;
-
-	FDBlist *first_file = var->files.front().get();
-	if( (file->recdim_units.empty()) ||
-	    (first_file->recdim_units.empty()) ||
-	    (first_file->ut_unit_ptr  == NULL) ||
-	    (file->ut_unit_ptr 		   == NULL) ||
-	    (! d->timelike )                        ||
-	    (file->recdim_units == first_file->recdim_units) )
-	    	return;
-
-	/* Convert the dim value to a date using the units given
-	 * in the file that this dim value came from
-	 */
-	err = utCalendar2_cal( *dimval, file->recdim_units.c_str(),
-		&year0, &month0, &day0, &hour0, &min0, &sec0, d->calendar.c_str() );
-	if( err == 0 ) {
-		err = utInvCalendar2_cal( year0, month0, day0, hour0, min0, sec0,
-			first_file->recdim_units.c_str(), &converted_dimval,
-			d->calendar.c_str() );
-		if( err == 0 )
-			*dimval = converted_dimval;
-		}
-#endif
-}
-
-/*************************************************************************************
- * Return the value of a dimension at a specific point.  Returns the type
- * of the dimension value, which is either NC_DOUBLE or NC_CHAR.  Make sure
- * to allocate space for at least a 1024 character string in the return_value!
- * It will never be larger than that.  Takes a virtual place, and converts 
- * it to an actual place before determining the value.
- */
-	nc_type
-fi_dim_value( NCVar *var, int dim_id, size_t virt_place, double *return_val_double, 
-	char *return_val_char, int *return_has_bounds, double *return_bounds_min, 
-	double *return_bounds_max, size_t *complete_ndim_virt_place )
-{
-	size_t	actual_place;
-	FDBlist	*file;
-	int	i;
-	std::string	dim_name;
-	nc_type	ret_val;
-	NCDim	*d;
-	size_t	idx_map;
-	NCDim_map_info	*dmi;
-
-if(1==0){
-printf( "Data cache vals for var %s:\n", var->name.c_str() );
-for( i=0; i<var->n_dims; i++ ) {
-	printf( "Dim %d (%s): ", i, var->dim[i]->name.c_str() );
-	if( var->dim_map_info[i] == NULL )
-		printf( "NULL\n" );
-	else
-		printf( "(%s) %f %f %f\n",
-			var->dim_map_info[i]->coord_var_name.c_str(),
-			var->dim_map_info[i]->data_cache[0], var->dim_map_info[i]->data_cache[10],
-			var->dim_map_info[i]->data_cache[100] );
-	}
-}
-
-	/* See if this dim value is actually 2-d mapped */
-	dmi = var->dim_map_info[dim_id].get();
-	if( dmi != NULL ) {
-		/* It IS 2-d mapped, calculate entry in data cache where val is */
-		idx_map = 0L;
-		for( i=0; i<var->n_dims; i++ ) {
-			idx_map += complete_ndim_virt_place[i] * dmi->index_place_factor[i];
-/*printf( "dimidx=%d  place=%ld  factor=%ld  idx_so_far=%ld\n", i, complete_ndim_virt_place[i], dmi->index_place_factor[i], idx_map );*/
-			}
-		*return_val_double = dmi->data_cache[idx_map];
-/*printf( "mapped, dim=%s loc=%ld  val=%lf\n", var->dim[dim_id]->name, idx_map, *return_val_double );*/
-		return( NC_DOUBLE );
-		}
-
-	std::vector<size_t> act_start_pos_buf( var->n_dims );
-	size_t *act_start_pos = act_start_pos_buf.data();
-	std::vector<size_t> virt_start_pos_buf( var->n_dims );
-	size_t *virt_start_pos = virt_start_pos_buf.data();
-
-	for( i=0; i<var->n_dims; i++ )
-		*(virt_start_pos+i) = 0L;
-	*(virt_start_pos+dim_id) = virt_place;
-
-	virt_to_actual_place( var, virt_start_pos, act_start_pos, &file );
-
-	actual_place = *(act_start_pos+dim_id);
-
-	d = (var->dim[dim_id].get());
-	dim_name  = d->name;
-	if( file_type == FILE_TYPE_NETCDF )
-		ret_val = netcdf_dim_value( file->id(), const_cast<char *>(dim_name.c_str()), actual_place,
-				return_val_double, return_val_char, virt_place,
-				return_has_bounds, return_bounds_min, return_bounds_max );
-	else
-		{
-		fprintf( stderr, "?unknown file_type passed to fi_dim_value: %d\n",
-			file_type );
-		exit( -1 );
-		}
-
-#ifdef HAVE_UDUNITS2
-	/* Now we have to figure out if we need to change units on the
-	 * returned value...This will happen with timelike dimensions that
-	 * have a different units string in each file.
-	 */
-	if( ret_val != NC_CHAR) {
-		fi_dim_value_convert( return_val_double, file, var, d );
-		fi_dim_value_convert( return_bounds_min, file, var, d );
-		fi_dim_value_convert( return_bounds_max, file, var, d );
-		}
-#endif
-
-	return( ret_val );
 }
 
 /*************************************************************************************
@@ -551,26 +343,7 @@ fi_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 		}
 }
 
-/*******************************************************************************
- * If the file format we are currently using defines a "fill value" (i.e.,
- * a special data value which indicates out-of-domain or never-written data)
- * then set the value to that fill value.  Otherwise, don't change it.
- */
-	void
-fi_fill_value( NCVar *var, float *fill_value )
-{
-	if( file_type == FILE_TYPE_NETCDF )
-		netcdf_fill_value( var->files.front()->id(), const_cast<char *>(var->name.c_str()),
-				fill_value, var->files.front()->aux_data.get() );
-	else
-		{
-		fprintf( stderr, "?unknown file_type passed to fi_fill_value: %d\n",
-			file_type );
-		exit( -1 );
-		}
-}
-
-	int 	
+	int
 fi_recdim_id( int fileid )
 {
 	return( netcdf_fi_recdim_id( fileid ));

@@ -214,7 +214,7 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, std::vector<int> 
 		cursor_place[ v->y_axis_id ] = jj;
 
 		/* Get X value */
-		dimval_type = fi_dim_value( v->variable, v->x_axis_id, ii, &tval, cval,
+		dimval_type = g_dataset.dimValue( v->variable, v->x_axis_id, ii, &tval, cval,
 			&has_bnds, &bnds_min, &bnds_max, cursor_place );
 		if( dimval_type == NC_DOUBLE )
 			dimval_x_2d[ii + jj*x_size] = tval;
@@ -222,7 +222,7 @@ gen_overlay_internal_mapped( View *v, float *data, long nvals, std::vector<int> 
 			dimval_x_2d[ii + jj*x_size] = dim_x->values[ii];
 
 		/* Get Y value */
-		dimval_type = fi_dim_value( v->variable, v->y_axis_id, ii, &tval, cval,
+		dimval_type = g_dataset.dimValue( v->variable, v->y_axis_id, ii, &tval, cval,
 			&has_bnds, &bnds_min, &bnds_max, cursor_place );
 		if( dimval_type == NC_DOUBLE )
 			dimval_y_2d[ii + jj*x_size] = tval;

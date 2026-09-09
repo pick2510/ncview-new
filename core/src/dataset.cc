@@ -8,10 +8,12 @@
 #include "ncview/dataset.h"
 
 #include "ncview/includes.h"
-#include "ncview/protos.h"	/* netcdf_fi_close() */
+#include "ncview/protos.h"	/* netcdf_fi_close(), netcdf_fi_get_data(), netcdf_dim_value(),
+				 * netcdf_fill_value(), virt_to_actual_place() */
 
 #ifdef HAVE_UDUNITS2
 #include "udunits2.h"
+#include "ncview/utCalendar2_cal.h"	/* utCalendar2_cal(), utInvCalendar2_cal() -- dimValueConvert() */
 extern ut_system *unitsys;
 #endif
 
@@ -134,7 +136,179 @@ int equivalent_FDBs( NCVar *v1, NCVar *v2 )
 	return(1);
 }
 
+/* Formerly file.cc's fi_dim_value_convert(): reconciles a dimension value
+ * read from one file in a multi-file series against the time units the
+ * FIRST file uses, when the files disagree (e.g. each file's own
+ * "days since <its own start date>"). Only called from dimValue() below,
+ * both before and after this moved out of file.cc, so it stays a free
+ * function rather than a Dataset method -- it doesn't touch Dataset
+ * state, only its FDBlist/NCVar/NCDim arguments. May ALTER *dimval. */
+void dimValueConvert( double *dimval, FDBlist *file, NCVar *var, NCDim *d )
+{
+#ifdef HAVE_UDUNITS2
+	double converted_dimval;
+	int	year0, month0, hour0, min0, day0, err;
+	double	sec0;
+
+	FDBlist *first_file = var->files.front().get();
+	if( (file->recdim_units.empty()) ||
+	    (first_file->recdim_units.empty()) ||
+	    (first_file->ut_unit_ptr  == NULL) ||
+	    (file->ut_unit_ptr 		   == NULL) ||
+	    (! d->timelike )                        ||
+	    (file->recdim_units == first_file->recdim_units) )
+	    	return;
+
+	/* Convert the dim value to a date using the units given
+	 * in the file that this dim value came from
+	 */
+	err = utCalendar2_cal( *dimval, file->recdim_units.c_str(),
+		&year0, &month0, &day0, &hour0, &min0, &sec0, d->calendar.c_str() );
+	if( err == 0 ) {
+		err = utInvCalendar2_cal( year0, month0, day0, hour0, min0, sec0,
+			first_file->recdim_units.c_str(), &converted_dimval,
+			d->calendar.c_str() );
+		if( err == 0 )
+			*dimval = converted_dimval;
+		}
+#endif
+}
+
 } // namespace
+
+void Dataset::getData( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
+{
+	FDBlist	*file;
+
+	/* Check to see if we should loop over the timelike indices
+	 */
+	if( (var->is_virtual == true) && (count[0] > 1) ) {
+		getDataIterate( var, virt_start_pos, count, data );
+		return;
+		}
+
+	std::vector<size_t> act_start_pos_buf( var->n_dims );
+	size_t *act_start_pos = act_start_pos_buf.data();
+	virt_to_actual_place( var, virt_start_pos, act_start_pos, &file );
+
+	/* Always netCDF (file.cc's file_type dispatch this used to go
+	 * through only ever held FILE_TYPE_NETCDF -- confirmed dead in
+	 * Phase 6's step 1; calling netcdf_fi_get_data() directly here
+	 * instead is part of the same collapse, not a new simplification
+	 * invented for this move). */
+	netcdf_fi_get_data( file->id(), const_cast<char *>(var->name.c_str()), act_start_pos,
+		  count, (float *)data, file->aux_data.get() );
+}
+
+/*****************************************************************************
+ * This is called when a variable lives in multiple files AND we
+ * want data from more than one file.  We must iterate over the files.
+ */
+void Dataset::getDataIterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data )
+{
+	size_t	it, start2[MAX_NC_DIMS], count2[MAX_NC_DIMS], prod_lower_dims;
+	FDBlist	*file;
+	int	i;
+
+	std::vector<size_t> act_start_pos_buf( var->n_dims );
+	size_t *act_start_pos = act_start_pos_buf.data();
+
+	prod_lower_dims = 1L;
+	for( i=1; i<var->n_dims; i++ ) {
+		start2[i] = virt_start_pos[i];
+		count2[i] = count[i];
+		prod_lower_dims *= count[i];
+		}
+
+	count2[0] = 1L;
+	for( it=virt_start_pos[0]; it<(virt_start_pos[0]+count[0]); it++ ) {
+		start2[0] = it;
+		virt_to_actual_place( var, start2, act_start_pos, &file );
+		netcdf_fi_get_data( file->id(), const_cast<char *>(var->name.c_str()), act_start_pos,
+			  count2, ((float *)data)+(it-virt_start_pos[0])*prod_lower_dims,
+			  	file->aux_data.get() );
+		}
+}
+
+/*************************************************************************************
+ * Return the value of a dimension at a specific point.  Returns the type
+ * of the dimension value, which is either NC_DOUBLE or NC_CHAR.  Make sure
+ * to allocate space for at least a 1024 character string in the return_value!
+ * It will never be larger than that.  Takes a virtual place, and converts
+ * it to an actual place before determining the value.
+ */
+nc_type Dataset::dimValue( NCVar *var, int dim_id, size_t virt_place, double *return_val_double,
+	char *return_val_char, int *return_has_bounds, double *return_bounds_min,
+	double *return_bounds_max, size_t *complete_ndim_virt_place )
+{
+	size_t	actual_place;
+	FDBlist	*file;
+	int	i;
+	std::string	dim_name;
+	nc_type	ret_val;
+	NCDim	*d;
+	size_t	idx_map;
+	NCDim_map_info	*dmi;
+
+	/* See if this dim value is actually 2-d mapped */
+	dmi = var->dim_map_info[dim_id].get();
+	if( dmi != NULL ) {
+		/* It IS 2-d mapped, calculate entry in data cache where val is */
+		idx_map = 0L;
+		for( i=0; i<var->n_dims; i++ ) {
+			idx_map += complete_ndim_virt_place[i] * dmi->index_place_factor[i];
+			}
+		*return_val_double = dmi->data_cache[idx_map];
+		return( NC_DOUBLE );
+		}
+
+	std::vector<size_t> act_start_pos_buf( var->n_dims );
+	size_t *act_start_pos = act_start_pos_buf.data();
+	std::vector<size_t> virt_start_pos_buf( var->n_dims );
+	size_t *virt_start_pos = virt_start_pos_buf.data();
+
+	for( i=0; i<var->n_dims; i++ )
+		*(virt_start_pos+i) = 0L;
+	*(virt_start_pos+dim_id) = virt_place;
+
+	virt_to_actual_place( var, virt_start_pos, act_start_pos, &file );
+
+	actual_place = *(act_start_pos+dim_id);
+
+	d = (var->dim[dim_id].get());
+	dim_name  = d->name;
+	/* Always netCDF -- see getData()'s comment above for why the old
+	 * file_type dispatch is gone rather than carried over. */
+	ret_val = netcdf_dim_value( file->id(), const_cast<char *>(dim_name.c_str()), actual_place,
+			return_val_double, return_val_char, virt_place,
+			return_has_bounds, return_bounds_min, return_bounds_max );
+
+#ifdef HAVE_UDUNITS2
+	/* Now we have to figure out if we need to change units on the
+	 * returned value...This will happen with timelike dimensions that
+	 * have a different units string in each file.
+	 */
+	if( ret_val != NC_CHAR) {
+		dimValueConvert( return_val_double, file, var, d );
+		dimValueConvert( return_bounds_min, file, var, d );
+		dimValueConvert( return_bounds_max, file, var, d );
+		}
+#endif
+
+	return( ret_val );
+}
+
+/*******************************************************************************
+ * If the file format we are currently using defines a "fill value" (i.e.,
+ * a special data value which indicates out-of-domain or never-written data)
+ * then set the value to that fill value.  Otherwise, don't change it.
+ */
+void Dataset::fillValue( NCVar *var, float *fill_value )
+{
+	/* Always netCDF -- see getData()'s comment above. */
+	netcdf_fill_value( var->files.front()->id(), const_cast<char *>(var->name.c_str()),
+			fill_value, var->files.front()->aux_data.get() );
+}
 
 NCVar *Dataset::findVariable( const char *var_name )
 {
@@ -215,7 +389,7 @@ void Dataset::addVariable( const char *var_name, int file_id, const char *filena
 		new_fdb->index      = 0;	/* Since this is the FIRST fdb for this var */
 		new_var->files.push_back( std::move( new_fdb_owner ) );
 		new_var->fill_value = DEFAULT_FILL_VALUE;
-		fi_fill_value( new_var, &(new_var->fill_value) );
+		fillValue( new_var, &(new_var->fill_value) );
 
 		/* Init the dim mapping info -- scalar_dim_map_info starts empty
 		 * and grows (up to MAX_SCALAR_COORDS) as scalar coords are
@@ -417,12 +591,12 @@ void Dataset::calcDimMinmaxes()
 				for( j=0; j<v->n_dims; j++ )
 					cursor_place[j] = (int)(v->size[j]/2.0);	/* take middle in case 2-d mapped dims apply */
 
-				type = fi_dim_value( v, i, 0L, &temp_double, temp_str, &has_bounds, &bounds_min,
+				type = dimValue( v, i, 0L, &temp_double, temp_str, &has_bounds, &bounds_min,
 								&bounds_max, cursor_place );	/* used to get type ONLY */
 				if( type == NC_DOUBLE ) {
 					for( j=0; j<(int)dim_len; j++ ) {
 						cursor_place[i] = j;
-						type = fi_dim_value( v, i, j, &temp_double, temp_str, &has_bounds, &bounds_min, &bounds_max, cursor_place );
+						type = dimValue( v, i, j, &temp_double, temp_str, &has_bounds, &bounds_min, &bounds_max, cursor_place );
 						d->values[j] = (float)temp_double;
 						}
 					d->min  = d->values[0];
@@ -492,7 +666,7 @@ void Dataset::getMinMaxOnestep( NCVar *var, size_t n_other, size_t tstep, float 
 		fflush( stdout );
 		}
 
-	fi_get_data( var, start, count, data );
+	getData( var, start, count, data );
 
 	for( j=0; j<n_other; j++ ) {
 		dat = *(data+j);

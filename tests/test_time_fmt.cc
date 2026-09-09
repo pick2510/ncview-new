@@ -52,7 +52,7 @@ std::string run_fmt_time(NCDim &dim, double val, int include_granularity = 1) {
 // Dataset::addVariable()/fill_dim_structs() path core itself uses (this is
 // what udu_calc_tgran() actually needs: a real NCDim with a populated
 // ->units string and a real file to read two sample values back from via
-// fi_dim_value() -- there's no lighter-weight way to exercise it).
+// Dataset::dimValue() -- there's no lighter-weight way to exercise it).
 struct TgranFixture {
     std::string path;
     int fileid;
