@@ -43,10 +43,21 @@ int 	netcdf_get_att_util( int id, int varid, const char *var_name, const char *a
 int 	nc_inq_varid_grp( int ncid, char *varname, int *varid, int *groupid );
 char 	*ncview_groupname( int gid );
 char 	*ncview_varname( int gid, int varid );
-void 	nc_print_group_structure( int fileid );
 int 	nc_root_id_from_group_id( int gid );
 
 const char *nc_type_to_string( nc_type type );
+
+/* These three used to be declared in protos.h with external linkage but,
+ * per Phase 6 of the "refine the architecture" plan, were confirmed to
+ * have zero callers anywhere outside this translation unit (the earlier
+ * "zero callers project-wide" survey that flagged them was read as
+ * "unused" but they are each called from within this same file --
+ * verified directly rather than deleted on the strength of that survey).
+ * Declared static here, matching this file's other internal-only
+ * helpers above. */
+static char *netcdf_varindex_to_name( int cdfid, int index );
+static std::string netcdf_global_att_string( int fileid );
+static int netcdf_dimvar_bounds_id( int fileid, char *dim_name, int *nvertices );
 
 /*******************************************************************************************/
 void safe_strcat( char *dest, size_t dest_len, const char *src )
@@ -197,7 +208,13 @@ void netcdf_fi_list_vars_inner( Stringlist **ret_val, int gid, char *groupname )
 				if( *(size+jj) > 1 ) 
 					eff_ndims++;
 				}
-			dimlist  = fi_scannable_dims( gid, var_name );
+			/* netcdf_scannable_dims(), not fi_scannable_dims(): this file
+			 * IS the netCDF backend fi_scannable_dims() would dispatch to,
+			 * so calling back through file.cc's dispatch layer here was a
+			 * circular dependency with no purpose (Phase 6, "refine the
+			 * architecture" plan) -- broken by calling the primitive
+			 * directly, as every other call in this file already does. */
+			dimlist  = netcdf_scannable_dims( gid, var_name );
 			if( (total_size > 1L) && (stringlist_len( dimlist ) >= 1)) {
 				/* Hack to make version 1.70+ emulate older versions
 				 * that did not display 1-d vars.
@@ -452,7 +469,9 @@ std::string netcdf_dim_id_to_name( int fileid, std::string_view var_name, int di
 	*/
 
 
-	n_dims = fi_n_dims( gid, var_name_ng );
+	/* netcdf_fi_n_dims(), not fi_n_dims(): breaking the same circular
+	 * call-back into file.cc's dispatch layer as above (Phase 6). */
+	n_dims = netcdf_fi_n_dims( gid, var_name_ng );
 	std::vector<int> dim( n_dims );
 	err    = nc_inq_var( gid, netcdf_var_id, var_name_ng, &var_type,
 				&n_dims, dim.data(), &n_atts );
@@ -549,7 +568,9 @@ int netcdf_dim_name_to_id( int fileid, char *var_name, char *dim_name )
 	if( netcdf_dim_id == -1 )
 		return( -1 );
 
-	n_dims = fi_n_dims( gid, var_name_ng );
+	/* netcdf_fi_n_dims(), not fi_n_dims(): breaking the same circular
+	 * call-back into file.cc's dispatch layer as above (Phase 6). */
+	n_dims = netcdf_fi_n_dims( gid, var_name_ng );
 	std::vector<int> dim( n_dims );
 	err    = nc_inq_var( gid, netcdf_var_id, var_name_ng, &var_type,
 				&n_dims, dim.data(), &n_atts );
@@ -842,7 +863,7 @@ int netcdf_n_dims( int cdfid, char *varname )
 /*******************************************************************************************/
 /* Given the variable INDEX, what is the variable's name?
 */
-char *netcdf_varindex_to_name( int cdfid, int index )
+static char *netcdf_varindex_to_name( int cdfid, int index )
 {
 	char	*var_name;
 	int	err;
@@ -1947,7 +1968,7 @@ std::string netcdf_att_string( int fileid, std::string_view var_name )
 }
 
 /*******************************************************************************************/
-std::string netcdf_global_att_string( int fileid )
+static std::string netcdf_global_att_string( int fileid )
 {
 	int	iatt, len, size_to_use, i, n_atts, err;
 	nc_type	datatype;
@@ -2035,7 +2056,7 @@ void warn_about_char_dims()
  * this returns the dimvarid of the bounds dimvar, and sets nvertices to the number
  * of vertices the bounds var has 
  */
-int netcdf_dimvar_bounds_id( int fileid, char *dim_name, int *nvertices )
+static int netcdf_dimvar_bounds_id( int fileid, char *dim_name, int *nvertices )
 {
 	int	reg_dimvar_id, bounds_dimvar_id, dimvar_ndims, err, name_length, debug,
 		dimvar_gid;
@@ -2124,55 +2145,6 @@ char *ncview_varname( int gid, int varid )
 
 	nc_inq_varname( gid, varid, buffer );
 	return( &(buffer[0]) );
-}
-
-/*****************************************************************************************************
- * Given a ncid (file id) which may or may not be the root id, prints the entire group structure
- * of the file. Useful for debugging
- */
-void nc_print_group_structure( int fileid )
-{
-	int 	rootid, cursor, parent;
-	int	ig, ndims, nvars, natts, unlimdimid;
-	int	ng;
-	size_t	gnl;
-
-	/* Get root */
-	cursor = fileid;
-	while( nc_inq_grp_parent( cursor, &parent ) == 0 ) {
-		cursor = parent;
-		}
-	rootid = cursor;
-
-	printf( "nc_print_group_structure: fileid=%d rootid=%d\n", fileid, rootid );
-	nc_inq_grps( rootid, &ng, NULL );	/* first call to get num groups */
-
-	if( ng == 0 ) {
-		printf("nc_print_group_structure: no groups in this file\n" );
-		return;
-		}
-
-	std::vector<int> gid( ng );
-	nc_inq_grps( rootid, &ng, gid.data() );
-	printf( "nc_print_group_structure: fileid=%d rootid=%d has %d groups:\n", fileid, rootid, ng );
-
-	for( ig=0; ig<ng; ig++ ) {
-
-		/* Get group name */
-		nc_inq_grpname_len( gid[ig], &gnl );
-		std::vector<char> group_name_buf( gnl+2 );
-		char *group_name = group_name_buf.data();
-		nc_inq_grpname_full( gid[ig], &gnl, group_name );
-
-		/* find info about this group: number of dims, vars, atts */
-		nc_inq( gid[ig], &ndims, &nvars, &natts, &unlimdimid );
-
-		printf( "   group %d: id=%d >%s<\n", 
-			ig, gid[ig], group_name );
-
-		printf( "       ndims:%d nvars:%d natts:%d unlimdimid:%d\n",
-			ndims, nvars, natts, unlimdimid );
-		}
 }
 
 /*****************************************************************************************************
