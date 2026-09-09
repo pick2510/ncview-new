@@ -1167,6 +1167,37 @@ Two things this pass confirmed by reading the code rather than assuming:
 Full verification (4-gate + ASan/UBSan/LSan + shuffled order at seeds 1
 and 42) clean.
 
+## Phase 5b: give `do_print.cc`'s `printopts` an owner
+
+`static PrintOptions printopts;` (`do_print.cc`) was the one genuinely
+ownerless module-static the round-3 survey found -- no getter, no setter,
+reachable only by calling `print_init()` first, which is why
+`test_button_dispatch.cc`, `test_do_print.cc` and `test_view_null_guards.cc`
+all have to call it by hand before printing can be exercised at all.
+
+Moved onto `ViewerSession` as a `print_settings_` member with a
+`printSettings()` accessor (`viewer_session.h`), following the exact
+pattern already established there for `RenderSettings`/`PlaybackSettings`/
+`SessionDisplayPrefs`/`StartupSettings` -- a `Printer`-shaped wrapper type
+was considered and rejected, since `ViewerSession` already is the place
+session-scoped settings structs live and a lone struct member needs
+nothing a wrapper class would add. `do_print.cc`'s three functions
+(`print_init`, `do_print`, `build_print_info`) each bind a local
+`PrintOptions &printopts = g_app.session.printSettings();` as their first
+statement -- the "move, don't split" pattern applied to a module-static
+instead of a free function, so every reference below it in each function
+body is untouched. `print_init()`'s call site (`ncview.cc:153`) and every
+test call site are unchanged, since the function's own signature and
+behavior didn't move, only its storage's owner did.
+
+No behavior change: `printopts`, static or as a `ViewerSession` member,
+has the same static storage duration and is zero-initialized either way
+before `print_init()` runs at startup, and nothing reads it before that
+point in either version. 167 tests / 4484 assertions, unchanged. Full
+verification (4-gate + ASan/UBSan/LSan + shuffled order at seeds 1 and
+42) clean; `grep -rn` confirms no reference to the old file-scope static
+survives outside an explanatory comment.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
