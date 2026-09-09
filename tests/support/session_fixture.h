@@ -54,6 +54,14 @@ extern bool g_have_last_print_info;
 extern PrintInfo g_last_print_info;
 extern PrintOptions g_last_print_options;
 extern std::function<void(PrintOptions &)> g_printer_options_override;
+extern int g_query_pointer_x;
+extern int g_query_pointer_y;
+extern bool g_have_last_xy_plot;
+extern size_t g_last_xy_n;
+extern int g_last_xy_dimindex;
+extern std::vector<double> g_last_xy_xvals;
+extern std::vector<double> g_last_xy_yvals;
+extern std::string g_last_xy_x_axis_title;
 extern void resetStubRecording();
 
 // The fake one-shot timer queue (stub_interface.cc) -- lets a test drive

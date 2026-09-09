@@ -66,6 +66,29 @@ PrintOptions g_last_print_options;
 // this.
 std::function<void(PrintOptions &)> g_printer_options_override;
 
+// Scripted in_query_pointer_position() answer for ViewerController::plotXY()
+// tests (Phase 7a): upstream's real hook reads the actual mouse position
+// from the windowing system, which the stub can't reproduce, so it
+// defaults to (0,0) and a test that needs a specific window position (an
+// in-bounds click, a click past an axis's edge to exercise plotXY()'s own
+// clamp) sets this pair first. Mirrors g_printer_options_override's
+// std::function-based scripting, just for a plain value instead of an
+// edit callback.
+int g_query_pointer_x = 0;
+int g_query_pointer_y = 0;
+
+// Captured by in_popup_XY_graph() for Phase 7a's plotXYSc() tests:
+// plot_XY_xvals/plot_XY_yvals/plot_XY_dim[] are file-scope statics inside
+// view.cc (internal linkage), so a test can't read them directly -- this
+// is the only place their contents actually leave the function, exactly
+// the way g_last_print_info captures do_print.cc's file-static printopts.
+bool g_have_last_xy_plot = false;
+size_t g_last_xy_n = 0;
+int g_last_xy_dimindex = -1;
+std::vector<double> g_last_xy_xvals;
+std::vector<double> g_last_xy_yvals;
+std::string g_last_xy_x_axis_title;
+
 // --- Fake timer queue ---------------------------------------------------
 // "Refine the architecture" plan, Phase 0b: in_timer_set() used to just
 // record its own name and drop the callback, which is why playback
@@ -99,6 +122,14 @@ void resetStubRecording()
 	g_pending_timer_callback = nullptr;
 	g_pending_timer_delay_ms = 0;
 	g_timer_armed = false;
+	g_query_pointer_x = 0;
+	g_query_pointer_y = 0;
+	g_have_last_xy_plot = false;
+	g_last_xy_n = 0;
+	g_last_xy_dimindex = -1;
+	g_last_xy_xvals.clear();
+	g_last_xy_yvals.clear();
+	g_last_xy_x_axis_title.clear();
 }
 
 bool timerIsArmed() { return g_timer_armed; }
@@ -172,8 +203,17 @@ public:
 	}
 	void in_change_min(const char*) override { g_recorded_calls.push_back("in_change_min"); }
 	void in_flush() override { g_recorded_calls.push_back("in_flush"); }
-	int in_popup_XY_graph(size_t, int, double*, double*, const char*, const char*, const char*, const char*, const Stringlist*) override { g_recorded_calls.push_back("in_popup_XY_graph"); return 0; }
-	void in_query_pointer_position(int *x, int *y) override { g_recorded_calls.push_back("in_query_pointer_position"); if (x) *x = 0; if (y) *y = 0; }
+	int in_popup_XY_graph(size_t n, int dimindex, double *xvals, double *yvals, const char *x_axis_title, const char*, const char*, const char*, const Stringlist*) override {
+		g_recorded_calls.push_back("in_popup_XY_graph");
+		g_have_last_xy_plot = true;
+		g_last_xy_n = n;
+		g_last_xy_dimindex = dimindex;
+		g_last_xy_xvals.assign(xvals, xvals + n);
+		g_last_xy_yvals.assign(yvals, yvals + n);
+		g_last_xy_x_axis_title = x_axis_title ? x_axis_title : "";
+		return 0;
+	}
+	void in_query_pointer_position(int *x, int *y) override { g_recorded_calls.push_back("in_query_pointer_position"); if (x) *x = g_query_pointer_x; if (y) *y = g_query_pointer_y; }
 	void in_popup_2d_window() override { g_recorded_calls.push_back("in_popup_2d_window"); }
 	void in_popdown_2d_window() override { g_recorded_calls.push_back("in_popdown_2d_window"); }
 	void in_timer_clear() override {
