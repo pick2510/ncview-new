@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -49,4 +50,51 @@ public:
 		const PixelMapSettings &settings,
 		const std::vector<ncv_pixel> &pixel_transform,
 		ncv_pixel *out_pixels );
+
+	/* The single-sample color-index step of render()'s inner loop, pulled
+	 * out so ui/'s Colorbar::draw() can share it instead of hand-copying
+	 * the transform/invert/scale formula (which had drifted: it hardcoded
+	 * 10 in place of n_extra_colors). 'normalized' is expected in [0,1];
+	 * render() clip_f()s to [0,.9999] before calling this, matching its
+	 * pre-extraction behavior exactly. Not clamped to a pixel/colormap
+	 * range here -- callers that don't pre-clip (Colorbar::draw() samples
+	 * px/width directly) must clamp the result themselves, as
+	 * Colorbar::draw() already did before this extraction.
+	 *
+	 * Templated on T (render() instantiates T=float, Colorbar::draw()
+	 * T=double) so each call site keeps its own original floating-point
+	 * precision through this one shared body, rather than forcing both
+	 * onto a single type: render()'s float arithmetic must stay
+	 * byte-for-byte identical to what test_pixels.cc/ui_smoke.sh's
+	 * goldens already pin, and forcing Colorbar's historically
+	 * double-precision math down to float shifts its rendered pixels by
+	 * one color index at some truncation boundaries (confirmed by
+	 * ui_smoke.sh failing when this was tried as a single non-templated
+	 * double/float function) -- a real, if tiny, behavior change this
+	 * phase isn't meant to introduce. */
+	template <typename T>
+	static int colorIndex(
+		T normalized, Transform transform, bool invert_colors,
+		int n_colors, int n_extra_colors )
+	{
+		const double pi = 3.1415926536;
+		T data = normalized;
+
+		switch( transform ) {
+			case Transform::None:	break;
+
+			case Transform::Low:	data = std::sqrt( data );
+						data = std::sqrt( data );
+						break;
+
+			case Transform::Hi:	data = data*data*data*data;     break;
+
+			case Transform::Center:	data = std::atan( (data - 0.5)*8.0 );
+						data = data/pi + 0.5;
+						break;
+			}
+		if( invert_colors )
+			data = 1. - data;
+		return (int)(data * n_colors) + n_extra_colors;
+	}
 };

@@ -28,9 +28,9 @@
 namespace ncview_ui {
 
 namespace {
-// Matches util.cc:data_to_pixels()'s pixel encoding: valid data occupies
-// indices [10, 10+n_colors), everything below is reserved (missing/out of
-// range). We don't have n_colors here, so just clamp to the array.
+// Matches FrameRenderer::render()'s pixel encoding (core/src/frame_renderer.cc):
+// valid data occupies indices [10, 10+n_colors), everything below is reserved
+// (missing/out of range). We don't have n_colors here, so just clamp to the array.
 inline void lookup( const unsigned char *r, const unsigned char *g, const unsigned char *b,
                      unsigned char idx, unsigned char *out )
 {
@@ -360,20 +360,16 @@ void Colorbar::draw()
 	int n_colors = options.n_colors > 0 ? options.n_colors : 200;
 	int width = w() > 0 ? w() : 1;
 	for( int px = 0; px < w(); px++ ) {
-		// Mirrors util.cc:data_to_pixels' pixel-index formula exactly
-		// (transform, then invert_colors, then scale by n_colors) --
-		// upstream's cbar.c does the same in cbar_make(). Without this the
-		// colorbar shows a plain linear gradient that no longer matches
-		// the image whenever a transform or "Invert Colormap" is active.
+		// Shares FrameRenderer::colorIndex() (core/src/frame_renderer.cc)
+		// with the actual image draw, rather than hand-copying its
+		// transform/invert/scale formula -- upstream's cbar.c does the
+		// same thing in cbar_make(). Without this the colorbar shows a
+		// plain linear gradient that no longer matches the image whenever
+		// a transform or "Invert Colormap" is active.
 		double normval = (double)px / (double)width;
-		switch( transform_ ) {
-			case Transform::Hi:     normval = normval*normval*normval*normval; break;
-			case Transform::Low:    normval = sqrt( sqrt( normval ) ); break;
-			case Transform::Center: normval = atan( (normval-0.5)*8.0 )/3.1415926536 + 0.5; break;
-			default: break;
-		}
-		if( options.invert_colors ) normval = 1.0 - normval;
-		int idx = 10 + (int)(normval * n_colors);
+		int idx = FrameRenderer::colorIndex<double>(
+			normval, transform_, options.invert_colors,
+			n_colors, options.n_extra_colors );
 		if( idx < 0 ) idx = 0;
 		if( idx > 255 ) idx = 255;
 		fl_color( fl_rgb_color( colormap_r_[idx], colormap_g_[idx], colormap_b_[idx] ) );

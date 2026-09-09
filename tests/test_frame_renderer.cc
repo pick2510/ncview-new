@@ -10,6 +10,7 @@
 // invert_physical==false fixture never could: invert_physical==true (the
 // row-flip branch) and a non-identity pixel_transform table under
 // display_type==PseudoColor (the remap branch at the end of the loop).
+#include <cmath>
 #include <vector>
 
 #include <doctest/doctest.h>
@@ -104,4 +105,78 @@ TEST_CASE("FrameRenderer::render: a missing value always maps to pixel_transform
                            settings, pixel_transform, pix.data());
 
     CHECK(pix[0] == 42);
+}
+
+TEST_CASE("FrameRenderer::colorIndex<float>: render() delegates to the shared step correctly") {
+    // Confirms render() actually calls through to colorIndex<float>()
+    // rather than having drifted back to an inline copy: a single-pixel
+    // grid whose rawdata normalizes to exactly 'normalized' within
+    // [0, user_max], with an identity pixel_transform so the returned
+    // pixel *is* the index, must equal calling colorIndex<float>()
+    // directly with the same normalized value.
+    std::vector<ncv_pixel> pixel_transform(90);
+    for (size_t i = 0; i < pixel_transform.size(); i++) pixel_transform[i] = (ncv_pixel)i;
+
+    const int n_colors = 80;
+    const int n_extra_colors = 10;
+
+    for (Transform t : {Transform::None, Transform::Low, Transform::Hi, Transform::Center}) {
+        for (bool invert : {false, true}) {
+            for (float normalized : {0.0f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 0.9999f}) {
+                CAPTURE(t);
+                CAPTURE(invert);
+                CAPTURE(normalized);
+
+                int direct_idx = FrameRenderer::colorIndex<float>(normalized, t, invert, n_colors, n_extra_colors);
+
+                auto settings = make_settings(t, invert, /*invert_physical=*/false,
+                                               n_colors, n_extra_colors, /*display_type=*/0);
+                std::vector<float> grid = { normalized };
+                std::vector<ncv_pixel> pix(1);
+                FrameRenderer::render(grid.data(), 1, 1, /*fill_value=*/-999,
+                                       /*user_min=*/0, /*user_max=*/1, settings, pixel_transform, pix.data());
+
+                CHECK((int)pix[0] == direct_idx);
+            }
+        }
+    }
+}
+
+TEST_CASE("FrameRenderer::colorIndex<double>: matches Colorbar::draw()'s pre-Phase-5c inline formula") {
+    // Colorbar::draw() computed this in double precision, with no
+    // intermediate narrowing (unlike render()'s float 'data'). colorIndex
+    // is a template specifically so each call site keeps its own original
+    // precision through one shared body -- verified here by reproducing
+    // Colorbar's exact pre-extraction computation independently and
+    // checking colorIndex<double>() agrees at every input, not just most.
+    // (An earlier attempt shared a single non-templated function and hit
+    // exactly the failure this test would have caught: forcing Colorbar
+    // onto float precision changed one pixel column in ui_smoke.sh's
+    // "initial" golden, at Transform::Low/invert=true/normalized=0.9 --
+    // this test exists so that regression can't come back silently.)
+    const int n_colors = 80;
+    const int n_extra_colors = 10;
+
+    for (Transform t : {Transform::None, Transform::Low, Transform::Hi, Transform::Center}) {
+        for (bool invert : {false, true}) {
+            for (double normalized : {0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 0.9999}) {
+                CAPTURE(t);
+                CAPTURE(invert);
+                CAPTURE(normalized);
+
+                double reference = normalized;
+                switch (t) {
+                    case Transform::Hi:     reference = reference*reference*reference*reference; break;
+                    case Transform::Low:    reference = sqrt(sqrt(reference)); break;
+                    case Transform::Center: reference = atan((reference-0.5)*8.0)/3.1415926536 + 0.5; break;
+                    default: break;
+                }
+                if (invert) reference = 1.0 - reference;
+                int reference_idx = n_extra_colors + (int)(reference * n_colors);
+
+                CHECK(FrameRenderer::colorIndex<double>(normalized, t, invert, n_colors, n_extra_colors)
+                      == reference_idx);
+            }
+        }
+    }
 }

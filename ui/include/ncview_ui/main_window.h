@@ -36,6 +36,7 @@
 // actively wrong here since in_timer_set() takes a std::function.
 #include "ncview/includes.h"
 #include "ncview/defines.h"
+#include "ncview/frame_renderer.h"
 #include "ncview/protos.h"
 
 namespace ncview_ui {
