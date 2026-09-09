@@ -762,6 +762,65 @@ scratch ASan/UBSan/LSan build.
 `fi_dim_value_convert`), the largest untested surface the inventory
 found and the feature the program exists for.
 
+## Phase 3c: the multi-file read path
+
+`fi_get_data_iterate()` (`file.cc`), `virt_to_actual_place()`'s
+multi-file branch (`util.cc`), `fi_dim_value_convert()`'s cross-file
+time-unit reconciliation (`file.cc`), and
+`Dataset::cacheScalarCoordInfo()`'s `timestep_2_fdb` construction
+(`dataset.cc`) all had zero direct tests -- every existing `fi_get_data`
+test used a single-file variable, so `fi_get_data()`'s
+`is_virtual && count[0]>1` branch that delegates to
+`fi_get_data_iterate()` had never actually run.
+
+`NcFixture` deliberately doesn't cover virtual multi-file variables (its
+own header comment says so, by design -- Phase 0b scoped it to the
+common single-file shape). `tests/test_multifile.cc` hand-rolls its
+fixture the way `test_varlist.cc`'s `make_virtual_piece()` already does,
+extended with a distinguishing per-file data offset (so a
+boundary-spanning read's returned values can be traced to the file they
+actually came from) and, for the reconciliation test, deliberately
+different time units on each file's record dimension.
+
+Covers: `fi_get_data`/`fi_get_data_iterate` spanning a file boundary
+(reads starting mid-file, ending mid-file, and covering the whole
+series); `virt_to_actual_place` at every file's first and last virtual
+timestep in a 3-file (3+2+4 timestep) series; `Dataset::
+cacheScalarCoordInfo`'s `timestep_2_fdb` mapping every virtual timestep
+to its owning `FDBlist*`; and `fi_dim_value` reconciling a value read
+from a file whose time units differ from the series' first file (day 5
+in "days since 2000-01-15" correctly reconciled to day 19 in "days
+since 2000-01-01", a 14-day epoch difference).
+
+**One real bug, in the new test's own fixture, not in production code.**
+The first draft declared "time" as a plain fixed-size dimension. netCDF
+only treats the *unlimited* dimension as the record dimension, and
+`netcdf_fill_aux_data()` only ever populates `FDBlist::recdim_units`
+from the record dimension's units attribute -- so with a fixed-size
+"time" dim, `recdim_units` stayed empty on every file, which is exactly
+the guard condition that makes `fi_dim_value_convert()` skip
+reconciliation. The reconciliation test passed for the wrong reason (it
+would have passed identically whether or not the conversion code ran at
+all) until this was caught by checking *why* it passed, not just that it
+did. Fixed by declaring the dimension `NC_UNLIMITED`. That surfaced a
+second, related mistake: writing to an unlimited-dimension variable with
+`nc_put_var_*` ("whole variable") infers the write shape from the
+dimension's *current* length, which for a fresh unlimited dimension is
+0 -- it silently writes zero records. `var->size[0]` coming back as 0
+caught this immediately (a `REQUIRE` failure, not a silent pass). Fixed
+by writing via `nc_put_vara_*` with an explicit start/count instead.
+
+Verified: 113 tests / 2162 assertions (up from 107/1759), full 4-gate
+suite including all 13 `ui_smoke.sh` goldens byte-identical, two
+`--order-by=rand` seeds, and a clean scratch ASan/UBSan/LSan build.
+
+**Next: 3d** -- delete the confirmed dead code the inventory found
+(four dangling `protos.h` declarations, the unreachable `udu.cc` stub
+block, several zero-caller functions), then 3e/3f (pure file motion:
+`ViewerController`/`ViewerSession` method bodies out of `view.cc` into
+the files named after their classes, and `ncview.cc`'s license text into
+its own file).
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
