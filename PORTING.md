@@ -1253,6 +1253,139 @@ survives.
 This completes Phase 5 (5a/5b/5c) as scoped in the round-3 reassessment.
 Phase 6 (the `fi_*`/`netcdf_*` collapse) is unblocked.
 
+## Phase 6: collapse the `fi_*`/`netcdf_*` double layer (partial)
+
+The largest remaining structural phase (~2,780 lines across `file.cc` and
+`file_netcdf.cc`), landed as a coherent, fully-verified **subset** of the
+plan's Phase 6 scope rather than the whole thing in one pass — the
+call-site count for the remaining piece (below) made that the safer
+split. Eight commits, each independently verified:
+
+**Dead code and the circular dependency (step 1).** `nc_print_group_structure()`
+had zero callers anywhere — confirmed by grep, not assumed — and was
+deleted outright. `netcdf_varindex_to_name()`, `netcdf_global_att_string()`
+and `netcdf_dimvar_bounds_id()` were declared in `protos.h` with what the
+round-3 survey called "zero callers project-wide", but each has a real
+caller from *within* `file_netcdf.cc` itself — not dead, just wearing
+external linkage they don't need. Made `static`, matching Phase 3d's
+precedent for the identical situation. The genuine circular dependency
+the round-3 survey found — `file_netcdf.cc` calling back UP into
+`file.cc`'s dispatch layer (`fi_scannable_dims()`, `fi_n_dims()` ×2) purely
+to reach `netcdf_scannable_dims()`/`netcdf_fi_n_dims()`, the same backend
+this file already is — is broken: every call site in `file_netcdf.cc`
+now calls the `netcdf_*` primitive directly, like every other call in the
+file already did.
+
+**`NetCDFFile::open()` (step 2).** `NetCDFFile` previously had only
+`explicit NetCDFFile(int fileid)`, adopting an already-open id; the only
+production way to open a file is `fi_initialize()`/`netcdf_fi_initialize()`,
+and both `exit(-1)` on failure, so the nonexistent/unreadable/not-netCDF
+cases have never been reachable in-process. `NetCDFFile::open(path,
+nc_errcode)` opens read-only via `nc_open()` and returns
+`std::optional<NetCDFFile>` — `nullopt` on failure, with the netCDF error
+code available via the out-parameter. `std::optional`, not
+`std::expected`: the project targets C++17. Deliberately **not** wired
+into the production startup path — changing `fi_initialize()`'s
+`exit()`-on-failure behavior is a separate decision this phase didn't
+make. `tests/test_netcdf_file.cc` (new): the RAII guarantee nothing
+previously proved (destruction actually closes the fd), reopening the
+same path twice, move construction/assignment (including that
+move-assignment closes the target's previous file first), and opening N
+files then confirming all N close on scope exit.
+
+**A real bug, found by the shuffled-order gate (its own commit).** With
+`open()` able to construct a `NetCDFFile` without `determine_file_type()`
+ever having run, `NetCDFFile::close()` → `fi_close()` → `file.cc`'s
+`file_type` dispatch hit the dead `else` branch and called `exit(-1)`,
+killing the whole test binary — reproduced with `--rand-seed=1`.
+Previously invisible because the only production path to a `NetCDFFile`
+(`Dataset::trackFile()` ← `fi_initialize()`) always ran after
+`determine_file_type()`; `open()` doesn't share that invariant and was
+never asked to. Fixed by having `NetCDFFile::close()` call
+`netcdf_fi_close()` directly — itself a small piece of the collapse,
+since `NetCDFFile` is already irrevocably the netCDF backend.
+
+**Removed `Dataset::addVariable()`'s dead `nfiles` parameter.** Phase 5a
+had pinned, rather than fixed, that this parameter — threaded from
+`ncview.cc` through `fi_initialize()` through `Dataset::addVariables()`
+into `Dataset::addVariable()` — was accepted but never read. Now that
+this exact call chain is being restructured, removed it outright rather
+than carrying it forward: dropped from all three functions, `ncview.cc`'s
+now-unused local variable removed, the dedicated characterization test
+for its no-op-ness deleted (no longer applicable), and 32 call sites
+across 14 test files updated.
+
+**Guarded `netcdf_fill_aux_data()` against a null `aux_data`.** The other
+Phase 5a finding: an unconditional `fdb->aux_data.get()` dereference,
+safe today only because the sole real caller (`new_fdblist()`) always
+pre-allocates it. Added a guard right before the first dereference (the
+independent `recdim_units` work above it still runs regardless); a
+collapse touching this function is exactly the point at which leaving a
+known latent crash in place stops being the safer choice. New regression
+test constructs a bare `FDBlist` with no `aux_data` and confirms no crash.
+
+**Moved the multi-file functions onto `Dataset`.** `fi_get_data()`/
+`fi_get_data_iterate()`, `fi_dim_value()`, `fi_dim_value_convert()`, and
+`fi_fill_value()` all act on an `NCVar` spanning however many files it
+actually lives in, not on one open file id — every call site already
+passed an `NCVar*` as the primary argument, unlike the 13 single-file
+forwarders (see "Deferred" below). Became `Dataset::getData()`/
+`getDataIterate()` (private), `Dataset::dimValue()`, and
+`Dataset::fillValue()`; `dimValueConvert()` stayed a free function in
+`dataset.cc`'s existing anonymous namespace (Phase 4b's `new_netcdf()`/
+`new_fdblist()`/`equivalent_FDBs()` precedent) since it touches no
+`Dataset` state. Each dropped the same dead `file_type` dispatch step 1
+already removed from `NetCDFFile::close()`, calling `netcdf_fi_get_data()`/
+`netcdf_dim_value()`/`netcdf_fill_value()` directly. `Dataset::dimValue()`
+also drops an `if(1==0){...}` block of unreachable debug `printf()`s
+carried along verbatim inside the old `fi_dim_value()` — provably dead,
+not a behavior change. 25 call sites across 8 files updated to
+`g_dataset.<method>(...)`.
+
+**New coverage for `netcdf_fill_value()`/`netcdf_fill_aux_data()`.**
+`_FillValue`/`missing_value` precedence and `scale_factor`/`add_offset`
+unpacking had zero coverage anywhere — confirmed by grep. 13 new
+`tests/test_file_netcdf.cc` cases cover the three-attribute precedence
+order (each found attribute overwrites the last, so a global
+`missing_value` beats both var-level attributes — genuinely surprising
+until the code is read), the netCDF-type-default fallback, scale/offset
+unpacking (alone and combined, and skipped entirely with a null
+`aux_data`), and `netcdf_fill_aux_data()`'s own attribute reads. One of
+these tests' own first draft got a real, pre-existing behavior wrong and
+had to be corrected by reading the code (this plan's standing rule, not
+a one-off): with `add_offset` **and** `scale_factor` both set but no
+`valid_range` attribute, the "assume they apply to the valid range too"
+special case also transforms `valid_min`/`valid_max` in place — not a
+bug, but easy to assume otherwise, and now pinned rather than silently
+assumed away.
+
+**Deferred, and why.** The 13 pure single-file forwarders (`fi_list_vars`,
+`fi_title`, `fi_long_var_name`, `fi_var_units`, `fi_dim_units`,
+`fi_n_dims`, `fi_scannable_dims`, `fi_var_size`, `fi_dim_id_to_name`,
+`fi_dim_name_to_id`, `fi_dim_longname`, `fi_recdim_id`,
+`fi_fill_aux_data`) were *not* migrated onto `NetCDFFile` methods this
+round. Unlike the multi-file functions, most call sites hold only a bare
+`int fileid` threaded down through several layers of their own callers
+(`view.cc`, `viewer_controller.cc`, `viewer_session.cc`, `do_print.cc`,
+`var_metadata.cc` — 40+ call sites total, confirmed by grep before
+scoping this phase), not an `NCVar*`/`FDBlist*`/`NetCDFFile*` already in
+hand — turning each into a method call means first getting a
+`NetCDFFile*` to call it on, which ripples into the signature of
+whatever function held the bare `int` in the first place. That's a real,
+separate migration with its own per-call-site verification burden, not
+a mechanical finish to this phase; it stays queued as Phase 6's
+remaining half rather than rushed here. Also deferred:
+`test_file_metadata.cc` for the ~350 lines of netCDF-4 group-handling
+code (`file_netcdf.cc`) still at zero coverage — orthogonal to
+everything else in this phase and sizable enough to deserve its own
+tests-first pass.
+
+169→190 tests, 4596→4831 assertions across the phase. Full verification
+(4-gate + ASan/UBSan/LSan + shuffled order across many seeds) clean at
+every commit; `grep -rn` confirms no reference survives to any
+renamed/moved/deleted symbol, and the circular dependency is actually
+broken, not relocated.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
