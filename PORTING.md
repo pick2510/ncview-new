@@ -698,6 +698,70 @@ re-enter core mid-call (a nested `draw()` fired from inside a dialog
 callback) -- not something the current stub does, and its own piece of
 design work, not a Phase 2 side quest.
 
+## Phase 3: verify, then split (3a/3b so far)
+
+A three-agent codebase inventory preceded this phase and replaced several
+of the plan's guesses with facts -- see the plan file's "Reassess here"
+section (2026-09-09) for the full list. Two corrections were significant
+enough to change what got built:
+
+**3a -- CI had never run on this branch.** `.github/workflows/ci.yml`
+triggered on push to `master` and on pull requests only; `OOP_redesign`
+had neither. All 29 commits since the branch was created (everything in
+this file above this section) had been verified on Linux alone. Added
+`OOP_redesign` to `ci.yml`'s push branches and, while there, a "Test
+(shuffled order)" step after every job's existing `ctest` step -- run by
+invoking the test binary directly with `--order-by=rand`, since `ctest`
+has no supported way to forward extra arguments to the test command it
+runs. First run: all five jobs (linux, macos, windows, sanitize,
+linux-static) passed clean, including the new shuffled step -- the
+branch was in good shape, it had simply never been checked.
+
+**3b -- one lead in the plan was wrong; the other was real.** The plan's
+"Reassess" section claimed `view.cc:826`'s `netcdf_fi_initialize()` call
+(inside `View::checkNewData()`) leaked a file descriptor once per second
+during paused playback. Checking the surrounding lines before writing a
+test for it found `view.cc:831` is `nc_close(t_ncid)` -- `git log -L`
+confirmed this close call predates the entire refactor branch. No leak;
+nothing to fix. Recorded as a correction rather than silently dropped,
+since the plan's own inventory-then-act discipline is only worth
+following if a wrong inventory claim gets caught and written down, not
+quietly abandoned.
+
+The second lead, checked independently rather than taken on trust,
+turned out to be real: `do_print()`/`build_print_info()` (`do_print.cc`)
+dereference `view->variable` and friends roughly 30 times with no null
+guard, reachable via `Button::Print`. `test_button_dispatch.cc`'s
+dispatch loop always selects a variable before testing `Button::Print`,
+so this path had never executed. Confirmed by temporarily adding a
+scratch test that dispatched `Button::Print` with no variable selected
+(reverted before committing, never landed) -- SIGSEGV, immediately.
+Fixed with the same guard pattern Phase 2 used throughout: an early
+`if (view == NULL) return;` in `do_print()`, matching the "no variable
+selected yet" session fact rather than "view might be null" in general.
+`test_view_null_guards.cc` gained a test pinning the fixed (no-op)
+behavior.
+
+This is also the first bug in this plan that couldn't be "tests first"
+in the usual sense -- the unmodified behavior was a crash, not a wrong
+answer, so there's no way to commit a normally-passing test against it.
+Handled the same way Phase 0a's and Phase 1's crash-class bugs were:
+verify the crash manually (here, with a throwaway test case, run once,
+then discarded before committing), fix and the regression test land
+together, and the verification section documents that the crash was
+reproduced rather than assumed.
+
+Verified: 107 tests / 1759 assertions (up from 106/1757), the full
+4-gate suite including all 13 `ui_smoke.sh` goldens byte-identical
+(including `print`, confirming the guard doesn't change the with-a-
+variable-selected path), a 2-seed `--order-by=rand` check, and a clean
+scratch ASan/UBSan/LSan build.
+
+**Next: 3c** -- test the multi-file/file-series read path
+(`fi_get_data_iterate`, `virt_to_actual_place`'s multi-file branch,
+`fi_dim_value_convert`), the largest untested surface the inventory
+found and the feature the program exists for.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
