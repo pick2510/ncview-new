@@ -1694,6 +1694,91 @@ two files are exactly the ones documented above.
 Phase 9 (`ui/`), and Phase 10 (coverage/fuzz CI) are all available next,
 fully specified, per the plan file's status table.
 
+## Phase 8: coverage for, then split, `ncview.cc`
+
+`parse_options()` (246 lines) and the colormap-loading path
+(`initialize_colormaps()`/`init_cmap_from_file()`, ~245 lines with their
+four `static` helpers) were both at zero direct test coverage. The line
+count the earlier sketch used (1,599) was stale -- Phase 3f had already
+split `legal_text.cc`'s GPL text out, leaving `ncview.cc` at 892 lines --
+corrected before starting, per this plan's "verify before acting" rule.
+
+**Tests first** (`tests/test_cli_options.cc`, `tests/test_colormaps.cc`),
+landed and passing against the unmodified functions, confirmed by
+stashing the split commit and rebuilding: same 240 tests / 6614
+assertions with or without the split applied. `parse_options()` writes
+directly into the global `options` struct rather than returning a value,
+so tests assert against `options`' post-call state. Two real, current
+quirks got pinned rather than fixed, both caught by tracing the index
+arithmetic directly rather than trusting a first read: `-minmax all` and
+`-minmax exh` silently map to the same `MinMaxMethod::Exhaust` (no
+separate enumerator exists for "all"), and `-repl` sets `options.blowup`
+(the magnitude), not `options.blowup_type`, exactly per the code's own
+preserved comment. One near-miss corrected before landing: `-missvalrgb`
+looked buggy on a first read (`argv[i+1]` appears three times with a
+single `i++` between each) but is actually correct -- the `i++`
+increments *before* each subsequent read, so r/g/b each read their own
+argument. Deliberately uncovered: every `exit()` path (missing required
+arguments, out-of-range `-nc`/`-maxsize`, `-w`/`-c`, an unrecognized
+flag) -- calling any of these in-process kills the test binary, the same
+category of gap as Phase 5a's `determine_file_type` rejection path.
+
+`initialize_colormaps()`/`init_cmap_from_file()` are the only two
+externally-declared entry points (`ncview/protos.h`); their four helpers
+stay `static`, so -- matching this plan's established practice of
+testing through public entry points rather than a file's private
+implementation (`do_print.cc`'s `build_print_info`, `file.cc`'s
+`netcdf_*` internals) -- they're exercised only indirectly, through
+`initialize_colormaps()`'s directory-scanning path (an isolated `$HOME`
+and a chdir'd scratch `.`, since the function unconditionally scans both
+with no way to suppress either). Extended `stub_interface.cc`'s
+`in_create_colormap()`/`x_seen_colormap_name()` to actually capture and
+script their arguments (`g_created_colormaps`, `g_seen_colormap_names`)
+instead of only recording that a call happened -- the same category of
+extension as Phase 4a's `printer_options()`/`in_print()` capture, needed
+because "a colormap was created" can't distinguish a correct load from a
+silently wrong one. All 25 built-in colormaps' names and one's exact
+content (`bw`, an exact grayscale ramp) are asserted; malformed files
+(too few lines, wrong entry count, an out-of-range component) and the
+duplicate-name skip are all confirmed via `init_cmap_from_file()`
+directly.
+
+**Step 2's scope, decided rather than hedged**: `options.` is referenced
+242 more times across 10 other `core/src` files (`file.cc`,
+`file_netcdf.cc`, `dataset.cc`, `var_metadata.cc`, `view.cc`,
+`viewer_controller.cc`, `viewer_session.cc`, `render_pipeline.cc`,
+`overlay.cc`, `do_print.cc`) -- grepped directly before choosing, per the
+plan's standing rule. Redesigning `parse_options()` to return a populated
+`StartupSettings` instead would mean redesigning `Options`' entire
+reference-member wiring (`viewer_session.cc:46-57`), a project-wide API
+change no single phase should absorb as a side effect of a file split.
+Took the plan's explicitly-allowed minimum-viable option instead: pure
+file motion, `parse_options()` still writing into `options`.
+`cli_options.cc` (291 lines) gets `parse_options()` alone;
+`colormap_library.cc` (330 lines) gets the two public entry points plus
+their four `static` helpers and the 24 colormap-data `#include`s.
+`ncview.cc` drops to 359 lines.
+
+Incidental, out of scope, left alone: `create_default_colormap()`
+(`ncview.cc`) is dead code -- declared in `protos.h`, defined, called
+nowhere in production or tests except one comment. Not deleted here;
+this phase's directive was coverage-then-split, not a dead-code sweep,
+and it doesn't block anything.
+
+Verified twice -- once for the tests-only commit (stashed the split,
+rebuilt, ran the full suite), once for the final split state: clean
+`-Werror` build; `ctest` normal + `--order-by=rand` (seeds 3, 17 -- seed
+17's 6615-vs-6614 count matches the pre-existing, already-documented
+`test_do_print.cc` order-dependence, not a regression);
+`ncview_core_linkcheck` exit 0; all 13 `ui_smoke.sh` goldens
+byte-identical; a scratch ASan/UBSan/LSan build clean (240/240, no
+reports); `grep -rn` confirms no stale reference to any moved symbol
+survives in `ncview.cc`. 216->240 tests, 5733->6614 assertions.
+
+**Phase 8 is now complete.** Phase 9 (`ui/`) and Phase 10 (coverage/fuzz
+CI) are both available next, fully specified, per the plan file's status
+table.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
