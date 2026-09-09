@@ -263,14 +263,7 @@ TEST_CASE("fi_fill_aux_data forwards to netcdf_fill_aux_data") {
     // ->aux_data/->ut_unit_ptr are touched), so two bare FDBlists with no
     // NetCDFFile attached are enough to compare -- avoids constructing a
     // second NetCDFFile over the same already-tracked fileid, which would
-    // double-close it. aux_data DOES have to be pre-allocated, though:
-    // netcdf_fill_aux_data() unconditionally dereferences fdb->aux_data.get()
-    // once the target variable has any attributes at all (it does here --
-    // "units"/"long_name") with no null check, exactly as new_fdblist()
-    // (dataset.cc), the only production caller, always pre-allocates it
-    // before calling. Leaving it default-constructed (nullptr) here
-    // reproduces a real SIGSEGV, confirmed while writing this test -- see
-    // this file's PORTING.md writeup.
+    // double-close it.
     FDBlist via_fi;
     via_fi.filename = f.path;
     via_fi.aux_data = std::make_unique<NetCDFOptions>();
@@ -284,6 +277,33 @@ TEST_CASE("fi_fill_aux_data forwards to netcdf_fill_aux_data") {
     CHECK(via_fi.recdim_units == via_netcdf.recdim_units);
     CHECK(via_fi.recdim_units == "days since 2000-01-01");
     CHECK((via_fi.aux_data != nullptr) == (via_netcdf.aux_data != nullptr));
+}
+
+TEST_CASE("netcdf_fill_aux_data: a null aux_data no longer crashes (Phase 6 regression test)") {
+    // Phase 5a found -- via a real SIGSEGV while constructing a bare
+    // FDBlist for the test above, before it pre-allocated aux_data --
+    // that netcdf_fill_aux_data() unconditionally dereferenced
+    // fdb->aux_data.get() once the target variable has any attributes at
+    // all (it does here -- "units"/"long_name"), with no null check.
+    // Safe in production only because new_fdblist() (dataset.cc), the
+    // sole real caller, always pre-allocates it first. 5a pinned this
+    // as-is (tests-only phase); Phase 6 added a guard instead of leaving
+    // it as a latent crash, since a collapse touching this function is
+    // exactly the point at which "leave it as a known gap" stops being
+    // the safer choice. This test proves the guard: recdim_units (set
+    // before the guarded section) still gets filled in, and the call
+    // simply returns without touching the null aux_data instead of
+    // segfaulting.
+    BareFile f("layer_fill_aux_null");
+
+    FDBlist fdb;
+    fdb.filename = f.path;
+    REQUIRE(fdb.aux_data == nullptr);
+
+    netcdf_fill_aux_data(f.fileid, (char *)"layer_fill_aux_null", &fdb);
+
+    CHECK(fdb.recdim_units == "days since 2000-01-01");
+    CHECK(fdb.aux_data == nullptr);
 }
 
 // ===================== fi_dim_calendar's override branch =====================

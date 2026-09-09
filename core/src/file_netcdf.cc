@@ -1431,7 +1431,20 @@ void netcdf_fill_aux_data( int id, char *var_name, FDBlist *fdb )
 	if( n_atts == 0 )
 		return;
 
-	netcdf->valid_range_set = 
+	/* netcdf was fetched from fdb->aux_data.get() above, before the
+	 * recdim_units work -- that's independent of it and still runs
+	 * regardless. Every real caller (Dataset::addVariable(), via
+	 * new_fdblist()) pre-allocates aux_data before reaching here, but
+	 * nothing enforced that invariant in this function: Phase 5a found
+	 * this via a real SIGSEGV while constructing a bare FDBlist without
+	 * it (see tests/test_file_layer.cc), pinned it rather than fixing it
+	 * (5a was tests-only), and flagged it for Phase 6. Guarding here,
+	 * rather than dereferencing blindly, matches this file's existing
+	 * style of checking preconditions instead of assuming them. */
+	if( netcdf == NULL )
+		return;
+
+	netcdf->valid_range_set =
 	    netcdf_get_att_util( gid, varid, var_name_ng, "valid_range",  2, netcdf->valid_range );
 	netcdf->valid_min_set = 
 	    netcdf_get_att_util( gid, varid, var_name_ng, "valid_min",    1, &(netcdf->valid_min) );
