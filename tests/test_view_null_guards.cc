@@ -75,3 +75,19 @@ TEST_CASE("view.cc null guards: every relocated entry point is a documented no-o
         CHECK(view == nullptr);
     }
 }
+
+// do_print()/build_print_info() (do_print.cc) dereference view->variable
+// and friends ~30 times with no null guard, reachable via Button::Print
+// (viewer_controller.cc's dispatch()) before any variable is selected.
+// Phase 3b of the "refine the architecture" plan confirmed this crashes
+// (SIGSEGV) against the unguarded function, then added the guard --
+// same "no variable selected yet" session fact as the entry points above.
+TEST_CASE("do_print: Print with no variable selected is a silent no-op, not a crash") {
+    SessionFixture fx;
+    ensure_ncview_misc_initialized();
+    print_init();
+
+    REQUIRE(view == nullptr);
+    do_print();
+    CHECK(view == nullptr);
+}

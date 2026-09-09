@@ -103,6 +103,14 @@ do_print( void )
 #ifdef DEBUG
 	fprintf( stderr, "entering do_print()\n" );
 #endif
+	/* Reachable via Button::Print before any variable has been selected
+	 * (e.g. pressing Print immediately on startup) -- view->variable
+	 * and everything build_print_info() reads below is otherwise
+	 * dereferenced unconditionally. Same "no variable selected yet"
+	 * session fact Phase 2 guarded view.cc's entry points against. */
+	if( view == NULL )
+		return;
+
 	x_size = view->variable->size[view->x_axis_id];
 	y_size = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
