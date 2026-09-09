@@ -275,58 +275,6 @@ int ImageView::handle( int event )
 
 /* ===================== Colorbar ===================== */
 
-namespace {
-// Direct port of upstream cbar.c's "nice round numbers" tick-level picker
-// (mynormalize/nlev_from_step/genlevs), unchanged, so the colorbar lands on
-// the same 1/2/5 x10^n step sizes and tick count upstream's does instead of
-// just labeling the two endpoints.
-void cbarNormalize( double value, double *mantissa, double *exponent )
-{
-	if( value == 0.0 ) { *mantissa = 0.0; *exponent = 0.0; return; }
-	double q = std::log10( value );
-	*exponent = (double)(int)q;
-	*mantissa = value / std::pow( 10.0, *exponent );
-	if( q < 0.0 ) { *exponent -= 1.0; *mantissa *= 10.0; }
-}
-
-void cbarNlevFromStep( double step, double mindat, double maxdat, int *nlev, double *start )
-{
-	int n0 = (int)(maxdat/step);
-	double cursor = (double)n0 * step;
-	while( cursor > mindat ) { n0--; cursor = (double)n0 * step; }
-	int n1 = (int)(mindat/step);
-	cursor = (double)n1 * step;
-	while( cursor < maxdat ) { n1++; cursor = (double)n1 * step; }
-	*nlev = n1 - n0 + 1;
-	*start = (double)n0 * step;
-}
-
-bool cbarGenlevs( double mindat, double maxdat, int nlevels, double *start, int *nlevs, double *step )
-{
-	if( nlevels < 2 || maxdat <= mindat ) return false;
-	static const int kTrial[4] = { 1, 2, 5, 10 };
-	double trialstep = (maxdat - mindat) / (double)(nlevels - 1);
-	double mant, expon;
-	cbarNormalize( trialstep, &mant, &expon );
-	double fact = std::pow( 10.0, expon );
-	for( int i = 0; i < 3; i++ ) {
-		if( mant < kTrial[i] || mant > kTrial[i+1] ) continue;
-		double step1 = kTrial[i]*fact, step2 = kTrial[i+1]*fact;
-		int n1, n2;
-		double start1, start2;
-		cbarNlevFromStep( step1, mindat, maxdat, &n1, &start1 );
-		cbarNlevFromStep( step2, mindat, maxdat, &n2, &start2 );
-		if( std::abs( n1 - nlevels ) <= std::abs( n2 - nlevels ) ) {
-			*step = step1; *nlevs = n1; *start = start1;
-		} else {
-			*step = step2; *nlevs = n2; *start = start2;
-		}
-		return true;
-	}
-	return false;
-}
-} // namespace
-
 Colorbar::Colorbar( int x, int y, int w, int h ) : Fl_Widget( x, y, w, h )
 {
 	std::memset( colormap_r_, 128, sizeof(colormap_r_) );
@@ -380,7 +328,7 @@ void Colorbar::draw()
 
 	double start, step;
 	int nlev;
-	if( !cbarGenlevs( user_min_, user_max_, nlev_target, &start, &nlev, &step ) )
+	if( !FrameRenderer::niceTickLevels( user_min_, user_max_, nlev_target, &start, &nlev, &step ) )
 		return;
 
 	fl_color( FL_BLACK );

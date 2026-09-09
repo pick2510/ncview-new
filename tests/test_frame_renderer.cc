@@ -180,3 +180,46 @@ TEST_CASE("FrameRenderer::colorIndex<double>: matches Colorbar::draw()'s pre-Pha
         }
     }
 }
+
+TEST_CASE("FrameRenderer::niceTickLevels: degenerate inputs return false") {
+    // Extracted from ui/'s Colorbar::draw() (Phase 9), which previously had
+    // no test at all -- ui/ has no unit test binary, only tests/ui_smoke.sh's
+    // screenshot goldens, which show tick labels too small/few to catch a
+    // subtle stepping regression. Pure arithmetic, no FLTK dependency, so it
+    // belongs in core the same way colorIndex() does.
+    double start, step;
+    int nlevs;
+
+    CHECK_FALSE(FrameRenderer::niceTickLevels(0.0, 10.0, 1, &start, &nlevs, &step));   // nlevels < 2
+    CHECK_FALSE(FrameRenderer::niceTickLevels(10.0, 10.0, 5, &start, &nlevs, &step));  // maxdat == mindat
+    CHECK_FALSE(FrameRenderer::niceTickLevels(10.0, 0.0, 5, &start, &nlevs, &step));   // maxdat < mindat
+}
+
+TEST_CASE("FrameRenderer::niceTickLevels: picks 1/2/5 x10^n steps covering the range") {
+    struct Case { double mindat, maxdat; int target; };
+    for (const Case &c : {
+             Case{0.0, 100.0, 5}, Case{0.0, 1.0, 4}, Case{260.9, 295.0, 5},
+             Case{-50.0, 50.0, 6}, Case{0.001, 0.009, 4}, Case{1.0, 1000.0, 3},
+         }) {
+        CAPTURE(c.mindat);
+        CAPTURE(c.maxdat);
+        CAPTURE(c.target);
+
+        double start, step;
+        int nlevs;
+        REQUIRE(FrameRenderer::niceTickLevels(c.mindat, c.maxdat, c.target, &start, &nlevs, &step));
+
+        // step must be exactly 1, 2, or 5 times a power of 10 (matching
+        // kTrial in the implementation) -- not just "some positive number".
+        double mant = step / std::pow(10.0, std::floor(std::log10(step) + 1e-9));
+        bool is_nice_mantissa = std::fabs(mant - 1.0) < 1e-9 || std::fabs(mant - 2.0) < 1e-9
+                                 || std::fabs(mant - 5.0) < 1e-9;
+        CHECK(is_nice_mantissa);
+
+        // The generated levels must actually cover [mindat, maxdat]: start
+        // <= mindat, and start + (nlevs-1)*step >= maxdat.
+        CHECK(start <= c.mindat + 1e-9);
+        CHECK(start + (nlevs - 1) * step >= c.maxdat - 1e-9);
+        CHECK(nlevs >= 2);
+    }
+}

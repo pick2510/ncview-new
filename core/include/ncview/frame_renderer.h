@@ -97,4 +97,22 @@ public:
 			data = 1. - data;
 		return (int)(data * n_colors) + n_extra_colors;
 	}
+
+	/* Picks "nice" (1/2/5 x10^n) tick-mark levels covering [mindat, maxdat],
+	 * targeting nlevels ticks -- e.g. for labeling a colorbar or axis with
+	 * round numbers instead of the two raw endpoints. Pulled out of ui/'s
+	 * Colorbar::draw() (Phase 9 of the "refine the architecture" plan),
+	 * where it lived as three free functions (cbarNormalize/
+	 * cbarNlevFromStep/cbarGenlevs) in an anonymous namespace: pure
+	 * arithmetic with no FLTK/widget dependency at all, so ui/'s own unit
+	 * test binary (there isn't one -- see PORTING.md's Phase 9 entry) was
+	 * never actually required to test it; it belongs here instead, next to
+	 * colorIndex() for the same reason. Returns false (leaving the out
+	 * parameters untouched) for a degenerate range or fewer than 2
+	 * requested levels, matching cbarGenlevs()'s original contract exactly
+	 * -- ui/'s Colorbar::draw() already handles a false return by skipping
+	 * tick labels for that frame. */
+	static bool niceTickLevels(
+		double mindat, double maxdat, int nlevels,
+		double *start, int *nlevs, double *step );
 };
