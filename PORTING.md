@@ -992,6 +992,98 @@ time formatting, string helpers), now that the two previously-zero-
 coverage files it's adjacent to (`overlay.cc`, `do_print.cc`) have real
 tests.
 
+## Phase 4b: dissolve `util.cc`
+
+`util.cc` (1,688 lines after Phase 3d's dead-code deletions) is gone.
+Its contents moved into five new files, in four tested-then-moved groups
+plus a final cleanup commit for the three leftover functions that didn't
+fit any group:
+
+- **`render_pipeline.cc`** (group 1): `data_to_pixels()`/`expand_data()`
+  already took a `View*` as their sole argument, so they became
+  `View::dataToPixels()` and private `View::expandData()` -- a straight
+  "move, don't split" method conversion, with the three call sites
+  (`view.cc` x2, `viewer_controller.cc`) updated to `view->dataToPixels()`.
+  `contract_data()` (already `View`-shaped, but file-`static`) became
+  private `View::contractData()` the same way. `close_enough`/`clip_f`/
+  `util_mean`/`util_mode`/`data_has_mv` have no natural `View` to attach
+  to and stayed free functions, moved verbatim. `tests/test_shrink.cc`
+  and `tests/test_expand.cc` (16 new cases) landed first, against the
+  unmodified free functions, and cover `ShrinkMethod::Mean` vs `Mode`,
+  `util_mode()`'s first-encountered tie-break, a shrink window containing
+  a missing value, a non-integer shrink factor's edge-clamp, `Replicate`
+  vs `Bilinear` at several blowup factors, and `Bilinear`'s corner/edge
+  handling.
+- **`var_metadata.cc`** (group 2): `virt_to_actual_place`,
+  `handle_dim_mapping`/`_scalar`/`_2d`, `fill_dim_structs`,
+  `is_scannable`, `determine_lat_lon`. **Correction to this plan's own
+  inventory**, found by reading `dataset.h`'s own header comment before
+  moving anything (per this plan's "verify before acting" discipline):
+  it records a *prior, deliberate* design decision that these functions
+  "stay free functions ... called from Dataset's methods the same way
+  anything else calls them", specifically because they only fill in an
+  already-allocated `NCVar*`'s fields and never touch `Dataset`'s
+  variable list itself -- unlike `add_var_to_list`/`cache_scalar_coord_
+  info`/etc., which *did* become `Dataset` methods in an earlier phase.
+  This plan's Phase 4 sketch called for "private Dataset methods" here;
+  that was wrong, and this phase respects the existing decision instead
+  of re-litigating it. `tests/test_dim_mapping.cc` (7 new cases) covers
+  the previously-untested 2-D curvilinear "coordinates" attribute mapping
+  (WRF-style `XLAT`/`XLONG`, plain `lat`/`lon`, bare `Y`/`X`, and an
+  unrecognized name that abandons the mapping). **Second correction**,
+  also found while writing that file: `determine_lat_lon()` classifies a
+  coordinate variable's *name* (a `lat`/`lon` prefix or substring,
+  case-insensitive, falling back to a bare `x`/`y` first letter) -- not a
+  *units string*, as the plan described.
+- **`epic_time.cc`** (group 3, merged into the existing file rather than
+  a new one): `handle_time_dim`/`months_calc_tgran`/`fmt_time`, the
+  `TimeStandard` dispatch layer shared across this file's `Epic0`
+  functions and `udu.cc`'s `Udunits` ones. Landed in the same commit as
+  group 2 rather than after its own separate tests-first step: group 2's
+  `fill_dim_structs()` calls `handle_time_dim()`, which was file-`static`
+  in `util.cc` -- splitting the two groups into separate TUs without
+  moving both at once would have left a real (if temporary) link error,
+  so they moved together. `handle_time_dim()` gained external linkage
+  (declared in `protos.h`) for exactly that reason; `months_calc_tgran()`
+  stayed a private helper. Existing coverage (`tests/test_time_fmt.cc`,
+  9 cases across every `TimeStandard`/calendar combination) already
+  exercised these paths and needed no expansion to stay green through
+  the move.
+- **`varname_utils.cc`** (group 4, moved first as the simplest, purely
+  mechanical group): `limit_string`, `strncmp_nocase`, `count_nslashes`,
+  `unpack_groupname`, `varname_no_groups`, `n_vars_in_list`. Pure file
+  motion, already covered by `tests/test_util.cc`/`test_varlist.cc`, no
+  new tests needed.
+- **Final cleanup commit**: the three functions left in `util.cc` after
+  the four groups moved out didn't fit any of them. `new_netcdf()` had
+  exactly one caller (`Dataset`'s `new_fdblist()`) and moved into
+  `dataset.cc`'s existing anonymous namespace, losing its external
+  linkage entirely. `set_blowup_type()` moved to `viewer_controller.cc`
+  (its primary caller, `ViewerController::blowupType()`) -- it stays a
+  free function; nothing owns it uniquely enough to justify a method.
+  `in_error()` moved to `viewer_ui_bridge.cc`, alongside every other
+  UI-seam forwarder, even though it forwards to `in_dialog()` (another
+  free function) rather than directly to `g_app.ui`. With all three
+  moved, `util.cc` was empty and deleted. Two stale doc comments this
+  move left behind got fixed in the same commit: `protos.h`'s "`in_error`
+  lives in `util.cc`" and `dataset.h`'s "stay free functions in
+  `util.cc`".
+
+`set_blowup_type`'s destination (flagged in the plan as needing a
+decision, since the inventory didn't assign one) is `viewer_controller.cc`,
+decided by checking its actual callers directly: `ViewerController::
+blowupType()` and one call inside `view.cc`'s `set_scan_variable()`
+(itself not yet a `View`/`ViewerController` method) -- majority caller
+wins, consistent with `set_blowup_type` staying a free function rather
+than becoming a method of either.
+
+Test count: 131 -> 147 tests, 3841 -> 3982 assertions (23 new
+characterization cases across `test_shrink.cc`/`test_expand.cc`/
+`test_dim_mapping.cc`; every other group was pure motion with no new
+tests needed). Full verification (4-gate + ASan/UBSan/LSan + shuffled
+order at seeds 1, 7, 42, 99) clean at every commit along the way, not
+just at the end.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
