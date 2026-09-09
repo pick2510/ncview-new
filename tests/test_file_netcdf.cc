@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <unistd.h>
 
@@ -122,6 +123,67 @@ struct SampleFile {
     }
 };
 
+// A one-variable file for netcdf_fill_value()/netcdf_fill_aux_data() tests,
+// with a caller-supplied set of float attributes on the data variable (any
+// of missing_value/_FillValue/scale_factor/add_offset, or a global
+// missing_value) -- covers the attribute-precedence and unpacking logic
+// that, before this, had zero test coverage anywhere (confirmed by grep;
+// "refine the architecture" plan, Phase 6).
+struct FillValueFile {
+    std::string path;
+    int fileid;
+
+    FillValueFile( std::optional<float> var_missing_value,
+                   std::optional<float> fill_value_attr,
+                   std::optional<float> global_missing_value,
+                   std::optional<float> scale_factor,
+                   std::optional<float> add_offset,
+                   std::optional<float> valid_min = std::nullopt,
+                   std::optional<float> valid_max = std::nullopt,
+                   bool add_unrelated_units_attr = false ) {
+        auto tmpl = (std::filesystem::temp_directory_path() / "ncview_fillval_XXXXXX").string();
+        int fd = mkstemp( &tmpl[0] );
+        REQUIRE( fd >= 0 );
+        close( fd );
+        path = tmpl;
+
+        int ncid;
+        REQUIRE( nc_create( path.c_str(), NC_CLOBBER, &ncid ) == NC_NOERR );
+        int dim_x;
+        REQUIRE( nc_def_dim( ncid, "x", 3, &dim_x ) == NC_NOERR );
+        int varid;
+        REQUIRE( nc_def_var( ncid, "data", NC_FLOAT, 1, &dim_x, &varid ) == NC_NOERR );
+
+        if( var_missing_value )
+            REQUIRE( nc_put_att_float( ncid, varid, "missing_value", NC_FLOAT, 1, &*var_missing_value ) == NC_NOERR );
+        if( fill_value_attr )
+            REQUIRE( nc_put_att_float( ncid, varid, "_FillValue", NC_FLOAT, 1, &*fill_value_attr ) == NC_NOERR );
+        if( global_missing_value )
+            REQUIRE( nc_put_att_float( ncid, NC_GLOBAL, "missing_value", NC_FLOAT, 1, &*global_missing_value ) == NC_NOERR );
+        if( scale_factor )
+            REQUIRE( nc_put_att_float( ncid, varid, "scale_factor", NC_FLOAT, 1, &*scale_factor ) == NC_NOERR );
+        if( add_offset )
+            REQUIRE( nc_put_att_float( ncid, varid, "add_offset", NC_FLOAT, 1, &*add_offset ) == NC_NOERR );
+        if( valid_min )
+            REQUIRE( nc_put_att_float( ncid, varid, "valid_min", NC_FLOAT, 1, &*valid_min ) == NC_NOERR );
+        if( valid_max )
+            REQUIRE( nc_put_att_float( ncid, varid, "valid_max", NC_FLOAT, 1, &*valid_max ) == NC_NOERR );
+        if( add_unrelated_units_attr )
+            REQUIRE( nc_put_att_text( ncid, varid, "units", 1, "K" ) == NC_NOERR );
+
+        REQUIRE( nc_enddef( ncid ) == NC_NOERR );
+        float vals[3] = { 1.0f, 2.0f, 3.0f };
+        REQUIRE( nc_put_var_float( ncid, varid, vals ) == NC_NOERR );
+        REQUIRE( nc_close( ncid ) == NC_NOERR );
+
+        fileid = open_sample_file( path );
+    }
+    ~FillValueFile() {
+        netcdf_fi_close( fileid );
+        std::remove( path.c_str() );
+    }
+};
+
 } // namespace
 
 TEST_CASE("file_netcdf: n_dims and var_size match the variable's real shape") {
@@ -191,4 +253,174 @@ TEST_CASE("file_netcdf: a name with no matching dimvar reports no values") {
     // that a same-named dimension actually exists. A name matching nothing
     // in the file at all must not crash, just report no dim values.
     CHECK(netcdf_has_dim_values(f.fileid, (char *)"nonexistent") == 0);
+}
+
+// ===================== netcdf_fill_value(): attribute precedence and unpacking =====================
+//
+// Phase 6 of the "refine the architecture" plan: netcdf_fill_value()'s
+// _FillValue/missing_value/valid_range precedence and its scale_factor/
+// add_offset unpacking had zero test coverage anywhere (confirmed by grep
+// before writing these). netcdf_fill_value() itself doesn't read valid_range
+// at all -- that's netcdf_min_max_option_set()/netcdf_get_att_util(),
+// exercised separately via Dataset::checkRanges() -- so "valid_range
+// precedence" here means what the function's own attribute-checking order
+// actually does: three float attributes checked in sequence, each one that
+// exists overwriting *v, so the LAST one found wins.
+
+TEST_CASE("netcdf_fill_value: with only _FillValue set, that value is used") {
+    FillValueFile f( std::nullopt, 42.0f, std::nullopt, std::nullopt, std::nullopt );
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, nullptr );
+    CHECK( v == doctest::Approx(42.0f) );
+}
+
+TEST_CASE("netcdf_fill_value: with only missing_value set, that value is used") {
+    FillValueFile f( -999.0f, std::nullopt, std::nullopt, std::nullopt, std::nullopt );
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, nullptr );
+    CHECK( v == doctest::Approx(-999.0f) );
+}
+
+TEST_CASE("netcdf_fill_value: _FillValue overrides a var-level missing_value") {
+    // netcdf_fill_value() checks missing_value first, then _FillValue,
+    // overwriting *v each time something is found -- so of these two,
+    // whichever is checked LAST wins, which is _FillValue.
+    FillValueFile f( -999.0f, 42.0f, std::nullopt, std::nullopt, std::nullopt );
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, nullptr );
+    CHECK( v == doctest::Approx(42.0f) );
+}
+
+TEST_CASE("netcdf_fill_value: a global missing_value overrides both var-level attributes") {
+    // The global missing_value check runs last of the three, so it wins
+    // over both a var-level missing_value AND a var-level _FillValue --
+    // a real, surprising-until-you-read-the-code precedence order.
+    FillValueFile f( -999.0f, 42.0f, /*global_missing_value=*/-1.0f, std::nullopt, std::nullopt );
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, nullptr );
+    CHECK( v == doctest::Approx(-1.0f) );
+}
+
+TEST_CASE("netcdf_fill_value: with no fill-related attribute at all, uses the type's netCDF default") {
+    FillValueFile f( std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt );
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, nullptr );
+    // "data" is NC_FLOAT.
+    CHECK( v == doctest::Approx(NC_FILL_FLOAT) );
+}
+
+TEST_CASE("netcdf_fill_value: scale_factor and add_offset both apply to the found fill value") {
+    FillValueFile f( std::nullopt, /*fill_value_attr=*/10.0f, std::nullopt,
+                      /*scale_factor=*/2.0f, /*add_offset=*/1.0f );
+    NetCDFOptions aux{};
+    aux.scale_factor_set = true;
+    aux.scale_factor = 2.0f;
+    aux.add_offset_set = true;
+    aux.add_offset = 1.0f;
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, &aux );
+    CHECK( v == doctest::Approx(10.0f * 2.0f + 1.0f) );
+}
+
+TEST_CASE("netcdf_fill_value: scale_factor alone applies without an offset") {
+    FillValueFile f( std::nullopt, /*fill_value_attr=*/10.0f, std::nullopt,
+                      /*scale_factor=*/2.0f, std::nullopt );
+    NetCDFOptions aux{};
+    aux.scale_factor_set = true;
+    aux.scale_factor = 2.0f;
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, &aux );
+    CHECK( v == doctest::Approx(20.0f) );
+}
+
+TEST_CASE("netcdf_fill_value: add_offset alone applies without a scale") {
+    FillValueFile f( std::nullopt, /*fill_value_attr=*/10.0f, std::nullopt,
+                      std::nullopt, /*add_offset=*/5.0f );
+    NetCDFOptions aux{};
+    aux.add_offset_set = true;
+    aux.add_offset = 5.0f;
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, &aux );
+    CHECK( v == doctest::Approx(15.0f) );
+}
+
+TEST_CASE("netcdf_fill_value: a null aux_data skips scale/offset unpacking entirely") {
+    // Documented at the call site (netcdf_fill_value()'s own comment):
+    // aux_data is NULL for coordinate-variable reads, which have no
+    // scale/offset attributes to apply. Confirms the found value passes
+    // through unscaled rather than crashing on a null aux_data.
+    FillValueFile f( std::nullopt, /*fill_value_attr=*/10.0f, std::nullopt, std::nullopt, std::nullopt );
+    float v = 0.0f;
+    netcdf_fill_value( f.fileid, (char *)"data", &v, nullptr );
+    CHECK( v == doctest::Approx(10.0f) );
+}
+
+// ===================== netcdf_fill_aux_data(): populating NetCDFOptions from attributes =====================
+
+TEST_CASE("netcdf_fill_aux_data: reads scale_factor/add_offset/valid_min/valid_max off the variable") {
+    FillValueFile f( std::nullopt, std::nullopt, std::nullopt, /*scale_factor=*/3.0f, /*add_offset=*/7.0f,
+                      /*valid_min=*/-5.0f, /*valid_max=*/5.0f );
+
+    FDBlist fdb;
+    fdb.filename = f.path;
+    fdb.aux_data = std::make_unique<NetCDFOptions>();
+    netcdf_fill_aux_data( f.fileid, (char *)"data", &fdb );
+
+    CHECK( fdb.aux_data->scale_factor_set );
+    CHECK( fdb.aux_data->scale_factor == doctest::Approx(3.0f) );
+    CHECK( fdb.aux_data->add_offset_set );
+    CHECK( fdb.aux_data->add_offset == doctest::Approx(7.0f) );
+    CHECK( fdb.aux_data->valid_min_set );
+    CHECK( fdb.aux_data->valid_max_set );
+    // Confirmed by reading the code, not assumed (this plan's standing
+    // rule): with add_offset AND scale_factor both set but no valid_range
+    // attribute, netcdf_fill_aux_data()'s "assume they apply to the valid
+    // range too" special case (file_netcdf.cc, right after the four
+    // netcdf_get_att_util() calls) transforms valid_min/valid_max in
+    // place -- so the values read back are NOT the raw -5/5 written above,
+    // they're valid_min*scale_factor+add_offset and
+    // valid_max*scale_factor+add_offset. First draft of this test
+    // expected the raw values and failed; this is real, pre-existing
+    // behavior, not a bug this phase should fix.
+    CHECK( fdb.aux_data->valid_min == doctest::Approx(-5.0f * 3.0f + 7.0f) );
+    CHECK( fdb.aux_data->valid_max == doctest::Approx(5.0f * 3.0f + 7.0f) );
+}
+
+TEST_CASE("netcdf_fill_aux_data: valid_min/valid_max come back unmodified with no scale_factor/add_offset") {
+    // The companion case to the test above: with neither scale_factor nor
+    // add_offset set, valid_min/valid_max are read back exactly as written.
+    FillValueFile f( std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
+                      /*valid_min=*/-5.0f, /*valid_max=*/5.0f );
+
+    FDBlist fdb;
+    fdb.filename = f.path;
+    fdb.aux_data = std::make_unique<NetCDFOptions>();
+    netcdf_fill_aux_data( f.fileid, (char *)"data", &fdb );
+
+    CHECK( fdb.aux_data->valid_min_set );
+    CHECK( fdb.aux_data->valid_min == doctest::Approx(-5.0f) );
+    CHECK( fdb.aux_data->valid_max_set );
+    CHECK( fdb.aux_data->valid_max == doctest::Approx(5.0f) );
+    CHECK_FALSE( fdb.aux_data->scale_factor_set );
+    CHECK_FALSE( fdb.aux_data->add_offset_set );
+}
+
+TEST_CASE("netcdf_fill_aux_data: an unrelated attribute present, but no scale/offset, leaves them unset") {
+    // n_atts == 0 short-circuits netcdf_fill_aux_data() before it ever
+    // checks for scale_factor/add_offset/valid_min/valid_max -- giving the
+    // variable an unrelated attribute (units) forces it past that early
+    // return, so this actually exercises the "checked, not found" path
+    // for each of the four attributes rather than the early-exit path.
+    FillValueFile f( std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
+                      std::nullopt, std::nullopt, /*add_unrelated_units_attr=*/true );
+
+    FDBlist fdb;
+    fdb.filename = f.path;
+    fdb.aux_data = std::make_unique<NetCDFOptions>();
+    netcdf_fill_aux_data( f.fileid, (char *)"data", &fdb );
+
+    CHECK_FALSE( fdb.aux_data->scale_factor_set );
+    CHECK_FALSE( fdb.aux_data->add_offset_set );
+    CHECK_FALSE( fdb.aux_data->valid_min_set );
+    CHECK_FALSE( fdb.aux_data->valid_max_set );
 }
