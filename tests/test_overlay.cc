@@ -34,6 +34,7 @@
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 #include "support/nc_fixture.h"
+#include "support/scratch_home.h"
 #include "support/session_fixture.h"
 #include "test_udunits_helper.h"
 
@@ -364,8 +365,8 @@ TEST_CASE("gen_overlay via a custom overlay file: blank and comment lines are sk
 
 TEST_CASE("determine_overlay_base_dir: honors NCVIEWBASE when set, and never overflows the buffer") {
     char buf[256];
-    setenv("NCVIEWBASE", "/some/test/overlay/dir", 1);
+    ncview_test::set_env("NCVIEWBASE", "/some/test/overlay/dir");
     determine_overlay_base_dir(buf, sizeof(buf));
     CHECK(std::string(buf) == "/some/test/overlay/dir");
-    unsetenv("NCVIEWBASE");
+    ncview_test::unset_env("NCVIEWBASE");
 }
