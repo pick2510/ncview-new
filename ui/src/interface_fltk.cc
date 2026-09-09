@@ -94,7 +94,7 @@ void FltkViewerUi::in_initialize( void )
 		else if( std::strcmp( d, "dimset" ) == 0 ) g_app.controller.dimset( Modifier::M1 );
 		else if( std::strcmp( d, "info" ) == 0 ) view->information();
 		else if( std::strcmp( d, "dataedit" ) == 0 ) view->dataEdit();
-		else if( std::strcmp( d, "plot" ) == 0 ) plot_XY();
+		else if( std::strcmp( d, "plot" ) == 0 ) g_app.controller.plotXY();
 		else if( std::strcmp( d, "overlay" ) == 0 ) do_overlay( OVERLAY_P8DEG, nullptr, false );
 		else if( std::strcmp( d, "print" ) == 0 ) {
 			// do_print() reads the printopts defaults that ncview_main()
@@ -329,7 +329,7 @@ int FltkViewerUi::in_set_2d_size( size_t width, size_t height )
 	// registered to call change_view"). FLTK has no equivalent wiring in
 	// this port, so without this the very first frame of a newly
 	// selected variable never actually gets drawn.
-	if( r >= 1 ) change_view( 0, FRAMES );
+	if( r >= 1 ) g_app.controller.stepView( 0, FRAMES );
 	return r;
 }
 

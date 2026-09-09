@@ -73,8 +73,8 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 			options.overlay->doit = false;
 			if( ! suppress_screen_changes ) {
 				view->data_status = ViewDataStatus::Invalid;
-				invalidate_all_saveframes();
-				change_view( 0, FRAMES );
+				g_app.session.invalidateAllSaveframes();
+				g_app.controller.stepView( 0, FRAMES );
 				}
 			break;
 
@@ -102,8 +102,8 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 			if( ! options.overlay->overlay.empty() ) {
 				options.overlay->doit = true;
 				if( ! suppress_screen_changes ) {
-					invalidate_all_saveframes();
-					change_view( 0, FRAMES );
+					g_app.session.invalidateAllSaveframes();
+					g_app.controller.stepView( 0, FRAMES );
 					}
 				}
 			break;
@@ -127,8 +127,8 @@ do_overlay_inner( View *v, float *data, long nvals, int suppress_screen_changes 
 	if( ! options.overlay->overlay.empty() ) {
 		options.overlay->doit = true;
 		if( ! suppress_screen_changes ) {
-			invalidate_all_saveframes();
-			change_view( 0, FRAMES );
+			g_app.session.invalidateAllSaveframes();
+			g_app.controller.stepView( 0, FRAMES );
 			}
 		}
 }

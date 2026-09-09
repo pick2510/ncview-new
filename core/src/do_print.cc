@@ -116,7 +116,7 @@ do_print( void )
 
 	in_set_cursor_busy();
 
-	view_draw( false, false ); /* Don't allow saveframes -- force reload of image data */
+	g_app.controller.draw( false, false ); /* Don't allow saveframes -- force reload of image data */
 
 	PrintInfo info;
 	info.width  = scaled_x_size;

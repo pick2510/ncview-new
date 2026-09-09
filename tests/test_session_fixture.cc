@@ -164,7 +164,7 @@ TEST_CASE("SessionFixture: framestore is invalid on entry, even after a prior te
         std::string path = make_one_var_file("frame_leftover");
         load_and_select("frame_leftover", path);
         REQUIRE(view != nullptr);
-        view_draw(1, 1);
+        g_app.controller.draw(1, 1);
         std::remove(path.c_str());
     }
 

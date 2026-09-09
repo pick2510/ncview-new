@@ -522,16 +522,19 @@ struct View {
 	void labelDimensions();
 	void flipIfInverted();
 
-	/* Phase 3: functions confirmed to have NO internal `view == NULL`
-	 * guard of their own (unlike view_draw/change_view/view_report_position/
-	 * etc., which are called from contexts -- expose events, mouse
-	 * clicks before any variable is selected -- where the global `view`
-	 * can genuinely be null, and so must stay free functions: calling a
-	 * method through a null unique_ptr is undefined behavior, and that
-	 * guard is load-bearing there). Each of these is only ever reached
-	 * once a variable is already selected, so converting them to methods
-	 * (called via `view->...`) is exactly as safe as Phase 1/2's
-	 * conversions -- verified by tracing every call site, not assumed. */
+	/* Phase 3 (of the earlier OOP_redesign view.cc triage -- not this
+	 * plan's later, differently-numbered Phase 2): functions confirmed
+	 * to have NO internal `view == NULL` guard of their own (unlike
+	 * draw()/stepView()/reportPosition()/etc., which are called from
+	 * contexts -- expose events, mouse clicks before any variable is
+	 * selected -- where the active view can genuinely not exist yet, and
+	 * so live on ViewerSession/ViewerController instead, which own the
+	 * unique_ptr and can check once internally: see PORTING.md's
+	 * "refine the architecture" Phase 2 entry). Each of these is only
+	 * ever reached once a variable is already selected, so converting
+	 * them to View methods (called via `view->...`) is exactly as safe
+	 * as Phase 1/2's conversions -- verified by tracing every call site,
+	 * not assumed. */
 	void applyCurDimPlace( int dimid, NCDim *dim, size_t place );
 	void setScanDims();
 	/* Formerly set_scan_view(): jumps the scan axis to an absolute frame
@@ -554,9 +557,10 @@ struct View {
 	void information();
 	void redrawDimensionInfo();
 	/* Formerly view_check_new_data(): also has no internal view==NULL
-	 * guard -- only reached via a timer armed from view_draw() (which
-	 * stays a free function; it has its own view==NULL guard, since
-	 * it's also called from expose events before any variable is
+	 * guard -- only reached via a timer armed from
+	 * ViewerController::draw() (which stays a session-owning method, not
+	 * a plain View one -- Phase 2 -- since it has its own view==NULL
+	 * guard: it's also called from expose events before any variable is
 	 * selected) once view is already known valid, never directly from
 	 * an expose/click event itself. */
 	void checkNewData( int unused );
@@ -569,6 +573,10 @@ private:
 	void reDetermineScanAxes( NCVar *var, View *old_view );
 	void initialSetScanPlace( NCVar *var );
 	void reSetScanPlace( NCVar *var, View *old_view );
+	/* Phase 2 postscript: formerly the file-local static free function
+	 * view_construct_scalar_coord_str() -- both its call sites were
+	 * already View methods (see core/src/view.cc). */
+	void constructScalarCoordStr( char *str, int slen );
 };
 
 /* OOP_redesign plan's name for this struct once it's owned via unique_ptr

@@ -80,7 +80,7 @@ ViewerController::restart( Modifier modifier )
 	in_timer_clear();
 
 	view->scanToPlace( 0 );
-	view_draw    ( true, false );
+	draw    ( true, false );
 
 	in_timer_clear();
 }
@@ -101,18 +101,18 @@ ViewerController::rewind( Modifier modifier )
 	in_timer_clear();
 
 	if( modifier == Modifier::M2 ) {
-		size = view_current_nt();
+		size = session_.currentNt();
 		d_delta = (double)size / 1000.0;
 		if( d_delta < 10.0 )
 			i_delta = -10;
 		else
 			i_delta = -d_delta;
-		change_view( i_delta, FRAMES );
+		stepView( i_delta, FRAMES );
 		in_timer_set( [this](){ rewind(Modifier::M2); }, delay_millisec );
 		}
 	else
 		{
-		change_view( -1, FRAMES );
+		stepView( -1, FRAMES );
 		in_timer_set( [this](){ rewind(Modifier::M1); }, delay_millisec );
 		}
 }
@@ -133,18 +133,18 @@ ViewerController::backwards( Modifier modifier )
 	in_timer_clear();
 
 	if( modifier == Modifier::M2 ) {
-		size = view_current_nt();
+		size = session_.currentNt();
 		if( size < 500 )
-			change_view( -10, PERCENT );
+			stepView( -10, PERCENT );
 		else if( size < 5000 )
-			change_view(  -5, PERCENT );
+			stepView(  -5, PERCENT );
 		else if( size < 50000 )
-			change_view(  -2, PERCENT );
+			stepView(  -2, PERCENT );
 		else
-			change_view(  -1, PERCENT );
+			stepView(  -1, PERCENT );
 		}
 	else
-		change_view( -1, FRAMES );
+		stepView( -1, FRAMES );
 
 	cur_button_ = Button::Pause;
 }
@@ -167,18 +167,18 @@ ViewerController::forward( Modifier modifier )
 	in_timer_clear();
 
 	if( modifier == Modifier::M2 ) {
-		size = view_current_nt();
+		size = session_.currentNt();
 		if( size < 500 )
-			change_view( 10, PERCENT );
+			stepView( 10, PERCENT );
 		else if( size < 5000 )
-			change_view(  5, PERCENT );
+			stepView(  5, PERCENT );
 		else if( size < 50000 )
-			change_view(  2, PERCENT );
+			stepView(  2, PERCENT );
 		else
-			change_view(  1, PERCENT );
+			stepView(  1, PERCENT );
 		}
 	else
-		change_view( 1, FRAMES );
+		stepView( 1, FRAMES );
 }
 
 /*===========================================================================================*/
@@ -197,18 +197,18 @@ ViewerController::fastforward( Modifier modifier )
 	delay_millisec = (long)(DELAY_DELTA * options.frame_delay) + DELAY_OFFSET;
 
 	if( modifier == Modifier::M2 ) {
-		size = view_current_nt();
+		size = session_.currentNt();
 		d_delta = (double)size / 1000.0;
 		if( d_delta < 10.0 )
 			i_delta = 10;
 		else
 			i_delta = d_delta;
-		if( change_view( i_delta, FRAMES ) == 0 )
+		if( stepView( i_delta, FRAMES ) == 0 )
 			in_timer_set( [this](){ fastforward(Modifier::M2); }, delay_millisec );
 		}
 	else
 		{
-		if( change_view( 1, FRAMES ) == 0 )
+		if( stepView( 1, FRAMES ) == 0 )
 			in_timer_set( [this](){ fastforward(Modifier::M1); }, delay_millisec );
 		}
 }
@@ -221,8 +221,8 @@ ViewerController::colormapSelect( Modifier modifier )
 		in_install_prev_colormap( true );
 	else
 		in_install_next_colormap( true );
-	view_draw( true, false );
-	view_recompute_colorbar();
+	draw( true, false );
+	recomputeColorbar();
 }
 
 /*===========================================================================================*/
@@ -230,8 +230,8 @@ void
 ViewerController::colormapSelectByName( const char *name )
 {
 	in_install_colormap_by_name( name, true );
-	view_draw( true, false );
-	view_recompute_colorbar();
+	draw( true, false );
+	recomputeColorbar();
 }
 
 /*===========================================================================================*/
@@ -243,7 +243,7 @@ ViewerController::invertPhysical( Modifier modifier )
 		options.invert_physical = false;
 	else
 		options.invert_physical = true;
-	view_draw( true, false );
+	draw( true, false );
 	view->redrawDimensionInfo();
 }
 
@@ -263,8 +263,8 @@ ViewerController::invertColormap( Modifier modifier )
 		options.invert_colors = false;
 	else
 		options.invert_colors = true;
-	view_draw( true, false );
-	view_recompute_colorbar();
+	draw( true, false );
+	recomputeColorbar();
 }
 
 /*===========================================================================================*/
@@ -335,7 +335,7 @@ ViewerController::blowupType( Modifier modifier )
 		set_blowup_type( BlowupType::Bilinear );
 	else
 		set_blowup_type( BlowupType::Replicate );
-	view_draw( true, false );
+	draw( true, false );
 }
 
 /*===========================================================================================*/

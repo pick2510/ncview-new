@@ -42,49 +42,49 @@ size_t current_frame() {
 
 } // namespace
 
-TEST_CASE("change_view: FRAMES steps by exactly delta frames") {
+TEST_CASE("stepView: FRAMES steps by exactly delta frames") {
     SessionFixture fx;
     NcFixture nc;
     select_nav_variable(nc, "nav_frames", 5);
     REQUIRE(current_frame() == 0);
 
-    change_view(2, FRAMES);
+    g_app.controller.stepView(2, FRAMES);
     CHECK(current_frame() == 2);
 
-    change_view(-1, FRAMES);
+    g_app.controller.stepView(-1, FRAMES);
     CHECK(current_frame() == 1);
 }
 
-TEST_CASE("change_view: FRAMES wraps to 0 past the last frame") {
+TEST_CASE("stepView: FRAMES wraps to 0 past the last frame") {
     SessionFixture fx;
     NcFixture nc;
     select_nav_variable(nc, "nav_wrap_fwd", 5);
-    change_view(4, FRAMES);
+    g_app.controller.stepView(4, FRAMES);
     REQUIRE(current_frame() == 4);
 
-    change_view(1, FRAMES);
+    g_app.controller.stepView(1, FRAMES);
     CHECK(current_frame() == 0);
 }
 
-TEST_CASE("change_view: FRAMES wraps to the last frame going below 0") {
+TEST_CASE("stepView: FRAMES wraps to the last frame going below 0") {
     SessionFixture fx;
     NcFixture nc;
     select_nav_variable(nc, "nav_wrap_bwd", 5);
     REQUIRE(current_frame() == 0);
 
-    change_view(-1, FRAMES);
+    g_app.controller.stepView(-1, FRAMES);
     CHECK(current_frame() == 4);
 }
 
-TEST_CASE("change_view: stop_on_restart pauses on the last frame instead of wrapping") {
+TEST_CASE("stepView: stop_on_restart pauses on the last frame instead of wrapping") {
     SessionFixture fx;
     NcFixture nc;
     select_nav_variable(nc, "nav_stop_on_restart", 3);
-    change_view(2, FRAMES);
+    g_app.controller.stepView(2, FRAMES);
     REQUIRE(current_frame() == 2);
 
     options.stop_on_restart = true;
-    change_view(1, FRAMES);
+    g_app.controller.stepView(1, FRAMES);
     // Would-wrap-to-0 returns immediately, before calling
     // View::scanToPlace(0) -- so the frame index is left exactly where it
     // was (2), not reset to 0. This is what actually stops the movie: the
@@ -94,36 +94,36 @@ TEST_CASE("change_view: stop_on_restart pauses on the last frame instead of wrap
     options.stop_on_restart = false;
 }
 
-TEST_CASE("change_view: PERCENT interprets delta as a percentage of scan size") {
+TEST_CASE("stepView: PERCENT interprets delta as a percentage of scan size") {
     SessionFixture fx;
     NcFixture nc;
     select_nav_variable(nc, "nav_percent", 100);
     REQUIRE(current_frame() == 0);
 
     // 10% of 100 frames == 10.
-    change_view(10, PERCENT);
+    g_app.controller.stepView(10, PERCENT);
     CHECK(current_frame() == 10);
 }
 
-TEST_CASE("change_view: PERCENT always moves at least one frame") {
+TEST_CASE("stepView: PERCENT always moves at least one frame") {
     SessionFixture fx;
     NcFixture nc;
     select_nav_variable(nc, "nav_percent_min", 5);
     REQUIRE(current_frame() == 0);
 
-    // 1% of 5 frames truncates to 0 -- change_view clamps that up to a
+    // 1% of 5 frames truncates to 0 -- stepView clamps that up to a
     // minimum single-frame step so PERCENT navigation never stalls.
-    change_view(1, PERCENT);
+    g_app.controller.stepView(1, PERCENT);
     CHECK(current_frame() == 1);
 }
 
-TEST_CASE("change_view: delta==0 redraws in place without stepping (the expose-event path)") {
+TEST_CASE("stepView: delta==0 redraws in place without stepping (the expose-event path)") {
     SessionFixture fx;
     NcFixture nc;
     select_nav_variable(nc, "nav_delta_zero", 5);
-    change_view(2, FRAMES);
+    g_app.controller.stepView(2, FRAMES);
     REQUIRE(current_frame() == 2);
 
-    CHECK(change_view(0, FRAMES) == 0);
+    CHECK(g_app.controller.stepView(0, FRAMES) == 0);
     CHECK(current_frame() == 2);
 }

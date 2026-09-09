@@ -28,50 +28,50 @@ TEST_CASE("view.cc null guards: every relocated entry point is a documented no-o
     REQUIRE(view == nullptr);
 
     SUBCASE("view_current_nt returns 0") {
-        CHECK(view_current_nt() == 0);
+        CHECK(g_app.session.currentNt() == 0);
     }
     SUBCASE("change_view returns 0 and does not crash") {
-        CHECK(change_view(1, FRAMES) == 0);
+        CHECK(g_app.controller.stepView(1, FRAMES) == 0);
         CHECK(view == nullptr);
     }
     SUBCASE("view_draw returns 0 and does not crash") {
-        CHECK(view_draw(true, false) == 0);
+        CHECK(g_app.controller.draw(true, false) == 0);
         CHECK(view == nullptr);
     }
     SUBCASE("view_change_cur_dim reports an error and does not crash") {
         char dim_name[] = "time";
-        view_change_cur_dim(dim_name, Modifier::M1);
+        g_app.controller.changeCurDim(dim_name, Modifier::M1);
         CHECK(view == nullptr);
     }
     SUBCASE("view_set_cur_dim_index reports an error and does not crash") {
-        view_set_cur_dim_index("time", 0);
+        g_app.controller.setCurDimIndex("time", 0);
         CHECK(view == nullptr);
     }
     SUBCASE("view_get_cur_dim_index returns 0") {
-        CHECK(view_get_cur_dim_index("time") == 0);
+        CHECK(g_app.session.curDimIndex("time") == 0);
     }
     SUBCASE("invalidate_all_saveframes is a silent no-op") {
-        invalidate_all_saveframes();
+        g_app.session.invalidateAllSaveframes();
         CHECK(view == nullptr);
     }
     SUBCASE("view_report_position is a silent no-op") {
-        view_report_position(1, 1, 0);
+        g_app.controller.reportPosition(1, 1, 0);
         CHECK(view == nullptr);
     }
     SUBCASE("set_min_from_curdata is a silent no-op") {
-        set_min_from_curdata();
+        g_app.controller.setMinFromCurdata();
         CHECK(view == nullptr);
     }
     SUBCASE("set_max_from_curdata is a silent no-op") {
-        set_max_from_curdata();
+        g_app.controller.setMaxFromCurdata();
         CHECK(view == nullptr);
     }
     SUBCASE("plot_XY is a silent no-op") {
-        plot_XY();
+        g_app.controller.plotXY();
         CHECK(view == nullptr);
     }
     SUBCASE("view_recompute_colorbar is a silent no-op") {
-        view_recompute_colorbar();
+        g_app.controller.recomputeColorbar();
         CHECK(view == nullptr);
     }
 }

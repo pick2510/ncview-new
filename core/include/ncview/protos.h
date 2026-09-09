@@ -206,29 +206,31 @@ Button	which_button_pressed( void );
 
 /******************************************************************************
  * in view.c
+ *
+ * "Refine the architecture" plan, Phase 2 moved the 12 entry points that
+ * used to live here -- change_view, view_draw, view_change_cur_dim,
+ * view_set_cur_dim_index, view_get_cur_dim_index, view_report_position,
+ * plot_XY, set_min_from_curdata, set_max_from_curdata,
+ * invalidate_all_saveframes, view_recompute_colorbar, view_current_nt --
+ * onto ViewerSession/ViewerController (ncview/app_context.h:
+ * g_app.session.currentNt()/curDimIndex()/invalidateAllSaveframes(),
+ * g_app.controller.stepView()/draw()/changeCurDim()/setCurDimIndex()/
+ * reportPosition()/plotXY()/setMinFromCurdata()/setMaxFromCurdata()/
+ * recomputeColorbar()). Each carried its own `view == NULL` guard that
+ * was really a session fact ("no variable selected yet"), not a
+ * genuine-anywhere possibility for a `View` method's `this`. See
+ * PORTING.md's Phase 2 entry.
  */
 int 	set_scan_variable    ( NCVar *var );
-int 	change_view          ( int delta, int interpretation );
-int	view_draw            ( int allow_saveframes_useage, int force_range_to_frame );
-void 	view_change_cur_dim  ( char *dim_name, Modifier modifier );
-void	view_set_cur_dim_index( const char *dim_name, long place );
-size_t	view_get_cur_dim_index( const char *dim_name );
 /* Formerly also declared here: view_forward()/view_backward() (never
  * defined anywhere, never called -- dead upstream declarations, removed
  * in the same Phase 1 cleanup) and redraw_ccontour() (a one-line wrapper
  * around view_draw() with zero callers, removed along with its
  * definition in view.cc). */
-void	view_report_position ( int x, int y, unsigned int button_mask );
 void 	view_report_position_vals( float xval, float yval, int plot_index );
-void 	plot_XY              ( void );
-void 	set_min_from_curdata ( void );
-void 	set_max_from_curdata ( void );
 void	beep		     ( void );
-void    invalidate_all_saveframes( void );
 void	view_get_scaled_size ( int blowup, size_t old_nx, size_t old_ny, size_t *new_nx, size_t *new_ny );
 void 	view_change_transform( int delta );
-void 	view_recompute_colorbar( void );
-long 	view_current_nt      ( void );
 
 /******************************************************************************
  * in overlay.c

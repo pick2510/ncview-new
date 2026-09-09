@@ -75,7 +75,6 @@ static void 		draw_file_info( NCVar *var );
 static void 		view_data_edit_warn();
 static void 		invalidate_variable( NCVar *var );
 static void 		mouse_xy_to_data_xy( int mouse_x, int mouse_y, int blowup, size_t *data_x, size_t *data_y );
-static void 		view_construct_scalar_coord_str( char *str, int slen );
 static float 		view_calc_minval_float( float *arr, size_t n );
 static float 		view_calc_maxval_float( float *arr, size_t n );
 static void 		strip_trailing_zeros( char *s );
@@ -336,7 +335,7 @@ set_scan_variable( NCVar *var )
 	 * is registered to call change_view.
 	 */
 	if( changed_size < 1 ) 
-	 	change_view(0,FRAMES);
+	 	g_app.controller.stepView(0,FRAMES);
 
 	/* Pop up the window if we are going to use it. */
 	in_popup_2d_window();
@@ -345,7 +344,7 @@ set_scan_variable( NCVar *var )
 
 	if( options.debug )
 		fprintf( stderr, "...recomputing colorbar\n" );
-	view_recompute_colorbar();
+	g_app.controller.recomputeColorbar();
 
 	if( options.debug )
 		fprintf( stderr, "exiting set_scan_variable.\n" );
@@ -405,19 +404,22 @@ View::setScanButtons()
 	set_buttons( set_state );
 	in_set_label( Label::ScanPlace, label );
 
-	view_construct_scalar_coord_str( scalar_coord_str, 1020 );
+	local_view->constructScalarCoordStr( scalar_coord_str, 1020 );
 	in_set_label( Label::ScalarDims, scalar_coord_str );
 }
 
 /**************************************************************************************
- * Report current size of scan azis
+ * Report current size of scan axis. Phase 2: moved from the free function
+ * view_current_nt() onto ViewerSession -- its `view == NULL` guard was
+ * standing in for "no variable selected yet", a session fact.
  */
-	long 
-view_current_nt()
+long
+ViewerSession::currentNt() const
 {
+	const std::unique_ptr<ViewState> &view = view_;
 	size_t		size;
 
-	if( view == NULL ) 
+	if( view == NULL )
 		return( 0 );
 
 	if( view->variable == NULL )
@@ -441,10 +443,15 @@ view_current_nt()
  * Change the view we currently have on the data; i.e., scan along
  * the scan-axis.  'interpretation' can be either FRAMES or PERCENT, and
  * indicates how in interpret the passed delta value.
+ *
+ * Phase 2: moved from the free function change_view() onto
+ * ViewerController -- its `view == NULL` guard was standing in for "no
+ * variable selected yet", a session fact.
  */
 	int
-change_view( int delta, int interpretation )
+ViewerController::stepView( int delta, int interpretation )
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
 	size_t	size;
 	long	place;
 	float	provisional_delta;
@@ -466,12 +473,12 @@ change_view( int delta, int interpretation )
 
 	if(view->scan_axis_id == -1) {
 		if( delta == 0 ) {
-			view_draw( false, false );
+			draw( false, false );
 			return(0);
 			}
 		else
 			{
-			fprintf( stderr, 
+			fprintf( stderr,
 				"called change_view with no scan_axis\n" );
 			exit( -1 );
 			}
@@ -509,13 +516,13 @@ change_view( int delta, int interpretation )
 			return(0);
 			}
 		}
-		
+
 	/* Have we decremented below the minimum allowed value? */
 	if( place < 0L )
 		place = size - 1L;
 
 	view->scanToPlace( place );
-	return( view_draw( true, false ) );
+	return( draw( true, false ) );
 }
 
 /********************************************************************************
@@ -609,18 +616,24 @@ View::scanToPlace( size_t scan_place )
 		}
 
 	/* Construct string showing the values of the scalar coordinates
-	 * for this variable, if any 
+	 * for this variable, if any
 	 */
-	view_construct_scalar_coord_str( scalar_coord_str, 1020 );
+	view->constructScalarCoordStr( scalar_coord_str, 1020 );
 	in_set_label( Label::ScalarDims, scalar_coord_str );
 }
 
 /********************************************************************************
  * draw the current view onto the display
+ *
+ * Phase 2: moved from the free function view_draw() onto ViewerController
+ * -- its `view == NULL` guard was standing in for "no variable selected
+ * yet", a session fact.
  */
 	int
-view_draw( int allow_framestore_usage, int force_range_to_frame )
+ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	FrameCache &framestore = session_.frameCache();
 	size_t		i;
 	size_t		x_size, y_size, scan_size, scaled_x_size, scaled_y_size, framesize, frameno;
 	static size_t	last_x_size=0, last_y_size=0;
@@ -696,7 +709,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 			if( view->scan_axis_id != -1 ) {
 				scan_size  = view->variable->size[view->scan_axis_id];
 				if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
-					in_timer_set( [](){ view->checkNewData(0); }, 1000L );
+					in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
 					}
 				}
 			return(0);
@@ -738,8 +751,8 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 		view->variable->user_max = max;
 		view->setRangeLabels( min, max );
 		view->data_status = ViewDataStatus::Invalid;
-		invalidate_all_saveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is true, it won't happen */
-		view_recompute_colorbar();
+		session_.invalidateAllSaveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is true, it won't happen */
+		recomputeColorbar();
 		}
 
 	if( options.debug )
@@ -773,7 +786,7 @@ view_draw( int allow_framestore_usage, int force_range_to_frame )
 	if( view->scan_axis_id != -1 ) {
 		scan_size  = view->variable->size[view->scan_axis_id];
 		if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
-			in_timer_set( [](){ view->checkNewData(0); }, 1000L );
+			in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
 			}
 		}
 
@@ -964,8 +977,8 @@ View::checkNewData( int unused )
 			view->variable->user_max = max;
 			view->setRangeLabels( min, max );
 			view->data_status = ViewDataStatus::Invalid;
-			invalidate_all_saveframes();
-			view_recompute_colorbar();
+			g_app.session.invalidateAllSaveframes();
+			g_app.controller.recomputeColorbar();
 			}
 		}
 
@@ -973,7 +986,7 @@ View::checkNewData( int unused )
 	 * NOTE that this ALSO sets the timer to call this
 	 * routine again as a side effect
 	 */
-	change_view( dt, FRAMES );
+	g_app.controller.stepView( dt, FRAMES );
 }
 
 /********************************************************************************
@@ -1241,7 +1254,7 @@ View::changeBlowup( int delta, int redraw_flag, int view_var_is_valid )
 		 * trigger this call without us having to do it.
 		 */
 		if( changed_size < 0 ) 
-			view_draw( false, false );
+			g_app.controller.draw( false, false );
 		}
 	in_set_cursor_normal();
 }
@@ -1302,12 +1315,13 @@ View::applyCurDimPlace( int dimid, NCDim *dim, size_t place )
 	view->data_status = ViewDataStatus::Invalid;
 	view->initSaveframes();
 
-	view_draw( true, false ); /* 'true' because we initialized saveframes above */
+	g_app.controller.draw( true, false ); /* 'true' because we initialized saveframes above */
 }
 
 	void
-view_change_cur_dim( char *dim_name, Modifier modifier )
+ViewerController::changeCurDim( char *dim_name, Modifier modifier )
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
 	int	dimid, fileid;
 	size_t	place, size;
 	long	delta, prov_place;
@@ -1365,8 +1379,9 @@ view_change_cur_dim( char *dim_name, Modifier modifier )
  * instead of clicking through it one step at a time.
  */
 	void
-view_set_cur_dim_index( const char *dim_name, long place )
+ViewerController::setCurDimIndex( const char *dim_name, long place )
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
 	int	dimid, fileid;
 	NCDim	*dim;
 
@@ -1404,8 +1419,9 @@ view_set_cur_dim_index( const char *dim_name, long place )
  * just trying to (re)draw a slider.
  */
 	size_t
-view_get_cur_dim_index( const char *dim_name )
+ViewerSession::curDimIndex( const char *dim_name ) const
 {
+	const std::unique_ptr<ViewState> &view = view_;
 	if( view == NULL )
 		return 0;
 
@@ -1504,7 +1520,7 @@ View::setScanDims()
 		view->allocStorage();
 		view->initSaveframes();
 		view->setScanButtons();
-		view_draw( true, false ); /* 'true' because we initialized saveframes above */
+		g_app.controller.draw( true, false ); /* 'true' because we initialized saveframes above */
 		}
 
 	in_set_cursor_normal();
@@ -1628,8 +1644,8 @@ View::setRange()
 	view->variable->user_max = new_max;
 	view->setRangeLabels( new_min, new_max );
 	view->data_status = ViewDataStatus::Invalid;
-	invalidate_all_saveframes();
-	view_draw( true, false ); /* 'true' because we just invalidated all saveframes */
+	g_app.session.invalidateAllSaveframes();
+	g_app.controller.draw( true, false ); /* 'true' because we just invalidated all saveframes */
 
 	if( allvars == true ) {
 		for( auto &cursor : variables ) {
@@ -1639,7 +1655,7 @@ View::setRange()
 			}
 		}
 
-	view_recompute_colorbar();
+	g_app.controller.recomputeColorbar();
 }
 
 /**************************************************************************************/
@@ -1708,7 +1724,7 @@ View::setRangeLabels( float min, float max )
 	void
 View::setRangeFrame()
 {
-	view_draw( true, true );
+	g_app.controller.draw( true, true );
 }
 
 /**************************************************************************************/
@@ -1777,8 +1793,10 @@ View::initSaveframes()
 
 /**************************************************************************************/
 	void
-invalidate_all_saveframes()
+ViewerSession::invalidateAllSaveframes()
 {
+	const std::unique_ptr<ViewState> &view = view_;
+	FrameCache &framestore = frame_cache_;
 	if( view == NULL )
 		return;
 
@@ -2220,8 +2238,9 @@ View::flipIfInverted()
 /**************************************************************************************/
 /* This reports the mouse location in the main (2-D color contour) window */
 	void
-view_report_position( int x, int y, unsigned int button_mask )
+ViewerController::reportPosition( int x, int y, unsigned int button_mask )
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
 	size_t	data_x, data_y, x_size, y_size;
 	int	type, has_bounds, i, x_is_mapped, y_is_mapped;
 	float	val;
@@ -2317,10 +2336,22 @@ view_report_position( int x, int y, unsigned int button_mask )
 	in_set_label( Label::DataValue, current_value_label );
 }
 
-/**************************************************************************************/
-	static void
-view_construct_scalar_coord_str( char *str, int slen ) 
+/**************************************************************************************
+ * Phase 2 postscript: moved from the file-local static free function
+ * view_construct_scalar_coord_str() onto View. Its `view == NULL` check
+ * looked like the same session guard the 12 functions above carry, but
+ * both its call sites (View::setScanButtons(), View::scanToPlace() above)
+ * are View methods, so the global `view` they read is always exactly the
+ * `this` whose method is currently running -- never actually null here.
+ * The check is preserved verbatim anyway (`View *view = this;` makes it
+ * unreachable rather than removing it, matching this codebase's
+ * move-don't-split rule -- see also View::setScanDims()'s similarly-dead
+ * cancel check).
+ */
+	void
+View::constructScalarCoordStr( char *str, int slen )
 {
+	View *view = this;
 	size_t	ts;
 	FDBlist	*fdb;
 	int	isc, nsc, fdb_index, space_avail;
@@ -2481,13 +2512,14 @@ View::setDataeditPlace()
 
 /**************************************************************************************/
 	void
-set_min_from_curdata()
+ViewerController::setMinFromCurdata()
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
 	size_t	data_x, data_y, x_size, y_size;
 	int	x, y;
 	float	val;
 
-	// See plot_XY()'s comment: ImageView accepts Ctrl-click before any
+	// See plotXY()'s comment: ImageView accepts Ctrl-click before any
 	// variable is selected, unlike upstream's canvas widget.
 	if( view == NULL )
 		return;
@@ -2521,20 +2553,21 @@ set_min_from_curdata()
 	view->variable->user_min = val;
 	view->setRangeLabels( val, view->variable->user_max );
 	view->initSaveframes();
-	view_draw( true, false ); /* 'true' because we just invalidated saveframes */
+	draw( true, false ); /* 'true' because we just invalidated saveframes */
 
-	view_recompute_colorbar();
+	recomputeColorbar();
 }
 
 /**************************************************************************************/
 	void
-set_max_from_curdata()
+ViewerController::setMaxFromCurdata()
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
 	size_t	data_x, data_y, x_size, y_size;
 	int	x, y;
 	float	val;
 
-	// See plot_XY()'s comment: ImageView accepts Ctrl-click before any
+	// See plotXY()'s comment: ImageView accepts Ctrl-click before any
 	// variable is selected, unlike upstream's canvas widget.
 	if( view == NULL )
 		return;
@@ -2568,9 +2601,9 @@ set_max_from_curdata()
 	view->variable->user_max = val;
 	view->setRangeLabels( val, view->variable->user_max );
 	view->initSaveframes();
-	view_draw( true, false ); /* 'true' because we just invalidated saveframes */
+	draw( true, false ); /* 'true' because we just invalidated saveframes */
 
-	view_recompute_colorbar();
+	recomputeColorbar();
 }
 
 /**************************************************************************************/
@@ -2712,8 +2745,9 @@ view_data_edit_warn()
  * the 2-D color contour window.  
  */
 	void
-plot_XY()
+ViewerController::plotXY()
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
 	int	X_axis, i, x_window, y_window;
 	size_t	data_x, data_y, x_size, y_size, n;
 
@@ -3245,15 +3279,16 @@ view_change_transform( int delta )
 			exit( -1 );
 		}
 
-	view_draw( true, false );
-	view_recompute_colorbar();
+	g_app.controller.draw( true, false );
+	g_app.controller.recomputeColorbar();
 }
 
 /***************************************************************************/
-void view_recompute_colorbar( void )
+void ViewerController::recomputeColorbar( void )
 {
+	std::unique_ptr<ViewState> &view = session_.activeView();
 	/* The user might ask to rearrange colormaps before any
-	 * variable is selected. In that event, return 
+	 * variable is selected. In that event, return
 	 * immediately
 	 */
 	if( (view == NULL) || (view->variable == NULL))

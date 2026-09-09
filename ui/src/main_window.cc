@@ -243,7 +243,7 @@ int ImageView::handle( int event )
 			if( Fl::event_button3() ) mask |= 4;
 			int bx, by;
 			screenToBuffer( Fl::event_x(), Fl::event_y(), &bx, &by );
-			view_report_position( bx, by, mask );
+			g_app.controller.reportPosition( bx, by, mask );
 			// Middle-button press/drag highlights the corresponding cell in
 			// the data-edit window, if one is open (matches upstream's
 			// Btn2Up/Btn2Motion -> do_set_dataedit_place() translation).
@@ -267,10 +267,10 @@ int ImageView::handle( int event )
 			// than an actual click.
 			if( Fl::event_button() == FL_LEFT_MOUSE ) {
 				if( dragging_ ) dragging_ = false;
-				else if( Fl::event_state( FL_CTRL ) ) set_min_from_curdata();
-				else plot_XY();
+				else if( Fl::event_state( FL_CTRL ) ) g_app.controller.setMinFromCurdata();
+				else g_app.controller.plotXY();
 			} else if( Fl::event_button() == FL_RIGHT_MOUSE && Fl::event_state( FL_CTRL ) ) {
-				set_max_from_curdata();
+				g_app.controller.setMaxFromCurdata();
 			}
 			return 1;
 		default:
@@ -1227,14 +1227,14 @@ void MainWindow::recenterVarPack()
 void MainWindow::dimStepCallback( Fl_Widget *, void *data )
 {
 	auto *p = static_cast<std::pair<std::string,Modifier>*>(data);
-	view_change_cur_dim( (char *)p->first.c_str(), p->second );
+	g_app.controller.changeCurDim( (char *)p->first.c_str(), p->second );
 }
 
 void MainWindow::dimSliderCallback( Fl_Widget *w, void *data )
 {
 	auto *name = static_cast<std::string*>(data);
 	auto *slider = static_cast<Fl_Slider*>(w);
-	view_set_cur_dim_index( name->c_str(), lround( slider->value() ) );
+	g_app.controller.setCurDimIndex( name->c_str(), lround( slider->value() ) );
 }
 
 void MainWindow::makeDimButtons( const Stringlist *dim_list )
@@ -1276,7 +1276,7 @@ void MainWindow::fillDimInfo( const NCDim *d, int /*please_flip*/ )
 			// called every time the place actually changes.
 			size_t size = d->size > 0 ? d->size : 1;
 			row.value_slider->bounds( 0, (double)(size-1) );
-			row.value_slider->value( (double)view_get_cur_dim_index( d->name.c_str() ) );
+			row.value_slider->value( (double)g_app.session.curDimIndex( d->name.c_str() ) );
 			break;
 		}
 	}
@@ -1290,7 +1290,7 @@ void MainWindow::setCurDimValue( const char *name, const char *value )
 	for( auto &row : dim_rows_ ) {
 		if( row.name == name ) {
 			static_cast<DimValueSlider*>( row.value_slider )->setDisplayText( value );
-			row.value_slider->value( (double)view_get_cur_dim_index( name ) );
+			row.value_slider->value( (double)g_app.session.curDimIndex( name ) );
 			return;
 		}
 	}
@@ -1547,7 +1547,7 @@ void MainWindow::setOptionsDialog()
 					(char *)custom_overlay_filename.c_str() : nullptr,
 				false );
 
-		view_draw( true, false );
+		g_app.controller.draw( true, false );
 	}
 }
 

@@ -19,13 +19,27 @@
  * (g_app.controller.range(modifier), not do_range(modifier)).
  * do_buttons.cc now only keeps which_button_pressed(), in_button_pressed(),
  * and in_colormap_selected() -- the parts with no direct-call equivalent.
+ *
+ * "Refine the architecture" plan, Phase 2 added a real `ViewerSession
+ * &session_` (below) and, with it, the ~9 view.cc entry points that used
+ * to stay free functions purely because each carried its own
+ * `if (view == NULL) return;` guard. That guard was never really about
+ * `View` possibly being null -- it was standing in for a fact only the
+ * session can know: "no variable is selected yet". Moving these onto the
+ * class that owns the active `View` lets the guard live where the fact
+ * it's protecting actually lives, instead of being duplicated at every
+ * UI call site. AppContext (ncview/app_context.h) now constructs this
+ * with a reference to its own `session` member.
  */
 #pragma once
 
 #include "ncview/defines.h"
+#include "ncview/viewer_session.h"
 
 class ViewerController {
 public:
+	explicit ViewerController( ViewerSession &session ) : session_( session ) {}
+
 	Button whichButtonPressed() const { return cur_button_; }
 
 	/* The former in_button_pressed() switch body. */
@@ -68,6 +82,21 @@ public:
 	 * this scoped-down step doesn't move wholesale. */
 	void print();
 
+	/* Phase 2: the view.cc entry points that carried their own
+	 * `view == NULL` guard, moved verbatim (bodies unchanged -- each gets
+	 * a local `std::unique_ptr<ViewState> &view = session_.activeView();`
+	 * alias so the existing `view->...` text needs no further edits). */
+	int  draw( int allow_framestore_usage, int force_range_to_frame );
+	int  stepView( int delta, int interpretation );
+	void changeCurDim( char *dim_name, Modifier modifier );
+	void setCurDimIndex( const char *dim_name, long place );
+	void setMinFromCurdata();
+	void setMaxFromCurdata();
+	void plotXY();
+	void recomputeColorbar();
+	void reportPosition( int x, int y, unsigned int button_mask );
+
 private:
+	ViewerSession &session_;
 	Button cur_button_ = Button::Pause;
 };

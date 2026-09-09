@@ -582,6 +582,122 @@ Verified the refactor changed nothing observable: the same 86 tests,
 edit, plus the full 4-gate suite, ASan/UBSan/LSan, and a 5-seed
 `--order-by=rand` run.
 
+## Phase 2: the last `view.cc` entry points
+
+The 12 remaining free functions in `view.cc` each carried their own
+`if (view == NULL) ...` guard: `view_current_nt`, `change_view`,
+`view_draw`, `view_change_cur_dim`, `view_set_cur_dim_index`,
+`view_get_cur_dim_index`, `invalidate_all_saveframes`,
+`view_report_position`, `set_min_from_curdata`, `set_max_from_curdata`,
+`plot_XY`, `view_recompute_colorbar`. That guard was never really about
+`View` possibly being null in general -- it's a stand-in for a session
+fact ("no variable is selected yet") that these functions had no other
+way to ask, since they had no session to ask. `ViewerSession`/
+`ViewerController` own the active `unique_ptr<ViewState>` and can check
+that fact once, internally, so that's where these moved.
+
+`ViewerController` gained a real `ViewerSession &session_` (bound in a
+new constructor, `ViewerController(ViewerSession &session)`); `AppContext`
+gained a matching constructor, `AppContext() : controller(session) {}`,
+since a reference member means `ViewerController` -- and so `AppContext`
+-- can no longer be default-constructed or brace-initialized as an
+aggregate. Nothing in the tree did either (checked before making the
+change), so this cost nothing.
+
+Every move kept the method-conversion pattern this plan has used
+throughout: a local alias (`std::unique_ptr<ViewState> &view =
+session_.activeView();`, or `view_`/`frame_cache_` directly inside a
+`ViewerSession` method) stands in for the old global name, so each
+function's body is otherwise byte-identical -- guard text included. The
+one deliberate exception: `view_current_nt`/`view_get_cur_dim_index`/
+`invalidate_all_saveframes` went onto `ViewerSession` as `currentNt()`/
+`curDimIndex()`/`invalidateAllSaveframes()`; the other nine went onto
+`ViewerController` as `draw()`, `stepView()`, `changeCurDim()`,
+`setCurDimIndex()`, `reportPosition()`, `setMinFromCurdata()`,
+`setMaxFromCurdata()`, `plotXY()`, `recomputeColorbar()`. Internal
+callers that used to reach these through the free-function name now call
+the sibling method directly (`draw(true, false)` from inside another
+`ViewerController` method) or through `g_app.controller`/`g_app.session`
+from everywhere else (`view.cc`'s own `set_scan_variable`/
+`view_change_transform`, `overlay.cc`, `do_print.cc`, `ui/src/main_window.cc`,
+`ui/src/interface_fltk.cc`). `protos.h`'s "in view.c" block lost these 12
+declarations, keeping only the genuinely free helpers (`set_scan_variable`,
+`view_report_position_vals`, `beep`, `view_get_scaled_size`,
+`view_change_transform` -- each stays free for its own reason: an
+entry-point orchestrator, reads file-static state instead of `view`, a
+UI-seam call, or a pure helper).
+
+A postscript, not in the original 12: `view_construct_scalar_coord_str()`
+also carried a `view == NULL` guard textually, but both its call sites
+(`View::setScanButtons()`, `View::scanToPlace()`) were already `View`
+methods, where the global `view` being read is always exactly the `this`
+whose method is running -- the guard was never actually reachable there.
+Moved onto `View` as a private `constructScalarCoordStr()` instead of
+onto `ViewerSession`/`ViewerController`, since it isn't a session-level
+question; the dead guard is kept verbatim anyway, matching this
+codebase's move-don't-split rule (see `View::setScanDims()`'s similarly
+dead cancel check for precedent).
+
+**Tests first, and what running them (not just reading the code) found.**
+Four new files -- `test_view_null_guards.cc` (all 12 relocated entry
+points invoked with no variable selected, pinning today's exact no-op),
+`test_view_navigation.cc` (`change_view` across FRAMES/PERCENT, both
+wrap directions, `stop_on_restart`, the `delta==0` expose-event path),
+`test_view_draw.cc` (framestore on/off, forced range, autoscale, a
+constant-valued degenerate case), `test_view_dims.cc` (dim navigation
+round-trip, clamping, X/Y-axis-move rejection) -- were written and
+landed in their own commit, verified passing against the *unmodified*
+free functions, before anything moved. `test_playback.cc` (Phase 0b)
+already covered the playback-adjacent controller methods end to end, so
+nothing needed adding there.
+
+Running those tests against the unmodified code (not just reading it)
+surfaced two real, non-obvious behaviors neither the plan nor a read of
+the source predicted:
+
+- `force_range_to_frame` has **no visible effect** when
+  `allow_framestore_usage` is true and the current frame is already
+  cached. `options.save_frames` defaults to `true`
+  (`DEFAULT_SAVEFRAMES`), so a freshly-selected variable's first frame is
+  normally already in the framestore by the time a test calls
+  `view_draw()` again -- the framestore-hit path returns *before* the
+  force-range recompute block ever runs. `test_view_draw.cc`'s
+  force-range test calls `view_draw(false, true)` (disallowing the
+  framestore) to actually exercise the recompute, and says why in a
+  comment.
+- `change_view`'s `stop_on_restart` branch does not reset the frame
+  index to 0 when it "wraps" -- it returns immediately, before
+  `View::scanToPlace(place)` ever runs, leaving the index exactly where
+  it was. That's the actual mechanism that stops the movie (the position
+  never advances past the last frame), not a visible snap back to frame
+  0 as the name might suggest.
+
+A **third**, genuinely order-dependent bug turned up only under
+`--order-by=rand` (seed 4 out of 8 tried): the framestore-off test set
+`options.save_frames = false` and then called a helper that, on
+whichever test happens to run first in the whole process, triggers the
+one-time `initialize_misc()` -- which itself calls
+`reset_session_defaults()`, resetting `save_frames` back to `true` and
+silently undoing the override. Not a production bug: `SessionFixture`
+already resets `options.save_frames` correctly on every test; the issue
+was purely in this new test's ordering relative to the one-time init.
+Fixed by calling `ensure_ncview_misc_initialized()` explicitly before
+setting the override, not after. This is exactly the class of bug the
+plan's Phase 0a shuffled-order run exists to catch, and it worked.
+
+Verified the refactor changed nothing observable: the same 106 tests,
+1757 assertions, all still passing unchanged after the move, plus the
+full 4-gate suite, ASan/UBSan/LSan, and an 8-seed `--order-by=rand` run
+(after the ordering fix above).
+
+**Deferred, not blocking:** pixel goldens for `test_view_draw.cc` (the
+`tests/support/pgm.h` infrastructure from Phase 0b's sketch still isn't
+built); exercising `view_draw()`'s `lockout_view_changes` re-entrancy
+guard for real, which needs `RecordingViewerUi`'s stubs to be able to
+re-enter core mid-call (a nested `draw()` fired from inside a dialog
+callback) -- not something the current stub does, and its own piece of
+design work, not a Phase 2 side quest.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds

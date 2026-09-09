@@ -123,6 +123,16 @@ public:
 	 * depending on global state. */
 	PixelMapSettings pixelMapSettings( const Options &options ) const;
 
+	/* "Refine the architecture" plan, Phase 2: view.cc entry points whose
+	 * only reason to stay a free function was a `view == NULL` guard
+	 * standing in for "no variable selected yet" -- a session fact, so it
+	 * belongs here rather than at every call site. Bodies moved verbatim
+	 * (formerly view_current_nt(), view_get_cur_dim_index(),
+	 * invalidate_all_saveframes()). */
+	long currentNt() const;
+	size_t curDimIndex( const char *dim_name ) const;
+	void invalidateAllSaveframes();
+
 private:
 	Dataset dataset_;
 	std::unique_ptr<ViewState> view_;

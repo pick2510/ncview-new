@@ -53,11 +53,11 @@ TEST_CASE("playback: rewind arms a timer that steps backward one frame at a time
     select_playback_variable(nc, "playback_rewind", 5);
     // Land on a middle frame first so rewind has somewhere to go.
     g_app.controller.restart(Modifier::M1);
-    change_view(2, FRAMES);
+    g_app.controller.stepView(2, FRAMES);
     REQUIRE(current_frame() == 2);
 
     g_app.controller.rewind(Modifier::M1);
-    CHECK(current_frame() == 1); // change_view(-1, FRAMES) already ran synchronously
+    CHECK(current_frame() == 1); // stepView(-1, FRAMES) already ran synchronously
     REQUIRE(timerIsArmed());
 
     REQUIRE(fireTimer());
@@ -105,7 +105,7 @@ TEST_CASE("playback: restart seeks to frame 0 and does not itself arm a timer") 
     NcFixture nc;
     select_playback_variable(nc, "playback_restart", 5);
     g_app.controller.restart(Modifier::M1);
-    change_view(3, FRAMES);
+    g_app.controller.stepView(3, FRAMES);
     REQUIRE(current_frame() == 3);
 
     g_app.controller.restart(Modifier::M1);

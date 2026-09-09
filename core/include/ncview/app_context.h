@@ -25,12 +25,23 @@
 #include "ncview/viewer_ui.h"
 
 struct AppContext {
+	/* "Refine the architecture" plan, Phase 2 gave ViewerController a
+	 * real `ViewerSession &`, which means it can no longer be default
+	 * constructed -- AppContext needs an explicit constructor to bind it
+	 * to `session` below (declaration order controls member-init order,
+	 * so session must stay declared first). This makes AppContext no
+	 * longer an aggregate; nothing brace-initializes it (grepped for
+	 * `AppContext{`/`AppContext {` across the tree -- the only two uses
+	 * are `AppContext g_app;`, ncview.cc, and the `extern` declarations
+	 * of it), so that costs nothing. */
 	ViewerSession    session;
 	ViewerController controller;
 	/* Non-owning: whoever constructs the real ViewerUi (main.cc for the
 	 * app, tests/stub_interface.cc for tests) owns its lifetime and
 	 * points this at it before anything reaches the interface.h seam. */
 	ViewerUi        *ui = nullptr;
+
+	AppContext() : controller( session ) {}
 };
 
 /* Defined once, in ncview.cc. */
