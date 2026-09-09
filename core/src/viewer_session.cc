@@ -19,8 +19,17 @@
  * ViewerSession now; the ~300+ existing `options.<field>` call sites
  * across core/, ui/, and tests/ read/write through these references
  * unchanged.
+ *
+ * "Refine the architecture" plan, Phase 3e added currentNt()/
+ * curDimIndex()/invalidateAllSaveframes() below -- bodies moved verbatim
+ * from view.cc, where Phase 2 had left them (it moved the *names* onto
+ * ViewerSession but the *bodies* stayed put). Pure file motion: no
+ * signature or logic change.
  */
 #include "ncview/viewer_session.h"
+
+#include "ncview/includes.h"
+#include "ncview/protos.h"
 
 PixelMapSettings
 ViewerSession::pixelMapSettings( const Options &options ) const
@@ -75,4 +84,75 @@ Options::Options( ViewerSession &session ) :
 	offset			( session.sessionDisplayPrefs().offset ),
 	overlay			( session.sessionDisplayPrefs().overlay )
 {
+}
+
+/**************************************************************************************
+ * Report current size of scan axis. Phase 2: moved from the free function
+ * view_current_nt() onto ViewerSession -- its `view == NULL` guard was
+ * standing in for "no variable selected yet", a session fact.
+ */
+long
+ViewerSession::currentNt() const
+{
+	const std::unique_ptr<ViewState> &view = view_;
+	size_t		size;
+
+	if( view == NULL )
+		return( 0 );
+
+	if( view->variable == NULL )
+		return( 0 );
+
+	if( view->variable->size.empty() )
+		return( 0 );
+
+	/* No scan axis (e.g. a purely 2-D variable, or a modifier-based
+	 * navigation call on one) -- upstream indexed size[-1] here
+	 * unconditionally. There's exactly one frame in that case. */
+	if( view->scan_axis_id == -1 )
+		return( 1 );
+
+	size = view->variable->size[view->scan_axis_id];
+
+	return( size );
+}
+
+/**********************************************************************
+ * Current index of a non-scan dimension -- lets a UI control (a slider)
+ * keep its on-screen position in sync with the actual view state after
+ * a change made some other way (the row's own prev/next buttons, or
+ * initial variable selection). Returns 0 if there's no current view or
+ * the name doesn't resolve, both of which are benign no-ops for a caller
+ * just trying to (re)draw a slider.
+ */
+	size_t
+ViewerSession::curDimIndex( const char *dim_name ) const
+{
+	const std::unique_ptr<ViewState> &view = view_;
+	if( view == NULL )
+		return 0;
+
+	int fileid = view->variable->files.front().get()->id();
+	int dimid  = fi_dim_name_to_id( fileid,
+				const_cast<char *>(view->variable->name.c_str()),
+				const_cast<char *>(dim_name) );
+	if( dimid < 0 )
+		return 0;
+
+	return view->var_place[dimid];
+}
+
+/**************************************************************************************/
+	void
+ViewerSession::invalidateAllSaveframes()
+{
+	const std::unique_ptr<ViewState> &view = view_;
+	FrameCache &framestore = frame_cache_;
+	if( view == NULL )
+		return;
+
+	if( (view->scan_axis_id == -1) || ! framestore.valid() )
+		return;
+
+	framestore.invalidateAll();
 }

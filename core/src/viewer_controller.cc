@@ -8,16 +8,34 @@
  * private member (cur_button_) instead of a file-static, and the two
  * timer-rearming lambdas (rewind, fastforward) capture [this] instead of
  * recursing through a free function.
+ *
+ * "Refine the architecture" plan, Phase 3e added the 9 methods below
+ * range()/dimset()/etc. (down through recomputeColorbar()) -- bodies
+ * moved verbatim from view.cc, where Phase 2 had left them (it moved the
+ * *names* onto ViewerController but the *bodies* stayed put). Pure file
+ * motion: no signature or logic change. See view_internal.h for the
+ * handful of view.cc-local helpers these still call.
  */
 #include "ncview/viewer_controller.h"
 
 #include "ncview/includes.h"
 #include "ncview/protos.h"
+#include "view_internal.h"
 
 #define DELAY_DELTA	350.0
 #define DELAY_OFFSET	10L
 
 extern Options options;
+
+/* Sole caller is stepView()'s stop_on_restart branch, below -- static,
+ * not declared in protos.h (moved here from view.cc in Phase 3e; it was
+ * already static-with-no-header-declaration since Phase 3d). */
+	static void
+beep()
+{
+	fprintf( stderr, "\a" );
+	fflush(  stderr );
+}
 
 /*===========================================================================================*/
 void
@@ -357,4 +375,675 @@ void
 ViewerController::print()
 {
 	do_print();
+}
+
+/********************************************************************************
+ * Change the view we currently have on the data; i.e., scan along
+ * the scan-axis.  'interpretation' can be either FRAMES or PERCENT, and
+ * indicates how in interpret the passed delta value.
+ *
+ * Phase 2: moved from the free function change_view() onto
+ * ViewerController -- its `view == NULL` guard was standing in for "no
+ * variable selected yet", a session fact.
+ */
+	int
+ViewerController::stepView( int delta, int interpretation )
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	size_t	size;
+	long	place;
+	float	provisional_delta;
+
+	if( view == NULL )	/* This happens because this routine is called    */
+		return(0);	/* when Expose events are generated, and one is   */
+				/* generated before the view has been initialized */
+
+	if( delta != 0 ) {
+		if( view->data_status == ViewDataStatus::Edited ) {
+			fprintf( stderr, "warning! flushing changes!\n" );
+			}
+		view->data_status = ViewDataStatus::Invalid;
+		}
+
+	/* Apply the skip */
+	if( interpretation == FRAMES )
+		delta *= view->skip;
+
+	if(view->scan_axis_id == -1) {
+		if( delta == 0 ) {
+			draw( false, false );
+			return(0);
+			}
+		else
+			{
+			fprintf( stderr,
+				"called change_view with no scan_axis\n" );
+			exit( -1 );
+			}
+		}
+
+	if( interpretation == PERCENT ) {
+		/* Delta is in percent of total size */
+		size              = view->variable->size[view->scan_axis_id];
+		provisional_delta = (float)size * (float)delta/100.0;
+		if( (int)provisional_delta == 0 ) {
+			if( delta < 0 )
+				delta = -1;
+			else
+				delta = 1;
+			}
+		else
+			delta = (int)provisional_delta;
+		}
+
+	place = view->var_place[view->scan_axis_id] + delta;
+	size  = view->variable->size[view->scan_axis_id];
+
+	/* Have we incremented past the maximum allowed value?
+	 * If we have, then reset to ZERO, not just (size modulo
+	 * step), so that when stepping with a skip > 1, we can
+	 * save frames and come back to the same frames in the
+	 * framestore.
+	 */
+	if( place >= (long)size ) {
+		place = 0L;
+		if( options.beep_on_restart )
+			beep();
+		if( options.stop_on_restart ) {
+			g_app.controller.pause( Modifier::M1 );
+			return(0);
+			}
+		}
+
+	/* Have we decremented below the minimum allowed value? */
+	if( place < 0L )
+		place = size - 1L;
+
+	view->scanToPlace( place );
+	return( draw( true, false ) );
+}
+
+/********************************************************************************
+ * draw the current view onto the display
+ *
+ * Phase 2: moved from the free function view_draw() onto ViewerController
+ * -- its `view == NULL` guard was standing in for "no variable selected
+ * yet", a session fact.
+ */
+	int
+ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	FrameCache &framestore = session_.frameCache();
+	size_t		i;
+	size_t		x_size, y_size, scan_size, scaled_x_size, scaled_y_size, framesize, frameno;
+	static size_t	last_x_size=0, last_y_size=0;
+	int		must_recalc_range;
+	float		min, max, dat;
+
+	/* The reason why we have to lockout the possiblity that this
+	 * routine is called WHILE it is executing is tricky.  The 
+	 * 'data_to_pixels' call, below and elsewhere, can result in a modal
+	 * dialog being popped up, but the ccontour window can still
+	 * get 'expose' events.  In that case multiple modal dialogs would
+	 * be popped up, to conflict at random, unless there were some
+	 * way of locking out entry to this subroutine while it is actively
+	 * being executed or the other modal dialogs are popped up.
+	 */
+	if( lockout_view_changes )
+		return(0);
+	lockout_view_changes = true;
+
+	/* These can happen because this routine is called when the ccontour
+	 * window gets 'expose' events, which happens on program startup,
+	 * before the view has been initialized.
+	 */
+	if( (view == NULL) || (view->data.empty())) {
+		lockout_view_changes = false;
+		return(0);
+		}
+
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
+
+	must_recalc_range = force_range_to_frame || options.autoscale;
+
+	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
+
+	framesize = scaled_x_size * scaled_y_size;
+	if( view->scan_axis_id == -1 )
+		frameno = 0;
+	else
+		frameno = view->var_place[view->scan_axis_id];
+
+	if( options.debug ) {
+		fprintf( stderr, "in view_draw:\n" );
+		fprintf( stderr, "	x_size, y_size:%zu %zu\n",
+						x_size, y_size );
+		fprintf( stderr, "	scan_axis_id:%d\n",
+						view->scan_axis_id);
+		fprintf( stderr, "	scan_place:%zu\n",
+						frameno );
+		}
+
+	/* Is this frame stored in the framestore? Never true under
+	 * -autoscale: upstream relied on its recalc-and-invalidate block
+	 * running *before* this check (invalidating whatever's cached here
+	 * on every autoscale draw, so this check would always miss while
+	 * autoscale is on). This port moved that block below, after
+	 * View::fillViewData(), so it recomputes from the freshly-loaded frame
+	 * instead of upstream's stale-until-next-frame data -- but that
+	 * leaves a window where a still-cached, currently-displayed frame
+	 * (e.g. redrawn right after toggling autoscale on in the Options
+	 * dialog) gets served from the cache before the invalidate below
+	 * ever runs. Excluding autoscale here closes that window the same
+	 * way upstream's ordering did.
+	 */
+	if( allow_framestore_usage && !options.autoscale ) {
+		const ncv_pixel *cached = framestore.lookup( frameno );
+		if( cached != nullptr ) {
+			if( options.debug )
+				printf( "drawing from framestore...\n" );
+			in_draw_2d_field( cached, scaled_x_size, scaled_y_size, frameno );
+			lockout_view_changes = false;
+
+			if( view->scan_axis_id != -1 ) {
+				scan_size  = view->variable->size[view->scan_axis_id];
+				if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
+					in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
+					}
+				}
+			return(0);
+			}
+		}
+
+	if( view->data_status == ViewDataStatus::Invalid ) {
+		if( options.debug )
+			printf( "Reading data to contour...\n" );
+		view->fillViewData();
+		}
+	else
+		{
+		if( options.debug )
+			printf( "NOT reading data to contour, since data is valid (%d)\n", static_cast<int>(view->data_status) );
+		}
+
+	/* If we need to adjust the range to the current frame, then do so.
+	 * Must run after View::fillViewData() above, so it sees the just-loaded
+	 * slice rather than whatever the previous frame left in view->data.
+	 */
+	if( must_recalc_range ) {
+		min = 1.0e35;
+		max = -min;
+
+		for( i=0; i<x_size*y_size; i++ ) {
+			dat = view->data[i];
+			if( dat != dat )
+				dat = view->variable->fill_value;
+			if( ! close_enough( dat, view->variable->fill_value) && (dat != FILL_FLOAT)) {
+				if( dat > max )
+					max = dat;
+				if( dat < min )
+					min = dat;
+				}
+			}
+
+		view->variable->user_min = min;
+		view->variable->user_max = max;
+		view->setRangeLabels( min, max );
+		view->data_status = ViewDataStatus::Invalid;
+		session_.invalidateAllSaveframes();	/* note we invalidate all frames, so even if allow_framestore_useage is true, it won't happen */
+		recomputeColorbar();
+		}
+
+	if( options.debug )
+		printf( "Calling data_to_pixels...\n" );
+	if( data_to_pixels( view.get() ) < 0 ) {
+		in_timer_clear();
+		if( view->variable->global_min == view->variable->global_max )
+			invalidate_variable( view->variable );
+		lockout_view_changes = false;
+		return( -1 );
+		}
+
+	if( (last_x_size != scaled_x_size) ||
+	    (last_y_size != scaled_y_size)) {
+		last_x_size = scaled_x_size;
+		last_y_size = scaled_y_size;
+		in_set_2d_size  ( scaled_x_size, scaled_y_size );
+		}
+
+	if( options.debug )
+		printf( "Calling draw_2d_field...\n" );
+	in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, frameno );
+
+	if( framestore.valid() )
+		framestore.store( frameno, view->pixels.data(), framesize );
+
+	/* If we just drew the last time entry for this var, then
+	 * set up a callback that waits 1 second and checks for
+	 * the var having new data in it.
+	 */
+	if( view->scan_axis_id != -1 ) {
+		scan_size  = view->variable->size[view->scan_axis_id];
+		if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
+			in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
+			}
+		}
+
+	lockout_view_changes = false;
+	return( 0 );
+}
+
+	void
+ViewerController::changeCurDim( char *dim_name, Modifier modifier )
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	int	dimid, fileid;
+	size_t	place, size;
+	long	delta, prov_place;
+	NCDim	*dim;
+
+	if( view == NULL ) {
+		in_error( "Please select a variable first" );
+		return;
+		}
+
+	if( view->data_status == ViewDataStatus::Edited )
+		view_data_edit_warn();
+
+	fileid = view->variable->files.front().get()->id();
+	dimid  = fi_dim_name_to_id( fileid,
+				const_cast<char *>(view->variable->name.c_str()), dim_name );
+	if( (dimid == view->x_axis_id) ||
+	    (dimid == view->y_axis_id) )
+		return;
+
+	dim = view->variable->dim[dimid].get();
+
+	/* Modifier 1 is the standard action */
+	if( modifier == Modifier::M1 ) {
+		view->var_place[dimid] = view->var_place[dimid]+1L;
+		if( view->var_place[dimid] > view->variable->size[dimid]-1L )
+			view->var_place[dimid] = 0L;
+		}
+	else if( modifier == Modifier::M2 ) {
+		/* Modifier 2 means "do it faster" */
+		size  = view->variable->size[dimid];
+		delta = (int)(0.1*(float)size);
+		view->var_place[dimid] = view->var_place[dimid]+(long)delta;
+		if( view->var_place[dimid] > view->variable->size[dimid]-1L )
+			view->var_place[dimid] = 0L;
+		}
+	else
+		{
+		/* Modifier 3 means to go backwards */
+		prov_place = view->var_place[dimid]-1L;
+		if( prov_place < 0L )
+			view->var_place[dimid] = view->variable->size[dimid] -1L;
+		else
+			view->var_place[dimid] = prov_place;
+		}
+
+	place = view->var_place[dimid];
+	view->applyCurDimPlace( dimid, dim, place );
+}
+
+/**********************************************************************
+ * Jump a non-scan dimension directly to an absolute index -- the
+ * counterpart to view_change_cur_dim()'s relative +1/-1/+10% stepping,
+ * for a UI control (a slider) that lets the user pick a place directly
+ * instead of clicking through it one step at a time.
+ */
+	void
+ViewerController::setCurDimIndex( const char *dim_name, long place )
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	int	dimid, fileid;
+	NCDim	*dim;
+
+	if( view == NULL ) {
+		in_error( "Please select a variable first" );
+		return;
+		}
+
+	if( view->data_status == ViewDataStatus::Edited )
+		view_data_edit_warn();
+
+	fileid = view->variable->files.front().get()->id();
+	dimid  = fi_dim_name_to_id( fileid,
+				const_cast<char *>(view->variable->name.c_str()),
+				const_cast<char *>(dim_name) );
+	if( (dimid == view->x_axis_id) ||
+	    (dimid == view->y_axis_id) )
+		return;
+
+	if( place < 0 )
+		place = 0;
+	if( (size_t)place > view->variable->size[dimid]-1L )
+		place = (long)(view->variable->size[dimid]-1L);
+
+	dim = view->variable->dim[dimid].get();
+	view->applyCurDimPlace( dimid, dim, (size_t)place );
+}
+
+/**************************************************************************************/
+/* This reports the mouse location in the main (2-D color contour) window */
+	void
+ViewerController::reportPosition( int x, int y, unsigned int button_mask )
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	size_t	data_x, data_y, x_size, y_size;
+	int	type, has_bounds, i, x_is_mapped, y_is_mapped;
+	float	val;
+	double	new_dimval, bound_min, bound_max;
+	char	current_value_label[500], temp_string[1024];
+	std::string	xdim_str, ydim_str;
+	NCDim	*xdim, *ydim;
+	size_t	virt_cursor_pos[MAX_NC_DIMS];
+
+	/* This can happen if you display a 2-d variable, then
+	 * display a variable with no valid range (thereby setting
+	 * the view to NULL), then roll back over the 2-d color
+	 * window. Fix thanks to Matthew Bettencourt @ usm.edu */
+	if( ! view )
+		return;
+
+	/* This can happen if we click on a 2-d variable, then click
+	 * on a 1-d variable, then move the pointer back over the
+	 * displayed colormap of the (old) 2-d variable.
+	 */
+	if( view->variable->effective_dimensionality == 1 )
+		return;
+
+	if( view->data_status == ViewDataStatus::Invalid ) {
+		view->fillViewData();
+		view->data_status = ViewDataStatus::Valid;
+		}
+
+	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
+
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
+
+	/* Make sure we don't go outside the limits */
+	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
+	data_y = ( (data_y >= y_size ) ? y_size-1 : data_y );
+
+	/* Invert Y because the reporting counts from the
+	 * UPPER LEFT, not the lower left like we want
+	 * it to.  If the *picture* is inverted, don't flip
+	 * y!
+	 */
+	if( !options.invert_physical )
+		data_y = y_size - data_y - 1;
+	
+	/* Get the value of the data field under the cursor */
+	val = view->data[data_x + data_y*x_size];
+
+	/* Get the values of the X and Y indices. 
+	* 'type' is the data type of the dimension--can be float or character 
+	*/
+	xdim = view->variable->dim[view->x_axis_id].get();
+	ydim = view->variable->dim[view->y_axis_id].get();
+
+	x_is_mapped = (view->variable->dim_map_info[ view->x_axis_id ] != NULL);
+	y_is_mapped = (view->variable->dim_map_info[ view->y_axis_id ] != NULL);
+	if( 1 || x_is_mapped || y_is_mapped ) {
+		/* Get virtual position in all dims for this mouse cursor point */
+		for( i=0; i<view->variable->n_dims; i++ )
+			virt_cursor_pos[i] = view->var_place[i];
+		virt_cursor_pos[ view->x_axis_id ] = data_x;
+		virt_cursor_pos[ view->y_axis_id ] = data_y;
+		}
+
+	type = fi_dim_value( view->variable, view->x_axis_id, data_x, &new_dimval,
+			temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_pos );
+	if( type == NC_DOUBLE ) {
+		char	dim_str_buf[80];
+		if( (xdim != NULL) && xdim->timelike && options.t_conv )
+			fmt_time( dim_str_buf, 79, new_dimval, xdim, 1 );
+		else
+			snprintf( dim_str_buf, 79, "%.7lg", new_dimval );
+		xdim_str = dim_str_buf;
+		}
+	else
+		xdim_str = std::string( temp_string, strnlen( temp_string, 79 ) );
+
+	type = fi_dim_value( view->variable, view->y_axis_id, data_y, &new_dimval,
+			temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_pos );
+	if( type == NC_DOUBLE ) {
+		char	dim_str_buf[80];
+		if( (ydim != NULL) && ydim->timelike && options.t_conv )
+			fmt_time( dim_str_buf, 79, new_dimval, ydim, 1 );
+		else
+			snprintf( dim_str_buf, 79, "%.7lg", new_dimval );
+		ydim_str = dim_str_buf;
+		}
+	else
+		ydim_str = std::string( temp_string, strnlen( temp_string, 79 ) );
+
+	snprintf( current_value_label, 499, "Current: (i=%1zu, j=%1zu) %g (x=%s, y=%s)\n",
+				data_x, data_y, val, xdim_str.c_str(), ydim_str.c_str() );
+	in_set_label( Label::DataValue, current_value_label );
+}
+
+/**************************************************************************************/
+	void
+ViewerController::setMinFromCurdata()
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	size_t	data_x, data_y, x_size, y_size;
+	int	x, y;
+	float	val;
+
+	// See plotXY()'s comment: ImageView accepts Ctrl-click before any
+	// variable is selected, unlike upstream's canvas widget.
+	if( view == NULL )
+		return;
+
+	if( view->data_status == ViewDataStatus::Invalid ) {
+		view->fillViewData();
+		view->data_status = ViewDataStatus::Valid;
+		}
+
+	in_query_pointer_position( &x, &y );
+	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
+
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
+
+	/* Make sure we don't go outside the limits */
+	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
+	data_y = ( (data_y >= y_size ) ? y_size-1 : data_y );
+
+	/* Invert Y because the reporting counts from the
+	 * UPPER LEFT, not the lower left like we want
+	 * it to.  If the *picture* is inverted, don't flip
+	 * y!
+	 */
+	if( !options.invert_physical )
+		data_y = y_size - data_y - 1;
+	
+	/* Get the value of the data field under the cursor */
+	val = view->data[data_x + data_y*x_size];
+
+	view->variable->user_min = val;
+	view->setRangeLabels( val, view->variable->user_max );
+	view->initSaveframes();
+	draw( true, false ); /* 'true' because we just invalidated saveframes */
+
+	recomputeColorbar();
+}
+
+/**************************************************************************************/
+	void
+ViewerController::setMaxFromCurdata()
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	size_t	data_x, data_y, x_size, y_size;
+	int	x, y;
+	float	val;
+
+	// See plotXY()'s comment: ImageView accepts Ctrl-click before any
+	// variable is selected, unlike upstream's canvas widget.
+	if( view == NULL )
+		return;
+
+	if( view->data_status == ViewDataStatus::Invalid ) {
+		view->fillViewData();
+		view->data_status = ViewDataStatus::Valid;
+		}
+
+	in_query_pointer_position( &x, &y );
+	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
+
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
+
+	/* Make sure we don't go outside the limits */
+	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
+	data_y = ( (data_y >= y_size ) ? y_size-1 : data_y );
+
+	/* Invert Y because the reporting counts from the
+	 * UPPER LEFT, not the lower left like we want
+	 * it to.  If the *picture* is inverted, don't flip
+	 * y!
+	 */
+	if( !options.invert_physical )
+		data_y = y_size - data_y - 1;
+	
+	/* Get the value of the data field under the cursor */
+	val = view->data[data_x + data_y*x_size];
+
+	view->variable->user_max = val;
+	view->setRangeLabels( val, view->variable->user_max );
+	view->initSaveframes();
+	draw( true, false ); /* 'true' because we just invalidated saveframes */
+
+	recomputeColorbar();
+}
+
+/**************************************************************************************
+ * Plot all the data along the plot_XY_axis for this (X,Y) position.  This is
+ * the routine called when the user selects an (X,Y) position by clicking on
+ * the 2-D color contour window.  
+ */
+	void
+ViewerController::plotXY()
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	int	X_axis, i, x_window, y_window;
+	size_t	data_x, data_y, x_size, y_size, n;
+
+	// Upstream's Xt canvas widget never has this wired up to a live click
+	// until a variable is actually being displayed, so 'view' being NULL
+	// here never came up there. Our ImageView is a plain Fl_Widget that
+	// accepts clicks from the moment the window is shown -- clicking the
+	// still-empty 2-D pane before selecting any variable reaches this
+	// function with view == NULL and crashed (segfault dereferencing
+	// view->plot_XY_axis) instead of upstream's implicit no-op.
+	if( view == NULL )
+		return;
+
+	X_axis = view->plot_XY_axis;
+	if( X_axis == -1 ) {
+		in_error( "Error! I have no valid axis to plot along!\n" );
+		return;
+		}
+
+	if( options.debug )
+		fprintf( stderr, "plot_XY: entering with axisid=%d\n", X_axis );
+
+	in_query_pointer_position( &x_window, &y_window );
+	if( (x_window < 0) || (y_window < 0) ) {
+		fprintf( stderr, "OUT OF WINDOW!!\n" );
+		return;
+		}
+
+	mouse_xy_to_data_xy( x_window, y_window, options.blowup, &data_x, &data_y );
+
+	x_size = view->variable->size[view->x_axis_id];
+	y_size = view->variable->size[view->y_axis_id];
+
+	/* Make sure we don't go outside the limits */
+	data_x = ( (data_x >= x_size ) ? x_size-1 : data_x );
+	data_y = ( (data_y >= y_size ) ? y_size-1 : data_y );
+
+	/* Invert Y because the reporting counts from the
+	 * UPPER LEFT, not the lower left like we want
+	 * it to.  If the *picture* is inverted, don't flip
+	 * y!
+	 */
+	if( !options.invert_physical )
+		data_y = y_size - data_y - 1;
+
+	std::vector<size_t> start( view->variable->n_dims );
+	std::vector<size_t> count( view->variable->n_dims );
+
+	/* Compute start and count arrays for data to plot.  Note that
+	 * the ordering of the following lines is important.  We first
+	 * set to the base variable place.  We then insert the place
+	 * in the window that was clicked upon.  We then set the X
+	 * axis to have a full count of all elements be plotted.
+	 */
+        n = view->variable->size[X_axis];
+	for( i=0; i<view->variable->n_dims; i++ ) {
+		start[i] = view->var_place[i];
+		count[i] = 1L;
+		}
+	start[view->x_axis_id] = data_x;
+	start[view->y_axis_id] = data_y;
+
+	/* Handle the lines on the plot.
+	 */
+	view->plot_XY_nlines++;
+	if( view->plot_XY_nlines > MAX_LINES_PER_PLOT )
+		view->plot_XY_nlines = 1;
+
+	/* Save position so we can later replot if X axis changes
+	 */
+	for( i=0; i<view->variable->n_dims; i++ ) {
+		view->plot_XY_position[ view->plot_XY_nlines-1 ][i] = start[i];
+		if( options.debug )
+			fprintf( stderr, "Setting position for line %d, dim %d: %zu\n",
+				view->plot_XY_nlines-1, i, start[i] );
+		}
+
+	start[X_axis] = 0L;
+	count[X_axis] = n;
+
+	if( options.debug )
+		fprintf( stderr, "plot_XY: about to call plot_XY_sc\n" );
+	view->plotXYSc( start.data(), count.data() );
+
+	if( options.debug )
+		fprintf( stderr, "plot_XY: exiting\n" );
+}
+
+/***************************************************************************/
+void ViewerController::recomputeColorbar( void )
+{
+	std::unique_ptr<ViewState> &view = session_.activeView();
+	/* The user might ask to rearrange colormaps before any
+	 * variable is selected. In that event, return
+	 * immediately
+	 */
+	if( (view == NULL) || (view->variable == NULL))
+		return;
+
+	if( options.debug ) {
+		fprintf( stderr, "view_recompute_colorbar: entering\n" );
+		fprintf( stderr, "view_recompute_colorbar: about to call x_create_colorbar with user_min=%f user_max=%f transform=%d\n",
+				view->variable->user_min, view->variable->user_max, static_cast<int>(options.transform) );
+		}
+
+	x_create_colorbar( view->variable->user_min, view->variable->user_max, options.transform );
+
+	if( options.debug )
+		fprintf( stderr, "view_recompute_colorbar: about to call x_draw_colorbar" );
+	x_draw_colorbar();
+
+	if( options.debug )
+		fprintf( stderr, "view_recompute_colorbar: exiting\n" );
 }
