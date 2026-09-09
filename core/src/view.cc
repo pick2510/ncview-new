@@ -538,7 +538,13 @@ View::checkNewData( int unused )
 	if( view->scan_axis_id != timelike_index ) 	/* in netcdf v3, simple way to check for time dimension */
 		return;
 
-	/* Get size of the var in the last file */
+	/* Get size of the var in the last file. Deliberately NOT migrated onto
+	 * the tracked NetCDFFile* in Phase 7b: this opens a second, throwaway
+	 * fileid for the same path to see the on-disk file's CURRENT size --
+	 * the tracked object's fileid is the stale, already-open handle whose
+	 * growth is exactly what's being checked for. Scoped and closed
+	 * entirely within this function via a raw nc_close(), not fi_close()/
+	 * NetCDFFile::close(), since it was never tracked in the first place. */
 	t_ncid = netcdf_fi_initialize( const_cast<char *>(view->variable->files.back()->filename.c_str()) );
 	t = netcdf_fi_var_size( t_ncid, const_cast<char *>(view->variable->name.c_str()) );
 	for( i=0; i<static_cast<size_t>(view->variable->n_dims); i++ )
@@ -2447,7 +2453,7 @@ View::plotXYFmtXVal( float val, int dimindex, char *s, size_t s_len )
 	void
 View::information()
 {
-	in_display_stuff( netcdf_att_string( variable->files.front().get()->id(),
+	in_display_stuff( variable->files.front().get()->file->attString(
 						variable->name ).c_str(),
 			variable->name.c_str() );
 }

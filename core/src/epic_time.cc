@@ -11,6 +11,7 @@
 */
 
 #include "ncview/includes.h"
+#include "ncview/dataset.h"	/* NetCDFFile -- handle_time_dim()/months_calc_tgran() (Phase 7b) */
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 
@@ -22,7 +23,7 @@
  * udu.cc's Udunits ones -- fmt_time() calls into both. Moved here rather
  * than into udu.cc since epic_time.cc is the smaller, less central of the
  * two calendar backends. */
-static TimeGranularity  months_calc_tgran( int fileid, NCDim *d );
+static TimeGranularity  months_calc_tgran( NetCDFFile *file, NCDim *d );
 
 /* Variables local to routines in this file */
 static  const char *month_name[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -117,9 +118,10 @@ epic_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCD
 
 /******************************************************************************/
 	void
-handle_time_dim( int fileid, NCVar *v, int dimid )
+handle_time_dim( NetCDFFile *file, NCVar *v, int dimid )
 {
 	NCDim   *d;
+	int	fileid = file->id();
 
 	d = v->dim[dimid].get();
 
@@ -138,7 +140,7 @@ handle_time_dim( int fileid, NCVar *v, int dimid )
 		 (strncasecmp( d->units.c_str(), "month", 5 ) == 0 ))  {
 		d->timelike = 1;
 		d->time_std = TimeStandard::Months;
-		d->tgran    = months_calc_tgran( fileid, d );
+		d->tgran    = months_calc_tgran( file, d );
 		}
 	else
 		d->timelike = 0;
@@ -146,7 +148,7 @@ handle_time_dim( int fileid, NCVar *v, int dimid )
 
 /******************************************************************************/
 	static TimeGranularity
-months_calc_tgran( int fileid, NCDim *d )
+months_calc_tgran( NetCDFFile *file, NCDim *d )
 {
 	char	temp_string[128];
 	float	delta, v0, v1;
@@ -157,7 +159,7 @@ months_calc_tgran( int fileid, NCDim *d )
 		return( TimeGranularity::Day );
 		}
 
-	type = netcdf_dim_value( fileid, const_cast<char *>(d->name.c_str()), 0L, &temp_double, temp_string, 0L, &has_bounds, &bounds_min, &bounds_max );
+	type = file->dimValue( const_cast<char *>(d->name.c_str()), 0L, &temp_double, temp_string, 0L, &has_bounds, &bounds_min, &bounds_max );
 	if( type == NC_DOUBLE )
 		v0 = (float)temp_double;
 	else
@@ -167,7 +169,7 @@ months_calc_tgran( int fileid, NCDim *d )
 		return( TimeGranularity::Day );
 		}
 
-	type = netcdf_dim_value( fileid, const_cast<char *>(d->name.c_str()), 1L, &temp_double, temp_string, 1L, &has_bounds, &bounds_min, &bounds_max );
+	type = file->dimValue( const_cast<char *>(d->name.c_str()), 1L, &temp_double, temp_string, 1L, &has_bounds, &bounds_min, &bounds_max );
 	if( type == NC_DOUBLE )
 		v1 = (float)temp_double;
 	else

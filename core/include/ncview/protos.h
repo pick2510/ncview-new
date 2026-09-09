@@ -42,6 +42,8 @@
 #include "ncview/interface.h"
 #include "ncview/app_context.h"
 
+class NetCDFFile;
+
 /* Global state, defined in ncview.cc. Upstream had every .c file that
  * needed these declare its own local `extern`; this is the one canonical
  * declaration ncview_ui can use too. */
@@ -243,7 +245,7 @@ TimeGranularity  epic_calc_tgran( int fileid, NCDim *d );
  * var_metadata.cc's fill_dim_structs(), across a TU boundary, so it needs
  * external linkage here -- unlike months_calc_tgran(), which stays a
  * private helper called only from within this file. */
-void	handle_time_dim	   ( int fileid, NCVar *v, int dimid );
+void	handle_time_dim	   ( NetCDFFile *file, NCVar *v, int dimid );
 
 /******************************************************************************
  * in do_print.c

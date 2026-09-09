@@ -133,7 +133,7 @@ handle_dim_mapping( NCVar *v )
 	 * _2d() -- both still take a raw char*, so bridge with strdup() the
 	 * same way the old malloc'd netcdf_get_char_att() return did (still
 	 * never freed either way, matching prior behavior). */
-	std::string coord_att_s = netcdf_get_char_att( ncid, v->name, "coordinates" );
+	std::string coord_att_s = v->files.front()->file->charAtt( v->name, "coordinates" );
 	if( coord_att_s.empty() )
 		return;
 	char *coord_att = strdup( coord_att_s.c_str() );
@@ -166,8 +166,13 @@ handle_dim_mapping( NCVar *v )
 			 * but otherwise, if the mapping var has more than 2 effective
 			 * dims, then forget it.
 			 */
+			/* netcdf_n_dims(), not netcdf_fi_n_dims()/->nDims() --
+			 * genuinely different functions (this one doesn't resolve
+			 * group-prefixed names), left as a direct call rather than
+			 * migrated onto NetCDFFile in Phase 7b: routing it through
+			 * ->nDims() would silently switch which lookup runs. */
 			coord_var_ndims = netcdf_n_dims( ncid, s );
-			size_t *coord_var_size_raw = netcdf_fi_var_size( ncid, s );
+			size_t *coord_var_size_raw = v->files.front()->file->varSize( s );
 			coord_var_neff_dims = 0;
 			for( i=0; i<coord_var_ndims; i++ )
 				if( coord_var_size_raw[i] > 1 ) {
@@ -287,12 +292,14 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 	if( options.debug ) printf( "Coord var named >%s< is a NON-SCALAR coord used to map a dimension of var %s\n",
 			coord_var_name, v->name.c_str() );
 
-	/* See how many dims this coord var has */
+	/* See how many dims this coord var has -- netcdf_n_dims(), not
+	 * netcdf_fi_n_dims()/->nDims(); see handle_dim_mapping()'s comment
+	 * on the same distinction. */
 	map_info->coord_var_ndims = netcdf_n_dims( ncid, coord_var_name );
 
 	/* Get size of the coord var */
 	{
-	size_t *raw = netcdf_fi_var_size( ncid, coord_var_name );
+	size_t *raw = v->files.front()->file->varSize( coord_var_name );
 	map_info->coord_var_size.assign( raw, raw + map_info->coord_var_ndims );
 	free( raw );
 	}
@@ -395,7 +402,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 			if( map_info->matching_var_dims[i] == 1 ) {
 				if( options.debug )
 					printf( "In variable \"%s\", dimension \"%s\" is mapped by LONGITUDE-like %d-dimensional variable \"%s\"\n",
-					v->name.c_str(), netcdf_dim_id_to_name( v->files.front()->id(), v->name, i).c_str(),
+					v->name.c_str(), v->files.front()->file->dimIdToName( v->name, i).c_str(),
 					map_info->coord_var_ndims, map_info->coord_var_name.c_str() );
 				v->dim_map_info[i] = std::move( map_info_owner );
 				idx_lon_dim = i;
@@ -417,7 +424,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 				idx_lat_dim = i;
 				if( options.debug )
 					printf( "In variable \"%s\", dimension \"%s\" is mapped by LATITUDE-like dimension %d-dimensional variable \"%s\"\n",
-					v->name.c_str(), netcdf_dim_id_to_name( v->files.front()->id(), v->name, i).c_str(),
+					v->name.c_str(), v->files.front()->file->dimIdToName( v->name, i).c_str(),
 					map_info->coord_var_ndims, map_info->coord_var_name.c_str() );
 				v->dim_map_info[i] = std::move( map_info_owner );
 				break;
@@ -445,7 +452,7 @@ handle_dim_mapping_2d( NCVar *v, char *coord_var_name, char *coord_att, size_t *
 		count[i] = map_info->coord_var_size[i];
 		}
 	map_info->data_cache.resize( totsize );
-	netcdf_fi_get_data( ncid, const_cast<char *>(map_info->coord_var_name.c_str()), start, count, map_info->data_cache.data(), NULL );
+	v->files.front()->file->getData( const_cast<char *>(map_info->coord_var_name.c_str()), start, count, map_info->data_cache.data() );
 
 	if( n_matches == 1 ) {
 		if( idx_lon_dim == -1 )
@@ -508,7 +515,7 @@ fill_dim_structs( NCVar *v )
 			d->size      	= v->size[i];
 			d->calendar = fi_dim_calendar( fileid, dim_name );
 			d->global_id 	= ++global_id;
-			handle_time_dim( fileid, v, i );
+			handle_time_dim( file0, v, i );
 			if( options.debug )
 				printf( "adding scannable dim to var %s: dimname: %s dimsize: %zu\n", v->name.c_str(), dim_name.c_str(), d->size );
 			}

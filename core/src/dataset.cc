@@ -75,6 +75,19 @@ std::string NetCDFFile::dimLongname( std::string_view dim_name ) const { return 
 int NetCDFFile::recdimId() const { return netcdf_fi_recdim_id( fileid_ ); }
 void NetCDFFile::fillAuxData( char *var_name, FDBlist *fdb ) const { netcdf_fill_aux_data( fileid_, var_name, fdb ); }
 
+/* Four more single-file forwarders, added in Phase 7b to close out the
+ * residue Phase 6 left behind -- see the comment above their declarations
+ * in dataset.h. */
+std::string NetCDFFile::charAtt( std::string_view var_name, std::string_view att_name ) const { return netcdf_get_char_att( fileid_, var_name, att_name ); }
+std::string NetCDFFile::attString( std::string_view var_name ) const { return netcdf_att_string( fileid_, var_name ); }
+nc_type NetCDFFile::dimValue( char *dim_name, size_t place, double *ret_val_double, char *ret_val_char,
+	size_t virt_place, int *return_has_bounds, double *return_bounds_min, double *return_bounds_max ) const
+{
+	return netcdf_dim_value( fileid_, dim_name, place, ret_val_double, ret_val_char, virt_place,
+		return_has_bounds, return_bounds_min, return_bounds_max );
+}
+void NetCDFFile::getData( char *var_name, size_t *start_pos, size_t *count, float *data ) const { netcdf_fi_get_data( fileid_, var_name, start_pos, count, data, NULL ); }
+
 NetCDFFile *Dataset::trackFile( int fileid )
 {
 	for( auto &f : files_ )

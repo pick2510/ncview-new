@@ -110,6 +110,26 @@ public:
 	int recdimId() const;
 	void fillAuxData( char *var_name, FDBlist *fdb ) const;
 
+	/* Four more single-file netcdf_*() primitives, given the same
+	 * already-open-object treatment as the 13 above (Phase 7b of the
+	 * "refine the architecture" plan, closing out Phase 6's residue) --
+	 * these were never part of the fi_*()/file.cc dispatch layer Phase 6
+	 * collapsed (no fi_get_char_att/fi_att_string/fi_dim_value/
+	 * fi_get_data_single_file ever existed as such), so they weren't in
+	 * that migration's list, but every call site already held the owning
+	 * NetCDFFile* the same way the 13 did. dimValue() here is NOT a
+	 * refactor of Dataset::dimValue() above -- that one takes a virtual
+	 * place across a variable's whole file series and does unit
+	 * conversion; this one is netcdf_dim_value()'s raw single-file,
+	 * single-record read, used by epic_time.cc's months_calc_tgran()
+	 * before a variable's multi-file structure is necessarily built. */
+	std::string charAtt( std::string_view var_name, std::string_view att_name ) const;
+	std::string attString( std::string_view var_name ) const;
+	nc_type dimValue( char *dim_name, size_t place, double *ret_val_double, char *ret_val_char,
+		size_t virt_place, int *return_has_bounds, double *return_bounds_min,
+		double *return_bounds_max ) const;
+	void getData( char *var_name, size_t *start_pos, size_t *count, float *data ) const;
+
 private:
 	void close();
 	int fileid_;
