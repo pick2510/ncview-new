@@ -89,9 +89,9 @@ void FltkViewerUi::in_initialize( void )
 			in_variable_selected( v->name.c_str() );
 	}
 	if( const char *d = getenv( "NCVIEW_TEST_DIALOG" ) ) {
-		if( std::strcmp( d, "range" ) == 0 ) do_range( Modifier::M1 );
-		else if( std::strcmp( d, "options" ) == 0 ) do_options( Modifier::M1 );
-		else if( std::strcmp( d, "dimset" ) == 0 ) do_dimset( Modifier::M1 );
+		if( std::strcmp( d, "range" ) == 0 ) g_app.controller.range( Modifier::M1 );
+		else if( std::strcmp( d, "options" ) == 0 ) g_app.controller.optionsDialog( Modifier::M1 );
+		else if( std::strcmp( d, "dimset" ) == 0 ) g_app.controller.dimset( Modifier::M1 );
 		else if( std::strcmp( d, "info" ) == 0 ) view->information();
 		else if( std::strcmp( d, "dataedit" ) == 0 ) view->dataEdit();
 		else if( std::strcmp( d, "plot" ) == 0 ) plot_XY();

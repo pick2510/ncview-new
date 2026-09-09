@@ -203,7 +203,7 @@ data_to_pixels( View *v )
 	    (v->variable->user_min == 0) &&
 	    (! options.autoscale) ) {
 		in_set_cursor_normal();
-		do_pause( Modifier::M1 );	/* pause playback directly -- no need to round-trip through the Button enum */
+		g_app.controller.pause( Modifier::M1 );	/* pause playback directly -- no need to round-trip through the Button enum */
 		if( options.min_max_method == MinMaxMethod::Exhaust ) {
 	    		snprintf( error_message, 1022, "min and max both 0 for variable %s (checked all data)\nSetting range to (-1,1)", 
 								v->variable->name.c_str() );

@@ -192,28 +192,17 @@ unsigned char interp( int i, int range_i, unsigned char *mat, int n_entries );
 
 /******************************************************************************
  * in do_buttons.c
+ *
+ * The 21 do_*() action functions that used to live here (do_range,
+ * do_pause, ..., do_blowup_type) are gone -- "refine the architecture"
+ * plan, Phase 1. Each had become a two-line forward onto
+ * g_app.controller (ncview/app_context.h) after the OOP_redesign plan's
+ * Step 7, with no logic of its own left; every call site now calls the
+ * corresponding ViewerController method directly. which_button_pressed()
+ * stays a free function (it's part of the interface.h-adjacent seam some
+ * UI code queries directly, not just an internal forwarder).
  */
 Button	which_button_pressed( void );
-void 	do_range 	  ( Modifier modifier );
-void 	do_quit		  ( Modifier modifier );
-void 	do_data_edit	  ( Modifier modifier );
-void 	do_info		  ( Modifier modifier );
-void 	do_options        ( Modifier modifier );
-void 	do_dimset         ( Modifier modifier );
-void	do_restart        ( Modifier modifier );
-void	do_rewind         ( Modifier modifier );
-void	do_backwards      ( Modifier modifier );
-void	do_pause          ( Modifier modifier );
-void	do_forward        ( Modifier modifier );
-void	do_fastforward    ( Modifier modifier );
-void	do_colormap_sel   ( Modifier modifier );
-void	do_invert_physical( Modifier modifier );
-void	do_invert_colormap( Modifier modifier );
-void	do_set_minimum    ( Modifier modifier );
-void	do_set_maximum    ( Modifier modifier );
-void	do_blowup	  ( Modifier modifier );
-void	do_transform	  ( Modifier modifier );
-void	do_blowup_type	  ( Modifier modifier );
 
 /******************************************************************************
  * in view.c
@@ -224,9 +213,11 @@ int	view_draw            ( int allow_saveframes_useage, int force_range_to_frame
 void 	view_change_cur_dim  ( char *dim_name, Modifier modifier );
 void	view_set_cur_dim_index( const char *dim_name, long place );
 size_t	view_get_cur_dim_index( const char *dim_name );
-void	view_forward         ( void );
-void	view_backward        ( void );
-void 	redraw_ccontour      ( void );
+/* Formerly also declared here: view_forward()/view_backward() (never
+ * defined anywhere, never called -- dead upstream declarations, removed
+ * in the same Phase 1 cleanup) and redraw_ccontour() (a one-line wrapper
+ * around view_draw() with zero callers, removed along with its
+ * definition in view.cc). */
 void	view_report_position ( int x, int y, unsigned int button_mask );
 void 	view_report_position_vals( float xval, float yval, int plot_index );
 void 	plot_XY              ( void );

@@ -10,12 +10,15 @@
  * for a later pass: the full ViewerUi virtual-interface conversion of
  * ncview/interface.h is NOT part of this step).
  *
- * do_buttons.cc keeps the free-function names (do_range, do_pause, ...,
- * which_button_pressed, in_button_pressed, in_colormap_selected) as thin
- * one-line forwards to g_app.controller (ncview/app_context.h), so every
- * existing call site elsewhere in core/, ui/, and tests/ keeps compiling
- * and behaving identically -- only do_buttons.cc itself changed to move
- * the actual logic here.
+ * do_buttons.cc originally kept the do_*() free-function names as thin
+ * one-line forwards to g_app.controller, so every existing call site
+ * could keep compiling unchanged while the logic moved here. Once those
+ * forwards had nothing left in them but the forward, "refine the
+ * architecture" plan's Phase 1 deleted them and updated every call site
+ * to call the ViewerController method directly instead
+ * (g_app.controller.range(modifier), not do_range(modifier)).
+ * do_buttons.cc now only keeps which_button_pressed(), in_button_pressed(),
+ * and in_colormap_selected() -- the parts with no direct-call equivalent.
  */
 #pragma once
 

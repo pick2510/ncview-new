@@ -134,14 +134,14 @@ TEST_CASE("in_variable_selected: selecting a variable populates the view and dra
     std::remove(path.c_str());
 }
 
-TEST_CASE("do_range: cancelling the dialog leaves the range/display untouched") {
+TEST_CASE("ViewerController::range: cancelling the dialog leaves the range/display untouched") {
     const char *var_name = "ctrl_char_var_range_cancel";
     std::string path = select_fresh_variable(var_name);
     float min_before = view->variable->user_min, max_before = view->variable->user_max;
 
     resetStubRecording();
     g_range_response = Message::Cancel;
-    do_range(Modifier::M1);
+    g_app.controller.range(Modifier::M1);
 
     CHECK(called("x_range"));
     // view_set_range() returns immediately on Message::Cancel, before
@@ -154,13 +154,13 @@ TEST_CASE("do_range: cancelling the dialog leaves the range/display untouched") 
     std::remove(path.c_str());
 }
 
-TEST_CASE("do_range: accepting the dialog redraws") {
+TEST_CASE("ViewerController::range: accepting the dialog redraws") {
     const char *var_name = "ctrl_char_var_range_ok";
     std::string path = select_fresh_variable(var_name);
 
     resetStubRecording();
     g_range_response = Message::OK;
-    do_range(Modifier::M1);
+    g_app.controller.range(Modifier::M1);
 
     CHECK(called("x_range"));
     CHECK(called("in_draw_2d_field"));
@@ -173,13 +173,13 @@ TEST_CASE("playback: fastforward arms the timer and sets Button::Fastforward; pa
     std::string path = select_fresh_variable(var_name);
 
     resetStubRecording();
-    do_fastforward(Modifier::M1);
+    g_app.controller.fastforward(Modifier::M1);
     CHECK(which_button_pressed() == Button::Fastforward);
-    CHECK(called("in_timer_clear")); // do_fastforward always clears the previous timer first
+    CHECK(called("in_timer_clear")); // fastforward() always clears the previous timer first
     CHECK(called("in_timer_set"));   // and re-arms itself, since stepping from frame 0->1 succeeds
 
     resetStubRecording();
-    do_pause(Modifier::M1);
+    g_app.controller.pause(Modifier::M1);
     CHECK(which_button_pressed() == Button::Pause);
     CHECK(called("in_timer_clear"));
     CHECK_FALSE(called("in_timer_set"));

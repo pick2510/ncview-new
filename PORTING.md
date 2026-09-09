@@ -544,6 +544,44 @@ carries its own small risk for no behavior change, so it's deferred
 until one of them needs a genuine change anyway. Pixel goldens
 (`tests/support/pgm.h`) are still open.
 
+## Phase 1: dead code, and a dispatch layer that stopped dispatching
+
+`do_buttons.cc`'s 21 `do_*()` functions had become pure two-line
+forwarders onto `g_app.controller` (their logic moved there at
+OOP_redesign's Step 7); nothing was left in their bodies but the
+forward. Deleted, updating every real call site (`ui/src/interface_fltk.cc`'s
+`NCVIEW_TEST_DIALOG` hook, `util.cc`'s error-path pause, `view.cc`'s
+`stop_on_restart` pause, `test_controller_characterization.cc`) to call
+the corresponding `ViewerController` method directly --
+`g_app.controller.range(modifier)`, not `do_range(modifier)`.
+`do_buttons.cc` now only keeps `which_button_pressed()`,
+`in_button_pressed()`, and `in_colormap_selected()` -- the parts with no
+direct-call equivalent. Also deleted: `view_forward()`/`view_backward()`
+(declared in `protos.h`, never defined anywhere, never called -- dead
+upstream declarations) and `redraw_ccontour()` (a one-line wrapper
+around `view_draw()` with zero callers).
+
+Per the plan's "tests first" rule, `test_button_dispatch.cc` was written
+and landed in its own commit *before* this refactor, driving
+`in_button_pressed()` through every `Button` enumerator except `Quit`
+(which calls `exit(0)` for real -- no test double for that) across all
+four `Modifier` values, run against the unmodified do_buttons.cc. Doing
+so surfaced a real, previously-unreachable bug in the test double
+itself: `RecordingViewerUi::in_set_scan_dims()` always left
+`*new_dim_list` null, but `View::setScanDims()`'s cancel check is
+documented dead code (an upstream quirk preserved verbatim: the returned
+status is never actually `Message::Cancel`'s numeric value), so it
+always falls through to dereferencing the list regardless -- meaning
+`Button::Dimset` had never actually been exercised through the stub
+before this test tried to. Fixed by having the stub echo back the
+current X/Y axes, matching what a real "accept unchanged" dialog answer
+would populate.
+
+Verified the refactor changed nothing observable: the same 86 tests,
+1226 assertions, all still passing unchanged after the do_buttons.cc
+edit, plus the full 4-gate suite, ASan/UBSan/LSan, and a 5-seed
+`--order-by=rand` run.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds

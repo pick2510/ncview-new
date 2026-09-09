@@ -505,7 +505,7 @@ change_view( int delta, int interpretation )
 		if( options.beep_on_restart )
 			beep();
 		if( options.stop_on_restart ) {
-			do_pause( Modifier::M1 );
+			g_app.controller.pause( Modifier::M1 );
 			return(0);
 			}
 		}
@@ -1244,13 +1244,6 @@ View::changeBlowup( int delta, int redraw_flag, int view_var_is_valid )
 			view_draw( false, false );
 		}
 	in_set_cursor_normal();
-}
-
-/**************************************************************************************/
-	void
-redraw_ccontour()
-{
-	view_draw( true, false );
 }
 
 /************************************************************************
