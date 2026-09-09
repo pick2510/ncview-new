@@ -301,7 +301,7 @@ set_scan_variable( NCVar *var )
 	if( options.debug )
 		fprintf( stderr, "...converting data to pixels\n" );
 	lockout_view_changes = true;
-	if( data_to_pixels( view.get() ) < 0 ) {
+	if( view->dataToPixels() < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );
@@ -2044,7 +2044,7 @@ View::changeDat( size_t index, float new_val )
 	view->data[x + (x_size)*y] = new_val;
 	view->initSaveframes();
 	lockout_view_changes = true;
-	if( data_to_pixels( view ) < 0 ) {
+	if( view->dataToPixels() < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );

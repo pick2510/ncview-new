@@ -156,18 +156,22 @@ int 	safe_ncvarid( int fileid, char *varname );
 /******************************************************************************
  * in util.c, general utility routines
  */
+/* data_to_pixels()/expand_data() moved onto View (View::dataToPixels(),
+ * private View::expandData()) in Phase 4b of the "refine the architecture"
+ * plan -- see core/src/render_pipeline.cc. close_enough/clip_f have no
+ * natural View to attach to and stay free functions, also now defined in
+ * render_pipeline.cc. */
 int 	close_enough	   ( float data, float fill );
 void 	new_netcdf         ( NetCDFOptions **n );
-int	data_to_pixels     ( View *v );
 void	clip_f		   ( float *val, float min, float max );
 /* Only called by Dataset::addVariable() (ncview/dataset.h) -- fills in
  * fields of an already-allocated NCVar* from netCDF metadata without
  * touching the variable list itself, so it stayed a free function here
- * rather than moving onto Dataset with the functions that do. */
+ * rather than moving onto Dataset with the functions that do. Now defined
+ * in var_metadata.cc (Phase 4b), same reasoning, new file. */
 void 	fill_dim_structs   ( NCVar *v );
 /* Ditto -- also only called by Dataset::addVariable(). */
 void	handle_dim_mapping ( NCVar *v );
-void 	expand_data	   ( float *big_data, View *v, size_t array_size );
 std::string limit_string   ( std::string_view s );
 std::vector<int> gen_overlay       ( View *v, char *overlay_fname );
 void 	fmt_time	   ( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity );

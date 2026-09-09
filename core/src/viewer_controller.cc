@@ -598,7 +598,7 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 
 	if( options.debug )
 		printf( "Calling data_to_pixels...\n" );
-	if( data_to_pixels( view.get() ) < 0 ) {
+	if( view->dataToPixels() < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable );

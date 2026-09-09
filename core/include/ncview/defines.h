@@ -565,7 +565,25 @@ struct View {
 	 * an expose/click event itself. */
 	void checkNewData( int unused );
 
+	/* Phase 4b of the "refine the architecture" plan (dissolving
+	 * util.cc): data_to_pixels() already took a View* as its sole
+	 * argument, so this is a straight method move, same pattern as the
+	 * rest of this class. Bodies live in the new render_pipeline.cc,
+	 * alongside the free helper functions (close_enough, clip_f,
+	 * util_mean, util_mode) it and expandData/contractData below share --
+	 * those have no natural "this" (they operate on raw float arrays with
+	 * no View involved) and stay free functions in the same file. */
+	int dataToPixels();
+
 private:
+	/* Also formerly free (util.cc), also already taking a View* first --
+	 * moved alongside dataToPixels() above. Both were `static` (file-local
+	 * to util.cc) with dataToPixels() as their only caller, so they stay
+	 * private here too. */
+	void expandData( float *big_data, size_t array_size );
+	void contractData( float *small_data, float fill_value );
+
+
 	/* Implementation details of determineScanAxes()/setScanPlace() above
 	 * -- each had no callers outside the one public method it now
 	 * belongs to. */

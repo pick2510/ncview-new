@@ -14,6 +14,7 @@ add_library(ncview_core STATIC
     src/handle_rc_file.cc
     src/ncview.cc
     src/overlay.cc
+    src/render_pipeline.cc
     src/stringlist.cc
     src/udu.cc
     src/utCalendar2_cal.cc

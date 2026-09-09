@@ -67,7 +67,7 @@ struct ExpandFixture {
         view_get_scaled_size(blowup, nx, ny, &new_nx, &new_ny);
         view.pixels.assign(new_nx * new_ny, 0);
 
-        REQUIRE(data_to_pixels(&view) == 0);
+        REQUIRE(view.dataToPixels() == 0);
         return view.pixels;
     }
 };
