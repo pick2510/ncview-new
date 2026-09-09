@@ -33,7 +33,7 @@ void select_dims_variable(NcFixture &nc, const char *var_name, int nlevel) {
       .coord("level").coord("lat").coord("lon")
       .var(var_name, {"level", "lat", "lon"});
     int fid = nc.openForCore();
-    g_dataset.addVariable(var_name, fid, nc.path().c_str(), 1);
+    g_dataset.addVariable(var_name, fid, nc.path().c_str());
     in_variable_selected(var_name);
 }
 

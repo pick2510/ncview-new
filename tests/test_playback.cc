@@ -35,7 +35,7 @@ void select_playback_variable(NcFixture &nc, const char *var_name, int nt) {
       .coord("lat").coord("lon")
       .var(var_name, {"time", "lat", "lon"});
     int fid = nc.openForCore();
-    g_dataset.addVariable(var_name, fid, nc.path().c_str(), 1);
+    g_dataset.addVariable(var_name, fid, nc.path().c_str());
     in_variable_selected(var_name);
 }
 

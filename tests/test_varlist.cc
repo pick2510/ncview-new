@@ -126,7 +126,7 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
     int nvars_before = n_vars_in_list(variables);
 
     int fid1 = open_for_core(path1);
-    g_dataset.addVariable(var_name, fid1, path1.c_str(), 2);
+    g_dataset.addVariable(var_name, fid1, path1.c_str());
 
     NCVar *var = g_dataset.findVariable(var_name);
     REQUIRE(var != nullptr);
@@ -136,7 +136,7 @@ TEST_CASE("add_var_to_list: a variable spanning two files becomes virtual, "
     CHECK(n_vars_in_list(variables) == nvars_before + 1); // exactly one new NCVar
 
     int fid2 = open_for_core(path2);
-    g_dataset.addVariable(var_name, fid2, path2.c_str(), 2);
+    g_dataset.addVariable(var_name, fid2, path2.c_str());
 
     // Re-fetch: Dataset::addVariable() mutates the existing NCVar in place
     // for a variable it already knows about, so `var` is still valid, but

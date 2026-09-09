@@ -30,7 +30,7 @@ TEST_CASE("NcFixture: a plain (time, lat, lon) variable loads with the right sha
       .var("temp", {"time", "lat", "lon"});
 
     int fid = nc.openForCore();
-    g_dataset.addVariable("temp", fid, nc.path().c_str(), 1);
+    g_dataset.addVariable("temp", fid, nc.path().c_str());
     NCVar *var = g_dataset.findVariable("temp");
     REQUIRE(var != nullptr);
     REQUIRE(var->n_dims == 3);
@@ -49,7 +49,7 @@ TEST_CASE("NcFixture: the default Ramp generator fills data in row-major order")
       .var("v", {"x", "y"}, Ramp{});
 
     int fid = nc.openForCore();
-    g_dataset.addVariable("v", fid, nc.path().c_str(), 1);
+    g_dataset.addVariable("v", fid, nc.path().c_str());
     NCVar *var = g_dataset.findVariable("v");
     REQUIRE(var != nullptr);
 
@@ -69,7 +69,7 @@ TEST_CASE("NcFixture: a Constant generator plus missing() sets a real _FillValue
       .missing(-999.0f);
 
     int fid = nc.openForCore();
-    g_dataset.addVariable("v", fid, nc.path().c_str(), 1);
+    g_dataset.addVariable("v", fid, nc.path().c_str());
     NCVar *var = g_dataset.findVariable("v");
     REQUIRE(var != nullptr);
 
@@ -90,7 +90,7 @@ TEST_CASE("NcFixture: two independent fixtures never collide, even with the same
     NcFixture nc1;
     nc1.dim("x", 2).var("v", {"x"}, Constant{1.0f});
     int fid1 = nc1.openForCore();
-    g_dataset.addVariable("v", fid1, nc1.path().c_str(), 1);
+    g_dataset.addVariable("v", fid1, nc1.path().c_str());
     CHECK(g_dataset.findVariable("v") != nullptr);
 
     // A second NcFixture with the same variable name is a genuinely

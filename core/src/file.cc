@@ -46,18 +46,16 @@ static void fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *cou
 /************************************************************************************/
 /* Do all file opening and initialization for the passed filename.
  * Return a unique integer ID by which this file will be indicated
- * in the future.  Passed arg 'nfiles' is total number of files that
- * were indicated on the command line; this can be used to make space
- * for some arrays.
+ * in the future.
  */
 	int
-fi_initialize( char *name, int nfiles )
+fi_initialize( char *name )
 {
 	int	id;
 	Stringlist *var_list;
 
 	if( file_type == FILE_TYPE_NETCDF ) {
-		if( options.debug ) 
+		if( options.debug )
 			printf( "Initializing file %s\n", name );
 		id = netcdf_fi_initialize( name );
 		}
@@ -68,16 +66,16 @@ fi_initialize( char *name, int nfiles )
 		exit( -1 );
 		}
 
-	if( options.debug ) 
+	if( options.debug )
 		printf( "Getting list of variables for file %s\n", name );
 	var_list = fi_list_vars( id );
-	g_dataset.addVariables( var_list, id, name, nfiles );
-	
-	if( options.debug ) 
+	g_dataset.addVariables( var_list, id, name );
+
+	if( options.debug )
 		printf( "Done initializing file %s\n", name );
 
 	return( id );
-}	
+}
 
 /************************************************************************************/
 /* Return a list of the names of all the displayable variables in

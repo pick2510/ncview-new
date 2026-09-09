@@ -145,7 +145,7 @@ NCVar *Dataset::findVariable( const char *var_name )
 	return( NULL );
 }
 
-void Dataset::addVariables( Stringlist *var_list, int id, const char *filename, int nfiles )
+void Dataset::addVariables( Stringlist *var_list, int id, const char *filename )
 {
 	if( options.debug )
 		printf( "add_vars_to_list: entering, adding vars to list for file %s\n", filename );
@@ -153,13 +153,13 @@ void Dataset::addVariables( Stringlist *var_list, int id, const char *filename, 
 	for( auto &e : *var_list ) {
 		if( options.debug )
 			printf( "adding variable %s to list\n", e.string.c_str() );
-		addVariable( e.string.c_str(), id, filename, nfiles );
+		addVariable( e.string.c_str(), id, filename );
 		}
 	if( options.debug )
 		printf( "done adding vars for file %s\n", filename );
 }
 
-void Dataset::addVariable( const char *var_name, int file_id, const char *filename, int nfiles )
+void Dataset::addVariable( const char *var_name, int file_id, const char *filename )
 {
 	NCVar	*var;
 	int	n_dims;

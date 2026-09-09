@@ -127,7 +127,7 @@ struct ThreeFileSeries {
             paths[f] = make_series_piece(var_name, kCounts[f], kNlat, kNlon, time_offset,
                                           kDataOffsets[f], "days since 2000-01-01");
             int fileid = open_for_core(paths[f]);
-            g_dataset.addVariable(var_name, fileid, paths[f].c_str(), 3);
+            g_dataset.addVariable(var_name, fileid, paths[f].c_str());
             time_offset += kCounts[f];
         }
         var = g_dataset.findVariable(var_name);
@@ -284,9 +284,9 @@ TEST_CASE("fi_dim_value: reconciles a timelike dim's value across files with dif
     std::string path1 = make_series_piece(var_name, 2, 2, 2, 5.0, 100.0f, "days since 2000-01-15");
 
     int fid0 = open_for_core(path0);
-    g_dataset.addVariable(var_name, fid0, path0.c_str(), 2);
+    g_dataset.addVariable(var_name, fid0, path0.c_str());
     int fid1 = open_for_core(path1);
-    g_dataset.addVariable(var_name, fid1, path1.c_str(), 2);
+    g_dataset.addVariable(var_name, fid1, path1.c_str());
 
     NCVar *var = g_dataset.findVariable(var_name);
     REQUIRE(var != nullptr);

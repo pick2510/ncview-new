@@ -130,7 +130,7 @@ TEST_CASE("handle_dim_mapping: a single unrecognized-name 2-D coordinate var aba
     ensure_ncview_misc_initialized();
     std::string path = make_2d_coord_piece("dimmap_unrecognized", "totally_unnamed_thing", 3, 4);
     int fileid = open_for_core(path);
-    g_dataset.addVariable("dimmap_unrecognized", fileid, path.c_str(), 2);
+    g_dataset.addVariable("dimmap_unrecognized", fileid, path.c_str());
     NCVar *var = g_dataset.findVariable("dimmap_unrecognized");
     REQUIRE(var != nullptr);
 
@@ -146,7 +146,7 @@ TEST_CASE("handle_dim_mapping: two 2-D coordinate vars (lat-like and lon-like na
     ensure_ncview_misc_initialized();
     std::string path = make_2d_latlon_piece("dimmap_wrf_style", "XLAT", "XLONG", 3, 4);
     int fileid = open_for_core(path);
-    g_dataset.addVariable("dimmap_wrf_style", fileid, path.c_str(), 2);
+    g_dataset.addVariable("dimmap_wrf_style", fileid, path.c_str());
     NCVar *var = g_dataset.findVariable("dimmap_wrf_style");
     REQUIRE(var != nullptr);
     REQUIRE(var->n_dims == 2);
@@ -190,7 +190,7 @@ TEST_CASE("handle_dim_mapping: a var with no coordinates attribute leaves every 
     REQUIRE(nc_close(ncid) == NC_NOERR);
 
     int fileid = open_for_core(path);
-    g_dataset.addVariable("dimmap_plain", fileid, path.c_str(), 2);
+    g_dataset.addVariable("dimmap_plain", fileid, path.c_str());
     NCVar *var = g_dataset.findVariable("dimmap_plain");
     REQUIRE(var != nullptr);
     for (auto &m : var->dim_map_info)
@@ -209,7 +209,7 @@ TEST_CASE("handle_dim_mapping: bare Y/X-prefixed coordinate var names are classi
     ensure_ncview_misc_initialized();
     std::string path = make_2d_latlon_piece("dimmap_yx_style", "Ycoord", "Xcoord", 3, 4);
     int fileid = open_for_core(path);
-    g_dataset.addVariable("dimmap_yx_style", fileid, path.c_str(), 2);
+    g_dataset.addVariable("dimmap_yx_style", fileid, path.c_str());
     NCVar *var = g_dataset.findVariable("dimmap_yx_style");
     REQUIRE(var != nullptr);
     REQUIRE(var->dim_map_info[0] != nullptr);
@@ -224,7 +224,7 @@ TEST_CASE("handle_dim_mapping: case-insensitive Latitude/Longitude prefixed name
     ensure_ncview_misc_initialized();
     std::string path = make_2d_latlon_piece("dimmap_latlon_style", "Latitude", "Longitude", 3, 4);
     int fileid = open_for_core(path);
-    g_dataset.addVariable("dimmap_latlon_style", fileid, path.c_str(), 2);
+    g_dataset.addVariable("dimmap_latlon_style", fileid, path.c_str());
     NCVar *var = g_dataset.findVariable("dimmap_latlon_style");
     REQUIRE(var != nullptr);
     REQUIRE(var->dim_map_info[0] != nullptr);

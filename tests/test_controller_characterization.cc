@@ -108,7 +108,7 @@ std::string select_fresh_variable( const char *var_name ) {
     options.blowup_default_size = 300;
     std::string path = make_sample_file(var_name, 2, 2, 2);
     int fid = open_for_core(path);
-    g_dataset.addVariable(var_name, fid, path.c_str(), 2);
+    g_dataset.addVariable(var_name, fid, path.c_str());
     resetStubRecording();
     in_variable_selected(var_name);
     return path;

@@ -8,22 +8,25 @@
 // collapse fi_*()/netcdf_*() into one layer, and a collapse can't be
 // proven safe against code nothing exercises.
 //
-// Two things this file's own tests had to confirm rather than assume,
+// One thing this file's own tests had to confirm rather than assume,
 // consistent with this plan's "inventory claims are leads, not facts"
-// rule:
-//  - file.cc's fi_*() forwarders all dispatch on the file-scope static
-//    `file_type`, which only ever holds FILE_TYPE_NETCDF (determined by
-//    determine_file_type(), the only setter, called via netcdf_fi_confirm()
-//    -- see file.cc). Every forwarder's `else` branch is fprintf+exit(-1),
-//    so testing the rejection branch here is out of scope: it would kill
-//    the test binary, not fail one assertion. determine_file_type() is
-//    tested for its accept path only.
-//  - Dataset::addVariable()'s `nfiles` parameter (threaded all the way
-//    through from fi_initialize()) is accepted but never read anywhere in
-//    Dataset::addVariable()'s body (core/src/dataset.cc) -- confirmed by
-//    reading the function, not assumed. "fi_initialize threads nfiles
-//    through" below pins that it currently has NO observable effect,
-//    rather than testing for an effect that doesn't exist.
+// rule: file.cc's fi_*() forwarders all dispatch on the file-scope static
+// `file_type`, which only ever holds FILE_TYPE_NETCDF (determined by
+// determine_file_type(), the only setter, called via netcdf_fi_confirm()
+// -- see file.cc). Every forwarder's `else` branch is fprintf+exit(-1),
+// so testing the rejection branch here is out of scope: it would kill
+// the test binary, not fail one assertion. determine_file_type() is
+// tested for its accept path only.
+//
+// UPDATE (Phase 6): this file originally also pinned that
+// Dataset::addVariable()'s `nfiles` parameter (threaded all the way
+// through from fi_initialize()) was accepted but never read anywhere in
+// its body -- confirmed by reading the function, not assumed. Phase 6
+// removed that dead parameter from fi_initialize()/addVariables()/
+// addVariable() entirely rather than leave it as documented dead weight,
+// so the test that pinned its no-op-ness ("fi_initialize: the nfiles
+// argument is threaded through but has no currently-observable effect")
+// no longer applies and was deleted along with the parameter.
 //
 // The circular dependency this plan's round-3 survey found (file_netcdf.cc
 // calling back UP into file.cc's fi_scannable_dims()/fi_n_dims() --
@@ -326,7 +329,7 @@ TEST_CASE("fi_initialize: opens the file and adds its variable(s) to the Dataset
     std::string path = make_layer_test_file("layer_fi_init", 3, 4, 5, "days since 2000-01-01");
     run_determine_file_type(path);
 
-    int fileid = fi_initialize(const_cast<char *>(path.c_str()), /*nfiles=*/1);
+    int fileid = fi_initialize(const_cast<char *>(path.c_str()));
 
     NCVar *var = g_dataset.findVariable("layer_fi_init");
     REQUIRE(var != nullptr);
@@ -336,44 +339,6 @@ TEST_CASE("fi_initialize: opens the file and adds its variable(s) to the Dataset
     CHECK(var->is_virtual == false);
 
     std::remove(path.c_str());
-}
-
-TEST_CASE("fi_initialize: the nfiles argument is threaded through but has no currently-observable effect") {
-    // Confirmed by reading Dataset::addVariable() (dataset.cc): its `nfiles`
-    // parameter is accepted and passed down from fi_initialize() but never
-    // read anywhere in the function body. This test pins that fact --
-    // calling fi_initialize() with two different nfiles values on
-    // otherwise-identical single-file opens produces an identical resulting
-    // NCVar, not a difference the plan's original wording ("assert the
-    // nfiles argument's effect") assumed existed. If a future change makes
-    // nfiles actually matter, this test will need updating, which is the
-    // point of pinning it now rather than leaving the assumption untested.
-    SessionFixture fx1;
-    ensure_ncview_misc_initialized();
-    std::string path1 = make_layer_test_file("layer_nfiles_a", 3, 4, 5, "days since 2000-01-01");
-    run_determine_file_type(path1);
-    int fileid1 = fi_initialize(const_cast<char *>(path1.c_str()), /*nfiles=*/1);
-    NCVar *var1 = g_dataset.findVariable("layer_nfiles_a");
-    REQUIRE(var1 != nullptr);
-    size_t n_dims1 = var1->n_dims;
-    size_t size0_1 = var1->size[0];
-    bool virtual1 = var1->is_virtual;
-    std::remove(path1.c_str());
-
-    SessionFixture fx2;
-    ensure_ncview_misc_initialized();
-    std::string path2 = make_layer_test_file("layer_nfiles_a", 3, 4, 5, "days since 2000-01-01");
-    run_determine_file_type(path2);
-    int fileid2 = fi_initialize(const_cast<char *>(path2.c_str()), /*nfiles=*/17);
-    NCVar *var2 = g_dataset.findVariable("layer_nfiles_a");
-    REQUIRE(var2 != nullptr);
-
-    CHECK(var2->n_dims == n_dims1);
-    CHECK(var2->size[0] == size0_1);
-    CHECK(var2->is_virtual == virtual1);
-    (void)fileid1;
-    (void)fileid2;
-    std::remove(path2.c_str());
 }
 
 // ===================== The circular call-back =====================

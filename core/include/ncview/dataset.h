@@ -106,9 +106,16 @@ public:
 
 	/* Formerly util.cc's add_var_to_list()/add_vars_to_list(): fill out
 	 * the FDBlist/NCVar structures for the given variable(s) and add them
-	 * to (or extend an existing entry in) variables_. */
-	void addVariable( const char *var_name, int file_id, const char *filename, int nfiles );
-	void addVariables( Stringlist *var_list, int id, const char *filename, int nfiles );
+	 * to (or extend an existing entry in) variables_. Neither of these
+	 * originally took an `nfiles` parameter for "total number of files
+	 * on the command line" -- one was added when Dataset took over from
+	 * the free functions, threaded all the way from fi_initialize(), but
+	 * was never actually read in either function body (confirmed by
+	 * Phase 5a of the "refine the architecture" plan, tests/test_file_
+	 * layer.cc); removed in Phase 6 rather than left as documented dead
+	 * weight. */
+	void addVariable( const char *var_name, int file_id, const char *filename );
+	void addVariables( Stringlist *var_list, int id, const char *filename );
 
 	/* Formerly util.cc's cache_scalar_coord_info(): builds timestep_2_fdb
 	 * and the scalar-coordinate data cache for every variable currently

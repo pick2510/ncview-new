@@ -53,7 +53,7 @@ void select_print_variable(NcFixture &nc, const char *var_name, int nt = 3) {
       .coord("lat").coord("lon")
       .var(var_name, {"time", "lat", "lon"});
     int fid = nc.openForCore();
-    g_dataset.addVariable(var_name, fid, nc.path().c_str(), 1);
+    g_dataset.addVariable(var_name, fid, nc.path().c_str());
     in_variable_selected(var_name);
 }
 
@@ -154,7 +154,7 @@ TEST_CASE("build_print_info: title uses long_name + units when present") {
     determine_file_type(files);
     stringlist_delete_entire_list(files);
     int fid = netcdf_fi_initialize(const_cast<char *>(path.c_str()));
-    g_dataset.addVariable("print_annotated_var", fid, path.c_str(), 1);
+    g_dataset.addVariable("print_annotated_var", fid, path.c_str());
     in_variable_selected("print_annotated_var");
 
     do_print();
@@ -234,14 +234,14 @@ TEST_CASE("build_print_info: a multi-file series reaches the 'Name of file' extr
        .coord("lat").coord("lon")
        .var(var_name, {"time", "lat", "lon"});
     int fid1 = nc1.openForCore();
-    g_dataset.addVariable(var_name, fid1, nc1.path().c_str(), 2);
+    g_dataset.addVariable(var_name, fid1, nc1.path().c_str());
 
     nc2.dim("time", 2).dim("lat", 2).dim("lon", 2)
        .timeAxis("time", "days since 2000-01-01")
        .coord("lat").coord("lon")
        .var(var_name, {"time", "lat", "lon"});
     int fid2 = nc2.openForCore();
-    g_dataset.addVariable(var_name, fid2, nc2.path().c_str(), 2);
+    g_dataset.addVariable(var_name, fid2, nc2.path().c_str());
 
     in_variable_selected(var_name);
 

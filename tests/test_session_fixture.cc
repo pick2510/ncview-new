@@ -68,7 +68,7 @@ NCVar *load_and_select(const char *var_name, const std::string &path) {
     ensure_ncview_misc_initialized();
     options.blowup_default_size = 300;
     int fid = open_for_core(path);
-    g_dataset.addVariable(var_name, fid, path.c_str(), 1);
+    g_dataset.addVariable(var_name, fid, path.c_str());
     NCVar *var = g_dataset.findVariable(var_name);
     REQUIRE(var != nullptr);
     in_variable_selected(var_name);
@@ -82,7 +82,7 @@ TEST_CASE("SessionFixture: Dataset is empty on entry, even after a prior test ad
         SessionFixture fx;
         std::string path = make_one_var_file("leftover_var");
         int fid = open_for_core(path);
-        g_dataset.addVariable("leftover_var", fid, path.c_str(), 1);
+        g_dataset.addVariable("leftover_var", fid, path.c_str());
         CHECK(g_dataset.findVariable("leftover_var") != nullptr);
         std::remove(path.c_str());
         // fx destructs here, resetting g_app.session -- including closing
@@ -103,7 +103,7 @@ TEST_CASE("SessionFixture: the SAME variable name can be reused across fixtures 
         SessionFixture fx;
         std::string path = make_one_var_file("reused_name");
         int fid = open_for_core(path);
-        g_dataset.addVariable("reused_name", fid, path.c_str(), 1);
+        g_dataset.addVariable("reused_name", fid, path.c_str());
         REQUIRE(g_dataset.findVariable("reused_name") != nullptr);
         std::remove(path.c_str());
     }
@@ -112,7 +112,7 @@ TEST_CASE("SessionFixture: the SAME variable name can be reused across fixtures 
         CHECK(g_dataset.findVariable("reused_name") == nullptr);
         std::string path = make_one_var_file("reused_name");
         int fid = open_for_core(path);
-        g_dataset.addVariable("reused_name", fid, path.c_str(), 1);
+        g_dataset.addVariable("reused_name", fid, path.c_str());
         CHECK(g_dataset.findVariable("reused_name") != nullptr);
         std::remove(path.c_str());
     }
@@ -181,7 +181,7 @@ TEST_CASE("SessionFixture: an early REQUIRE failure still resets state on unwind
         SessionFixture fx;
         std::string path = make_one_var_file("unwind_var");
         int fid = open_for_core(path);
-        g_dataset.addVariable("unwind_var", fid, path.c_str(), 1);
+        g_dataset.addVariable("unwind_var", fid, path.c_str());
         std::remove(path.c_str());
         throw std::runtime_error("simulated mid-test failure");
     };

@@ -739,16 +739,14 @@ init_cmap_from_file( const char *dir_name, const char *file_name, int n_suffix )
 	void
 initialize_file_interface( Stringlist *input_files )
 {
-	int	idim, nvars, nfiles;
+	int	idim, nvars;
 
 	if( options.debug )
 		printf( "Initializing file interface...\n" );
 
-	nfiles = stringlist_len( input_files );
-
 	if( input_files != NULL )
 		for( auto &f : *input_files )
-			fi_initialize( (char *)f.string.c_str(), nfiles );
+			fi_initialize( (char *)f.string.c_str() );
 	if( options.debug )
 		printf( "...calculating dim min & maxes...\n" );
 	g_dataset.calcDimMinmaxes();

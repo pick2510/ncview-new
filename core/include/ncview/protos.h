@@ -92,7 +92,7 @@ void	useage			    ( void );
 /******************************************************************************
  * in file.c
  */
-int 	fi_initialize    ( char *name, int nfiles );
+int 	fi_initialize    ( char *name );
 Stringlist *fi_list_vars ( int fileid );
 int	fi_n_dims	 ( int fileid, char *var_name );
 size_t	*fi_var_size	 ( int fileid, char *var_name );

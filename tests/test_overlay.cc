@@ -125,7 +125,7 @@ void select_overlay_grid_variable(const std::string &path, const char *var_name)
     g_app.session.pixelTransform().assign(options.n_colors + options.n_extra_colors, 0);
 
     int fid = netcdf_fi_initialize(const_cast<char *>(path.c_str()));
-    g_dataset.addVariable(var_name, fid, path.c_str(), 1);
+    g_dataset.addVariable(var_name, fid, path.c_str());
     // gen_xform() (overlay.cc) reads NCDim::values directly, which is
     // only ever populated by Dataset::calcDimMinmaxes() -- normally run
     // once by ncview.cc's initialize_file_interface(), not by

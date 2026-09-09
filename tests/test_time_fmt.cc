@@ -96,7 +96,7 @@ struct TgranFixture {
         stringlist_delete_entire_list(files);
         fileid = netcdf_fi_initialize(const_cast<char *>(path.c_str()));
 
-        g_dataset.addVariable(var_name, fileid, path.c_str(), 1);
+        g_dataset.addVariable(var_name, fileid, path.c_str());
         var = g_dataset.findVariable(var_name);
         REQUIRE(var != nullptr);
     }
