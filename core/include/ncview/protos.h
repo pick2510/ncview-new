@@ -250,6 +250,12 @@ void 	udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval
 void epic_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim );
 int  epic_istime0( int fileid, NCVar *v, NCDim *d );
 TimeGranularity  epic_calc_tgran( int fileid, NCDim *d );
+/* The TimeStandard dispatch layer (formerly util.cc, moved here Phase 4b
+ * of the "refine the architecture" plan): handle_time_dim() is called from
+ * var_metadata.cc's fill_dim_structs(), across a TU boundary, so it needs
+ * external linkage here -- unlike months_calc_tgran(), which stays a
+ * private helper called only from within this file. */
+void	handle_time_dim	   ( int fileid, NCVar *v, int dimid );
 
 /******************************************************************************
  * in do_print.c
