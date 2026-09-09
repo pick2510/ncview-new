@@ -85,6 +85,31 @@ public:
 	 * both success (NC_NOERR) and failure, so a caller can report why. */
 	static std::optional<NetCDFFile> open( const std::string &path, int *nc_errcode = nullptr );
 
+	/* The 13 single-file fi_*() forwarders formerly in file.cc, collapsed
+	 * onto this class (Phase 6 of the "refine the architecture" plan):
+	 * every call site already held the owning FDBlist/NetCDFFile and only
+	 * used ->id() to hand a bare fileid to a free-function dispatcher
+	 * whose `file_type` switch (file.cc) only ever held FILE_TYPE_NETCDF
+	 * anyway (confirmed dead, step 1 of this phase) -- so each method body
+	 * below is the netcdf_*() call the old forwarder made, unchanged,
+	 * just relocated with an implicit fileid_ instead of a passed-in one.
+	 * fi_initialize()/fi_dim_calendar()/determine_file_type() stayed free
+	 * functions in file.cc: the first two add real logic beyond dispatch,
+	 * the third doesn't forward at all. */
+	Stringlist *listVars() const;
+	std::string title() const;
+	std::string longVarName( std::string_view var_name ) const;
+	std::string varUnits( std::string_view var_name ) const;
+	std::string dimUnits( std::string_view dim_name ) const;
+	int nDims( char *var_name ) const;
+	Stringlist *scannableDims( char *var_name ) const;
+	size_t *varSize( char *var_name ) const;
+	std::string dimIdToName( std::string_view var_name, int dim_id ) const;
+	int dimNameToId( char *var_name, char *dim_name ) const;
+	std::string dimLongname( std::string_view dim_name ) const;
+	int recdimId() const;
+	void fillAuxData( char *var_name, FDBlist *fdb ) const;
+
 private:
 	void close();
 	int fileid_;

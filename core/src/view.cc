@@ -33,6 +33,7 @@
 
 /* Include files */
 #include "ncview/includes.h"
+#include "ncview/dataset.h"	/* NetCDFFile -- file0->title()/dimUnits()/etc. below (Phase 6) */
 #include "ncview/defines.h"
 #include "ncview/frame_cache.h"
 #include "ncview/protos.h"
@@ -778,11 +779,16 @@ View::initialDetermineScanAxes( NCVar *var )
 	View *view = this;
 	Stringlist	*dimlist;
 	int		n_dims;
+	/* Every fi_scannable_dims()/fi_dim_name_to_id() call below used to
+	 * re-derive a bare fileid via ->files.front().get()->id() just to hand
+	 * it to a free-function dispatcher; both are now NetCDFFile methods
+	 * (Phase 6), so the owning object itself is enough. */
+	NetCDFFile *file0 = var->files.front()->file;
 
 	if( options.debug ) fprintf( stderr, "initial_determine_scan_axes: entering for var %s\n", const_cast<char *>(var->name.c_str()) );
 
 	/* Get a list of all possible scannable dimensions */
-	dimlist = fi_scannable_dims( var->files.front().get()->id(), const_cast<char *>(var->name.c_str()) );
+	dimlist = file0->scannableDims( const_cast<char *>(var->name.c_str()) );
 
 	if( options.debug ) {
 		fprintf( stderr, "initial_determine_scan_axes: scannable dims:\n" );
@@ -790,22 +796,20 @@ View::initialDetermineScanAxes( NCVar *var )
 		}
 
 	/* For now, just pick the last two to be the Y and X axes.
-	 */ 
+	 */
 	n_dims = stringlist_len( dimlist );
 	switch( n_dims ) {
 		case 1:
 			view->scan_axis_id = -1;
 			view->y_axis_id    = -1;
-			view->x_axis_id    = fi_dim_name_to_id(
-					var->files.front().get()->id(),
+			view->x_axis_id    = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[0].string.c_str() );
 			break;
 
 		case 2:
 			view->scan_axis_id = -1;
-			view->y_axis_id    = fi_dim_name_to_id(
-					var->files.front().get()->id(),
+			view->y_axis_id    = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[0].string.c_str() );
 			if( view->y_axis_id == -1 ) {
@@ -813,8 +817,7 @@ View::initialDetermineScanAxes( NCVar *var )
 					(*dimlist)[0].string.c_str(), const_cast<char *>(var->name.c_str()) );
 				exit(-1);
 				}
-			view->x_axis_id    = fi_dim_name_to_id(
-					var->files.front().get()->id(),
+			view->x_axis_id    = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[1].string.c_str() );
 			if( view->x_axis_id == -1 ) {
@@ -829,8 +832,7 @@ View::initialDetermineScanAxes( NCVar *var )
 	 		* dims, because that one will be the 'time' dimension by netCDF
 	 		* standards. Y/X axes are the last two entries.
 	 		*/
-			view->scan_axis_id = fi_dim_name_to_id(
-					var->files.front().get()->id(),
+			view->scan_axis_id = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[0].string.c_str() );
 			if( view->scan_axis_id == -1 ) {
@@ -839,8 +841,7 @@ View::initialDetermineScanAxes( NCVar *var )
 				exit(-1);
 				}
 
-			view->y_axis_id    = fi_dim_name_to_id(
-					var->files.front().get()->id(),
+			view->y_axis_id    = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[n_dims-2].string.c_str() );
 			if( view->y_axis_id == -1 ) {
@@ -848,8 +849,7 @@ View::initialDetermineScanAxes( NCVar *var )
 					(*dimlist)[n_dims-2].string.c_str(), const_cast<char *>(var->name.c_str()) );
 				exit(-1);
 				}
-			view->x_axis_id    = fi_dim_name_to_id(
-					var->files.front().get()->id(),
+			view->x_axis_id    = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[n_dims-1].string.c_str() );
 			if( view->x_axis_id == -1 ) {
@@ -1055,8 +1055,9 @@ View::setScanDims()
 	v          = view->variable;
 	cur_x_name = const_cast<char *>(v->dim[view->x_axis_id]->name.c_str());
 	cur_y_name = const_cast<char *>(v->dim[view->y_axis_id]->name.c_str());
+	NetCDFFile *file0 = v->files.front()->file;
 
-	dim_list = fi_scannable_dims( v->files.front().get()->id(), const_cast<char *>(v->name.c_str()) );
+	dim_list = file0->scannableDims( const_cast<char *>(v->name.c_str()) );
 	snprintf( scan_dim, sizeof(scan_dim), "%s", (*dim_list)[0].string.c_str() );
 
 	/* Pop up the dialog box which asks for the user's selection */
@@ -1077,8 +1078,8 @@ View::setScanDims()
 	 * new_dim_list is Y-axis first, then X-axis (see in_set_scan_dims's
 	 * own contract).
 	 */
-	new_y_id = fi_dim_name_to_id( v->files.front().get()->id(), const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[0].string.c_str() );
-	new_x_id = fi_dim_name_to_id( v->files.front().get()->id(), const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[1].string.c_str() );
+	new_y_id = file0->dimNameToId( const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[0].string.c_str() );
+	new_x_id = file0->dimNameToId( const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[1].string.c_str() );
 	if( new_x_id < new_y_id ) {
 		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", true );
 		if( message == Message::Cancel )
@@ -1135,10 +1136,11 @@ View::setAxis( Dimension dimension, char *new_dim_name )
 	v      = local_view->variable;
 	new_id = -1;
 	old_id = -1;
+	NetCDFFile *file0 = v->files.front()->file;
 
 	switch( dimension ) {
 		case Dimension::X:
-			new_id = fi_dim_name_to_id( v->files.front().get()->id(), 
+			new_id = file0->dimNameToId(
 						const_cast<char *>(v->name.c_str()), new_dim_name );
 			if( options.debug ) 
 				fprintf( stderr, "setting dim X to %s\n", 
@@ -1149,7 +1151,7 @@ View::setAxis( Dimension dimension, char *new_dim_name )
 			break;
 
 		case Dimension::Y:
-			new_id = fi_dim_name_to_id( v->files.front().get()->id(), 
+			new_id = file0->dimNameToId(
 						const_cast<char *>(v->name.c_str()), new_dim_name );
 			if( options.debug ) 
 				fprintf( stderr, "setting dim Y to %s\n", 
@@ -1166,7 +1168,7 @@ View::setAxis( Dimension dimension, char *new_dim_name )
 				return;
 				}
 			set_buttons( BUTTONS_ALL_ON );
-			new_id = fi_dim_name_to_id( v->files.front().get()->id(), 
+			new_id = file0->dimNameToId(
 						const_cast<char *>(v->name.c_str()), new_dim_name );
 			old_id = local_view->scan_axis_id;
 			local_view->scan_axis_id = new_id;
@@ -1176,7 +1178,7 @@ View::setAxis( Dimension dimension, char *new_dim_name )
 			break;
 
 		case Dimension::None:
-			new_id = fi_dim_name_to_id( v->files.front().get()->id(), 
+			new_id = file0->dimNameToId(
 						const_cast<char *>(v->name.c_str()), new_dim_name );
 			if( options.debug ) 
 				fprintf( stderr, "setting dim NONE to %s\n", 
@@ -1263,11 +1265,10 @@ View::setRangeLabels( float min, float max )
 	View *view = this;
 	std::string units, var_long_name;
 	char	temp_label[4096], extra_label[4096];
+	NetCDFFile *file0 = view->variable->files.front()->file;
 
-	units = fi_var_units( view->variable->files.front().get()->id(),
-				view->variable->name );
-	var_long_name = fi_long_var_name( view->variable->files.front().get()->id(),
-					view->variable->name );
+	units = file0->varUnits( view->variable->name );
+	var_long_name = file0->longVarName( view->variable->name );
 	if( units.empty() ) {
 		snprintf( temp_label, 4095, "displayed range: %g to %g (%g to %g shown)",
 			view->variable->global_min,
@@ -1479,7 +1480,7 @@ View::reDetermineScanAxes( NCVar *new_var, View *old_view )
 
 	old_var = old_view->variable;
 	old_n_scannable_dims = stringlist_len(
-		fi_scannable_dims( old_var->files.front().get()->id(), const_cast<char *>(old_var->name.c_str())) );
+		old_var->files.front()->file->scannableDims( const_cast<char *>(old_var->name.c_str())) );
 
 	for( i=0; i<old_n_scannable_dims; i++ ) {
 		old_dim = old_var->dim[i].get();
@@ -1490,7 +1491,7 @@ View::reDetermineScanAxes( NCVar *new_var, View *old_view )
 			/* dim_index is the index in the *new* variable of
 		 	 * the *old* dimension
 		 	 */
-			dim_index = fi_dim_name_to_id( new_var->files.front().get()->id(),
+			dim_index = new_var->files.front()->file->dimNameToId(
 					const_cast<char *>(new_var->name.c_str()), const_cast<char *>(old_dim->name.c_str()) );
 			if( dim_index != -1 ) {
 				/* This dimension is in the new variable. 
@@ -1570,7 +1571,7 @@ View::reSetScanPlace( NCVar *new_var, View *old_view )
 		 */
 		new_dim   = new_var->dim[i].get();
 		if( new_dim != NULL ) {
-			dim_index = fi_dim_name_to_id( old_var->files.front().get()->id(),
+			dim_index = old_var->files.front()->file->dimNameToId(
 					const_cast<char *>(old_var->name.c_str()), const_cast<char *>(new_dim->name.c_str()) );
 			if( dim_index != -1 ) {
 				old_place = old_view->var_place[dim_index];
@@ -1636,13 +1637,13 @@ draw_file_info( NCVar *var )
 	std::string title, units, var_long_name;
 	char	range_label[256], temp_label[600];
 
-	title = fi_title( var->files.front().get()->id() );
+	title = var->files.front()->file->title();
 	if( title.empty() )
 		in_set_label( Label::Title, PROGRAM_ID );
 	else
 		in_set_label( Label::Title, title.c_str() );
 
-	units = fi_var_units( var->files.front().get()->id(), var->name );
+	units = var->files.front()->file->varUnits( var->name );
 	if( units.empty() ) {
 		if( (var->global_min != var->user_min) || (var->global_max != var->user_max))
 			snprintf( range_label, 255, "%g to %g (%g to %g shown)",
@@ -1673,7 +1674,7 @@ draw_file_info( NCVar *var )
 	snprintf( temp_label, 599, "displayed range: %s", range_label );
 	in_set_label( Label::DataExtrema, temp_label );
 
-	var_long_name = fi_long_var_name( view->variable->files.front().get()->id(),
+	var_long_name = view->variable->files.front()->file->longVarName(
 					view->variable->name );
 	if( var_long_name.empty() ) {
 		snprintf( temp_label, 255, "variable=%s", limit_string(view->variable->name).c_str() );
@@ -1707,7 +1708,7 @@ View::redrawDimensionInfo()
 	char	*cur_y_name;
 
 	var     = view->variable;
-	dimlist = fi_scannable_dims( var->files.front().get()->id(), const_cast<char *>(var->name.c_str()) );
+	dimlist = var->files.front()->file->scannableDims( const_cast<char *>(var->name.c_str()) );
 
 	y_dim      = var->dim[view->y_axis_id].get();
 	cur_y_name = const_cast<char *>(y_dim->name.c_str());
@@ -1739,13 +1740,12 @@ View::showCurrentDimValues()
 	nc_type	type;
 
 	var = view->variable;
-	scannable_dims   = fi_scannable_dims( var->files.front().get()->id(), const_cast<char *>(var->name.c_str()) );
+	scannable_dims   = var->files.front()->file->scannableDims( const_cast<char *>(var->name.c_str()) );
 
 	if( scannable_dims != NULL )
 	for( auto &e : *scannable_dims ) {
 		dim_name   = (char *)e.string.c_str();
-		dimid      = fi_dim_name_to_id(
-					var->files.front().get()->id(),
+		dimid      = var->files.front()->file->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					dim_name );
 
@@ -2306,7 +2306,7 @@ View::plotXYSc( size_t *start, size_t *count )
 
 	/* Get the X axis title */
 	snprintf( x_axis_title, sizeof(x_axis_title), "%s", view->variable->dim[dim_to_plot]->name.c_str() );
-	units    = fi_dim_units( view->variable->files.front().get()->id(), dim_name );
+	units    = view->variable->files.front()->file->dimUnits( dim_name );
 	if( !units.empty() ) {
 		strncat( x_axis_title, " (", sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
 		strncat( x_axis_title, units.c_str(), sizeof(x_axis_title) - strlen(x_axis_title) - 1 );
@@ -2336,7 +2336,7 @@ View::plotXYSc( size_t *start, size_t *count )
 
 	/* Get the Y (which is the active variable) axis title */
 	snprintf( y_axis_title, sizeof(y_axis_title), "%s", view->variable->name.c_str() );
-	units = fi_var_units( view->variable->files.front().get()->id(), view->variable->name );
+	units = view->variable->files.front()->file->varUnits( view->variable->name );
 	if( !units.empty() ) {
 		strncat( y_axis_title, " (", sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
 		strncat( y_axis_title, units.c_str(), sizeof(y_axis_title) - strlen(y_axis_title) - 1 );
@@ -2344,13 +2344,13 @@ View::plotXYSc( size_t *start, size_t *count )
 		}
 
 	/* Get the overall plot title */
-	long_name = fi_long_var_name( view->variable->files.front().get()->id(),
+	long_name = view->variable->files.front()->file->longVarName(
 				view->variable->name );
 	if( !long_name.empty() )
 		snprintf( title, sizeof(title), "%s", long_name.c_str() );
 	else
 		snprintf( title, sizeof(title), "%s", view->variable->name.c_str() );
-	file_title = fi_title( view->variable->files.front().get()->id() );
+	file_title = view->variable->files.front()->file->title();
 	if( !file_title.empty() ) {
 		strncat( title, " from ", sizeof(title) - strlen(title) - 1 );
 		strncat( title, file_title.c_str(), sizeof(title) - strlen(title) - 1 );

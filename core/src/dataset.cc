@@ -58,6 +58,23 @@ std::optional<NetCDFFile> NetCDFFile::open( const std::string &path, int *nc_err
 	return NetCDFFile( fileid );
 }
 
+/* The 13 single-file fi_*() forwarders, collapsed onto NetCDFFile -- see
+ * dataset.h's comment above the declarations for why these bodies are
+ * exactly the netcdf_*() call file.cc's forwarders used to make. */
+Stringlist *NetCDFFile::listVars() const { return netcdf_fi_list_vars( fileid_ ); }
+std::string NetCDFFile::title() const { return netcdf_title( fileid_ ); }
+std::string NetCDFFile::longVarName( std::string_view var_name ) const { return netcdf_long_var_name( fileid_, var_name ); }
+std::string NetCDFFile::varUnits( std::string_view var_name ) const { return netcdf_var_units( fileid_, var_name ); }
+std::string NetCDFFile::dimUnits( std::string_view dim_name ) const { return netcdf_dim_units( fileid_, dim_name ); }
+int NetCDFFile::nDims( char *var_name ) const { return netcdf_fi_n_dims( fileid_, var_name ); }
+Stringlist *NetCDFFile::scannableDims( char *var_name ) const { return netcdf_scannable_dims( fileid_, var_name ); }
+size_t *NetCDFFile::varSize( char *var_name ) const { return netcdf_fi_var_size( fileid_, var_name ); }
+std::string NetCDFFile::dimIdToName( std::string_view var_name, int dim_id ) const { return netcdf_dim_id_to_name( fileid_, var_name, dim_id ); }
+int NetCDFFile::dimNameToId( char *var_name, char *dim_name ) const { return netcdf_dim_name_to_id( fileid_, var_name, dim_name ); }
+std::string NetCDFFile::dimLongname( std::string_view dim_name ) const { return netcdf_dim_longname( fileid_, dim_name ); }
+int NetCDFFile::recdimId() const { return netcdf_fi_recdim_id( fileid_ ); }
+void NetCDFFile::fillAuxData( char *var_name, FDBlist *fdb ) const { netcdf_fill_aux_data( fileid_, var_name, fdb ); }
+
 NetCDFFile *Dataset::trackFile( int fileid )
 {
 	for( auto &f : files_ )
@@ -343,8 +360,8 @@ void Dataset::addVariable( const char *var_name, int file_id, const char *filena
 	FDBlist *new_fdb = new_fdb_owner.get();
 	new_fdb->file     = trackFile( file_id );
 	{
-	size_t *raw_size = fi_var_size( file_id, const_cast<char *>(var_name) );
-	int raw_n_dims = fi_n_dims( file_id, const_cast<char *>(var_name) );
+	size_t *raw_size = new_fdb->file->varSize( const_cast<char *>(var_name) );
+	int raw_n_dims = new_fdb->file->nDims( const_cast<char *>(var_name) );
 	new_fdb->var_size.assign( raw_size, raw_size + raw_n_dims );
 	free( raw_size );
 	}
@@ -358,7 +375,7 @@ void Dataset::addVariable( const char *var_name, int file_id, const char *filena
 	/* fill out auxiliary (data-file format dependent) information
 	 * for the new fdb.
 	 */
-	fi_fill_aux_data( file_id, const_cast<char *>(var_name), new_fdb );
+	new_fdb->file->fillAuxData( const_cast<char *>(var_name), new_fdb );
 #ifdef HAVE_UDUNITS2
 	new_fdb->ut_unit_ptr = ut_parse( unitsys, new_fdb->recdim_units.c_str(), UT_ASCII ); /* Will be NULL if there was an error */
 #endif
@@ -369,7 +386,7 @@ void Dataset::addVariable( const char *var_name, int file_id, const char *filena
 		auto new_var_owner = std::make_unique<NCVar>();
 		NCVar *new_var = new_var_owner.get();
 		new_var->name       = var_name;
-		n_dims              = fi_n_dims( file_id, const_cast<char *>(var_name) );
+		n_dims              = new_fdb->file->nDims( const_cast<char *>(var_name) );
 		new_var->n_dims     = n_dims;
 		if( options.debug )
 			printf( "adding variable %s with %d dimensions\n",
@@ -382,7 +399,7 @@ void Dataset::addVariable( const char *var_name, int file_id, const char *filena
 		new_var->auto_set_no_range = 0;
 		new_var->have_set_range    = false;
 		{
-		size_t *raw_size = fi_var_size( file_id, const_cast<char *>(var_name) );
+		size_t *raw_size = new_fdb->file->varSize( const_cast<char *>(var_name) );
 		new_var->size.assign( raw_size, raw_size + n_dims );
 		free( raw_size );
 		}

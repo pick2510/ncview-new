@@ -132,8 +132,7 @@ ViewerSession::curDimIndex( const char *dim_name ) const
 	if( view == NULL )
 		return 0;
 
-	int fileid = view->variable->files.front().get()->id();
-	int dimid  = fi_dim_name_to_id( fileid,
+	int dimid  = view->variable->files.front()->file->dimNameToId(
 				const_cast<char *>(view->variable->name.c_str()),
 				const_cast<char *>(dim_name) );
 	if( dimid < 0 )

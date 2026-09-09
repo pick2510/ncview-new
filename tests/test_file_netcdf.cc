@@ -96,13 +96,16 @@ std::string make_sample_file() {
     return path;
 }
 
-// Several netcdf_*() functions (e.g. netcdf_dim_name_to_id(),
-// netcdf_dim_id_to_name()) internally call the dispatching fi_n_dims() --
-// not netcdf_fi_n_dims() directly -- which checks core's own module-static
-// file_type (file.cc) and exit()s if it was never set. determine_file_type()
-// is the only way to set it from outside file.cc, and it needs a real file
-// to probe, so this must run after the sample file exists but before
-// opening it for real.
+// UPDATE (Phase 6): this comment used to say netcdf_dim_name_to_id()/
+// netcdf_dim_id_to_name() internally called the dispatching fi_n_dims() --
+// that's no longer true (Phase 6 broke that circular dependency; they call
+// netcdf_fi_n_dims() directly now, confirmed by reading file_netcdf.cc, not
+// assumed) and no function this file exercises still checks file_type via
+// a fi_*() dispatcher. determine_file_type() is called below regardless,
+// since it's the only way core's file_type module-static gets set at all
+// and other tests/production code depend on it having run by this point in
+// the process; it needs a real file to probe, so this runs after the
+// sample file exists but before opening it for real.
 int open_sample_file(const std::string &path) {
     Stringlist *files = nullptr;
     stringlist_add_string(&files, path.c_str());

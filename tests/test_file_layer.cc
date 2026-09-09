@@ -28,6 +28,21 @@
 // argument is threaded through but has no currently-observable effect")
 // no longer applies and was deleted along with the parameter.
 //
+// UPDATE (Phase 6, continued): the 13 pure-forwarder fi_*() functions this
+// file's "forwarder equivalence" section originally called by name no
+// longer exist -- they were collapsed onto NetCDFFile methods (see
+// dataset.h/dataset.cc), which was the point of writing this file in the
+// first place: pin the dispatch layer's behavior so the collapse could be
+// proven safe. The section below now calls the NetCDFFile methods
+// directly (still comparing each against its underlying netcdf_*()
+// counterpart) instead of the free functions that used to sit in front of
+// them. This is a deliberate call-surface change, not a scope reduction:
+// every equivalence this file originally asserted still holds, just
+// against the method that now embodies it. BareFile below therefore owns
+// a NetCDFFile (which closes itself on destruction, the same
+// netcdf_fi_close() fi_close() used to dispatch to) instead of calling
+// fi_close() by hand.
+//
 // The circular dependency this plan's round-3 survey found (file_netcdf.cc
 // calling back UP into file.cc's fi_scannable_dims()/fi_n_dims() --
 // file_netcdf.cc:200,455,552) is exercised implicitly by every test below
@@ -133,150 +148,158 @@ int open_bare(const std::string &path) {
     return netcdf_fi_initialize(const_cast<char *>(path.c_str()));
 }
 
-// A file + bare fileid, auto-closed via the real fi_close() so file_type
-// stays exercised on the close path too.
+// A file, its bare fileid (for comparing a NetCDFFile method's result
+// against the underlying netcdf_*() call directly), and a NetCDFFile
+// wrapping that same id -- closed automatically on destruction via
+// NetCDFFile's own destructor (netcdf_fi_close(), the same call fi_close()
+// used to dispatch to), so file_type still gets exercised on the way in
+// via determine_file_type(), just not on the way out via fi_close()
+// specifically (fi_close() is untouched by Phase 6 and stays covered by
+// its own equivalence, not this fixture's teardown).
 struct BareFile {
     std::string path;
     int fileid;
+    NetCDFFile file;
     static constexpr int nt = 3, nlat = 4, nlon = 5;
     explicit BareFile(const char *var_name, const char *time_units = "days since 2000-01-01",
                        const char *calendar = "")
         : path(make_layer_test_file(var_name, nt, nlat, nlon, time_units, calendar)),
-          fileid(open_bare(path)) {}
+          fileid(open_bare(path)), file(fileid) {}
     ~BareFile() {
-        fi_close(fileid);
         std::remove(path.c_str());
     }
 };
 
 } // namespace
 
-// ===================== The 13 pure-forwarder fi_*() functions =====================
+// ===================== The 13 collapsed fi_*() forwarders, now NetCDFFile methods =====================
 // Each asserted to return exactly what its netcdf_*() counterpart returns
 // for the same fileid/args -- a deliberately mechanical table whose value
-// is that it must still pass, unchanged, after Phase 6 deletes file.cc's
-// copy of each dispatch.
+// is that it must still pass, unchanged, after Phase 6's collapse (this
+// file's job was to pin these before that happened, and now confirms it
+// happened correctly).
 
-TEST_CASE("fi_list_vars forwards to netcdf_fi_list_vars") {
+TEST_CASE("NetCDFFile::listVars matches netcdf_fi_list_vars") {
     BareFile f("layer_list_vars");
-    Stringlist *from_fi = fi_list_vars(f.fileid);
+    Stringlist *from_method = f.file.listVars();
     Stringlist *from_netcdf = netcdf_fi_list_vars(f.fileid);
-    REQUIRE(from_fi != nullptr);
+    REQUIRE(from_method != nullptr);
     REQUIRE(from_netcdf != nullptr);
-    REQUIRE(stringlist_len(from_fi) == stringlist_len(from_netcdf));
-    for (size_t i = 0; i < from_fi->size(); i++)
-        CHECK((*from_fi)[i].string == (*from_netcdf)[i].string);
+    REQUIRE(stringlist_len(from_method) == stringlist_len(from_netcdf));
+    for (size_t i = 0; i < from_method->size(); i++)
+        CHECK((*from_method)[i].string == (*from_netcdf)[i].string);
 }
 
-TEST_CASE("fi_title forwards to netcdf_title") {
+TEST_CASE("NetCDFFile::title matches netcdf_title") {
     BareFile f("layer_title");
-    CHECK(fi_title(f.fileid) == netcdf_title(f.fileid));
+    CHECK(f.file.title() == netcdf_title(f.fileid));
 }
 
-TEST_CASE("fi_long_var_name forwards to netcdf_long_var_name") {
+TEST_CASE("NetCDFFile::longVarName matches netcdf_long_var_name") {
     BareFile f("layer_long_name");
-    CHECK(fi_long_var_name(f.fileid, "layer_long_name") == netcdf_long_var_name(f.fileid, "layer_long_name"));
-    CHECK(fi_long_var_name(f.fileid, "layer_long_name") == "temperature");
+    CHECK(f.file.longVarName("layer_long_name") == netcdf_long_var_name(f.fileid, "layer_long_name"));
+    CHECK(f.file.longVarName("layer_long_name") == "temperature");
 }
 
-TEST_CASE("fi_var_units forwards to netcdf_var_units") {
+TEST_CASE("NetCDFFile::varUnits matches netcdf_var_units") {
     BareFile f("layer_var_units");
-    CHECK(fi_var_units(f.fileid, "layer_var_units") == netcdf_var_units(f.fileid, "layer_var_units"));
-    CHECK(fi_var_units(f.fileid, "layer_var_units") == "K");
+    CHECK(f.file.varUnits("layer_var_units") == netcdf_var_units(f.fileid, "layer_var_units"));
+    CHECK(f.file.varUnits("layer_var_units") == "K");
 }
 
-TEST_CASE("fi_dim_units forwards to netcdf_dim_units") {
+TEST_CASE("NetCDFFile::dimUnits matches netcdf_dim_units") {
     BareFile f("layer_dim_units");
-    CHECK(fi_dim_units(f.fileid, "lat") == netcdf_dim_units(f.fileid, "lat"));
-    CHECK(fi_dim_units(f.fileid, "lat") == "degrees_north");
+    CHECK(f.file.dimUnits("lat") == netcdf_dim_units(f.fileid, "lat"));
+    CHECK(f.file.dimUnits("lat") == "degrees_north");
 }
 
-TEST_CASE("fi_n_dims forwards to netcdf_fi_n_dims") {
+TEST_CASE("NetCDFFile::nDims matches netcdf_fi_n_dims") {
     BareFile f("layer_n_dims");
-    CHECK(fi_n_dims(f.fileid, (char *)"layer_n_dims") == netcdf_fi_n_dims(f.fileid, (char *)"layer_n_dims"));
-    CHECK(fi_n_dims(f.fileid, (char *)"layer_n_dims") == 3);
+    CHECK(f.file.nDims((char *)"layer_n_dims") == netcdf_fi_n_dims(f.fileid, (char *)"layer_n_dims"));
+    CHECK(f.file.nDims((char *)"layer_n_dims") == 3);
 }
 
-TEST_CASE("fi_scannable_dims forwards to netcdf_scannable_dims") {
+TEST_CASE("NetCDFFile::scannableDims matches netcdf_scannable_dims") {
     BareFile f("layer_scannable");
-    Stringlist *from_fi = fi_scannable_dims(f.fileid, (char *)"layer_scannable");
+    Stringlist *from_method = f.file.scannableDims((char *)"layer_scannable");
     Stringlist *from_netcdf = netcdf_scannable_dims(f.fileid, (char *)"layer_scannable");
-    REQUIRE(from_fi != nullptr);
+    REQUIRE(from_method != nullptr);
     REQUIRE(from_netcdf != nullptr);
-    REQUIRE(stringlist_len(from_fi) == stringlist_len(from_netcdf));
-    for (size_t i = 0; i < from_fi->size(); i++)
-        CHECK((*from_fi)[i].string == (*from_netcdf)[i].string);
+    REQUIRE(stringlist_len(from_method) == stringlist_len(from_netcdf));
+    for (size_t i = 0; i < from_method->size(); i++)
+        CHECK((*from_method)[i].string == (*from_netcdf)[i].string);
 }
 
-TEST_CASE("fi_var_size forwards to netcdf_fi_var_size") {
+TEST_CASE("NetCDFFile::varSize matches netcdf_fi_var_size") {
     BareFile f("layer_var_size");
-    size_t *from_fi = fi_var_size(f.fileid, (char *)"layer_var_size");
+    size_t *from_method = f.file.varSize((char *)"layer_var_size");
     size_t *from_netcdf = netcdf_fi_var_size(f.fileid, (char *)"layer_var_size");
-    REQUIRE(from_fi != nullptr);
+    REQUIRE(from_method != nullptr);
     REQUIRE(from_netcdf != nullptr);
     for (int i = 0; i < 3; i++)
-        CHECK(from_fi[i] == from_netcdf[i]);
-    CHECK(from_fi[0] == BareFile::nt);
-    CHECK(from_fi[1] == BareFile::nlat);
-    CHECK(from_fi[2] == BareFile::nlon);
+        CHECK(from_method[i] == from_netcdf[i]);
+    CHECK(from_method[0] == BareFile::nt);
+    CHECK(from_method[1] == BareFile::nlat);
+    CHECK(from_method[2] == BareFile::nlon);
 }
 
-TEST_CASE("fi_dim_id_to_name forwards to netcdf_dim_id_to_name") {
+TEST_CASE("NetCDFFile::dimIdToName matches netcdf_dim_id_to_name") {
     BareFile f("layer_dim_id_to_name");
-    CHECK(fi_dim_id_to_name(f.fileid, "layer_dim_id_to_name", 1) ==
+    CHECK(f.file.dimIdToName("layer_dim_id_to_name", 1) ==
           netcdf_dim_id_to_name(f.fileid, "layer_dim_id_to_name", 1));
-    CHECK(fi_dim_id_to_name(f.fileid, "layer_dim_id_to_name", 1) == "lat");
+    CHECK(f.file.dimIdToName("layer_dim_id_to_name", 1) == "lat");
 }
 
-TEST_CASE("fi_dim_name_to_id forwards to netcdf_dim_name_to_id") {
+TEST_CASE("NetCDFFile::dimNameToId matches netcdf_dim_name_to_id") {
     BareFile f("layer_dim_name_to_id");
-    CHECK(fi_dim_name_to_id(f.fileid, (char *)"layer_dim_name_to_id", (char *)"lat") ==
+    CHECK(f.file.dimNameToId((char *)"layer_dim_name_to_id", (char *)"lat") ==
           netcdf_dim_name_to_id(f.fileid, (char *)"layer_dim_name_to_id", (char *)"lat"));
-    CHECK(fi_dim_name_to_id(f.fileid, (char *)"layer_dim_name_to_id", (char *)"lat") == 1);
+    CHECK(f.file.dimNameToId((char *)"layer_dim_name_to_id", (char *)"lat") == 1);
     // A dim name that doesn't exist on the variable: both sides must agree
     // on the -1 miss too, not just the hit.
-    CHECK(fi_dim_name_to_id(f.fileid, (char *)"layer_dim_name_to_id", (char *)"nope") == -1);
+    CHECK(f.file.dimNameToId((char *)"layer_dim_name_to_id", (char *)"nope") == -1);
 }
 
-TEST_CASE("fi_dim_longname forwards to netcdf_dim_longname") {
+TEST_CASE("NetCDFFile::dimLongname matches netcdf_dim_longname") {
     BareFile f("layer_dim_longname");
-    CHECK(fi_dim_longname(f.fileid, "lat") == netcdf_dim_longname(f.fileid, "lat"));
-    CHECK(fi_dim_longname(f.fileid, "lat") == "Latitude");
+    CHECK(f.file.dimLongname("lat") == netcdf_dim_longname(f.fileid, "lat"));
+    CHECK(f.file.dimLongname("lat") == "Latitude");
 }
 
-TEST_CASE("fi_recdim_id forwards to netcdf_fi_recdim_id -- and has no file_type guard at all") {
-    // Unlike every other fi_*() forwarder, fi_recdim_id() (file.cc) has no
-    // `if (file_type != FILE_TYPE_NETCDF)` check at all -- it unconditionally
-    // calls netcdf_fi_recdim_id(). That makes this equivalence trivially
-    // true by construction rather than by dispatch, which is itself the
-    // behavior being pinned: Phase 6 must not "fix" this by adding a guard
-    // as an incidental side effect of the collapse, since that would be a
-    // behavior change riding along on a refactor.
+TEST_CASE("NetCDFFile::recdimId matches netcdf_fi_recdim_id -- and had no file_type guard at all, even as fi_recdim_id()") {
+    // Unlike every other collapsed forwarder, file.cc's old fi_recdim_id()
+    // had no `if (file_type != FILE_TYPE_NETCDF)` check at all -- it
+    // unconditionally called netcdf_fi_recdim_id(). That made (and makes)
+    // this equivalence trivially true by construction rather than by
+    // dispatch, which is itself the behavior this test pins: the collapse
+    // must not have "fixed" this by adding a guard as an incidental side
+    // effect, since that would be a behavior change riding along on a
+    // refactor.
     BareFile f("layer_recdim_id");
-    CHECK(fi_recdim_id(f.fileid) == netcdf_fi_recdim_id(f.fileid));
-    CHECK(fi_recdim_id(f.fileid) >= 0); // "time" is the unlimited dim
+    CHECK(f.file.recdimId() == netcdf_fi_recdim_id(f.fileid));
+    CHECK(f.file.recdimId() >= 0); // "time" is the unlimited dim
 }
 
-TEST_CASE("fi_fill_aux_data forwards to netcdf_fill_aux_data") {
+TEST_CASE("NetCDFFile::fillAuxData matches netcdf_fill_aux_data") {
     BareFile f("layer_fill_aux");
     // Neither function reads fdb->file (only ->filename/->recdim_units/
     // ->aux_data/->ut_unit_ptr are touched), so two bare FDBlists with no
     // NetCDFFile attached are enough to compare -- avoids constructing a
     // second NetCDFFile over the same already-tracked fileid, which would
     // double-close it.
-    FDBlist via_fi;
-    via_fi.filename = f.path;
-    via_fi.aux_data = std::make_unique<NetCDFOptions>();
-    fi_fill_aux_data(f.fileid, (char *)"layer_fill_aux", &via_fi);
+    FDBlist via_method;
+    via_method.filename = f.path;
+    via_method.aux_data = std::make_unique<NetCDFOptions>();
+    f.file.fillAuxData((char *)"layer_fill_aux", &via_method);
 
     FDBlist via_netcdf;
     via_netcdf.filename = f.path;
     via_netcdf.aux_data = std::make_unique<NetCDFOptions>();
     netcdf_fill_aux_data(f.fileid, (char *)"layer_fill_aux", &via_netcdf);
 
-    CHECK(via_fi.recdim_units == via_netcdf.recdim_units);
-    CHECK(via_fi.recdim_units == "days since 2000-01-01");
-    CHECK((via_fi.aux_data != nullptr) == (via_netcdf.aux_data != nullptr));
+    CHECK(via_method.recdim_units == via_netcdf.recdim_units);
+    CHECK(via_method.recdim_units == "days since 2000-01-01");
+    CHECK((via_method.aux_data != nullptr) == (via_netcdf.aux_data != nullptr));
 }
 
 TEST_CASE("netcdf_fill_aux_data: a null aux_data no longer crashes (Phase 6 regression test)") {
@@ -337,8 +360,9 @@ TEST_CASE("determine_file_type: accepts a real netCDF file and sets file_type fo
     // comment.
     BareFile f("layer_determine_type"); // BareFile's ctor already ran determine_file_type()
     // If file_type hadn't been set to FILE_TYPE_NETCDF, this and every
-    // other fi_*() call in this file would have exit(-1)'d already.
-    CHECK(fi_n_dims(f.fileid, (char *)"layer_determine_type") == 3);
+    // other fi_*()/NetCDFFile-method call in this file would have
+    // exit(-1)'d already.
+    CHECK(f.file.nDims((char *)"layer_determine_type") == 3);
 }
 
 // ===================== fi_initialize: open + fi_list_vars + Dataset::addVariables =====================

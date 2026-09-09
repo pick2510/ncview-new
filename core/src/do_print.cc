@@ -25,6 +25,7 @@
 #include <array>
 
 #include "ncview/includes.h"
+#include "ncview/dataset.h"	/* NetCDFFile -- file0->dimLongname()/etc. below */
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 
@@ -155,23 +156,29 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 	time_t	sec_since_1970;
 	double	temp_double, bound_min, bound_max;
 	PrintOptions &printopts = g_app.session.printSettings();
+	/* The 13 single-file fi_*() forwarders this function used to call were
+	 * collapsed onto NetCDFFile methods (Phase 6): every call site already
+	 * held the owning FDBlist and only used ->id() to hand a bare fileid
+	 * to a free function, so ->file (the NetCDFFile* FDBlist already
+	 * carries) is the direct replacement -- "move, don't split" applied to
+	 * the caller side, not just the callee. */
+	NetCDFFile *file0 = view->variable->files.front()->file;
 
 #ifdef DEBUG
 	fprintf( stderr, "build_print_info: entering\n" );
 #endif
 	x_dim_name     = const_cast<char *>(view->variable->dim[view->x_axis_id]->name.c_str());
-	x_dim_longname = fi_dim_longname( view->variable->files.front().get()->id(), x_dim_name );
-	x_units        = fi_dim_units( view->variable->files.front().get()->id(), x_dim_name );
+	x_dim_longname = file0->dimLongname( x_dim_name );
+	x_units        = file0->dimUnits( x_dim_name );
 
 	y_dim_name     = const_cast<char *>(view->variable->dim[view->y_axis_id]->name.c_str());
-	y_dim_longname = fi_dim_longname( view->variable->files.front().get()->id(), y_dim_name );
-	y_units        = fi_dim_units( view->variable->files.front().get()->id(), y_dim_name );
+	y_dim_longname = file0->dimLongname( y_dim_name );
+	y_units        = file0->dimUnits( y_dim_name );
 
-	main_long_name = fi_long_var_name( view->variable->files.front().get()->id(),
-			view->variable->name );
+	main_long_name = file0->longVarName( view->variable->name );
 	if( main_long_name.empty() )
 		main_long_name = view->variable->name;
-	main_units     = fi_var_units( view->variable->files.front().get()->id(), view->variable->name );
+	main_units     = file0->varUnits( view->variable->name );
 
 	/***** Main variable name and units ******/
 	if( printopts.include_title ) {
@@ -194,7 +201,7 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 	/***************** Other information *******************/
 	if( printopts.include_extra_info ) {
 		/**** File title ***/
-		file_title = fi_title( view->variable->files.front().get()->id() );
+		file_title = file0->title();
 		if( !file_title.empty() )
 			info->extra_info.push_back( file_title );
 
@@ -233,8 +240,8 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 			    (i != view->y_axis_id) &&
 			    (view->variable->dim[i].get() != NULL)) {
 				dim_name     = const_cast<char *>(view->variable->dim[i]->name.c_str());
-				dim_longname = fi_dim_longname( view->variable->files.front().get()->id(), dim_name );
-				units        = fi_dim_units( view->variable->files.front().get()->id(), dim_name );
+				dim_longname = file0->dimLongname( dim_name );
+				units        = file0->dimUnits( dim_name );
 				type         = g_dataset.dimValue( view->variable, i, view->var_place[i],
 							&temp_double, tstr2, &has_bounds, &bound_min, &bound_max, view->var_place.data() );
 				if( type == NC_DOUBLE )
@@ -254,8 +261,8 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 		std::array<size_t, 20> actual_place;
 		virt_to_actual_place( view->variable, view->var_place.data(), actual_place.data(), &fdb );
 		if( (view->scan_axis_id != -1) &&
-		    (fi_recdim_id( view->variable->files.front().get()->id() ) != view->x_axis_id ) &&
-		    (fi_recdim_id( view->variable->files.front().get()->id() ) != view->y_axis_id))
+		    (file0->recdimId() != view->x_axis_id ) &&
+		    (file0->recdimId() != view->y_axis_id))
 			snprintf( tstr, 1499, "Frame %ld in ",
 				(long)(actual_place[view->scan_axis_id]+1) );
 		strncat( tstr, "File ", sizeof(tstr) - strlen(tstr) - 1 );

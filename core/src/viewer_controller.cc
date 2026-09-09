@@ -639,7 +639,7 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 ViewerController::changeCurDim( char *dim_name, Modifier modifier )
 {
 	std::unique_ptr<ViewState> &view = session_.activeView();
-	int	dimid, fileid;
+	int	dimid;
 	size_t	place, size;
 	long	delta, prov_place;
 	NCDim	*dim;
@@ -652,8 +652,7 @@ ViewerController::changeCurDim( char *dim_name, Modifier modifier )
 	if( view->data_status == ViewDataStatus::Edited )
 		view_data_edit_warn();
 
-	fileid = view->variable->files.front().get()->id();
-	dimid  = fi_dim_name_to_id( fileid,
+	dimid  = view->variable->files.front()->file->dimNameToId(
 				const_cast<char *>(view->variable->name.c_str()), dim_name );
 	if( (dimid == view->x_axis_id) ||
 	    (dimid == view->y_axis_id) )
@@ -699,7 +698,7 @@ ViewerController::changeCurDim( char *dim_name, Modifier modifier )
 ViewerController::setCurDimIndex( const char *dim_name, long place )
 {
 	std::unique_ptr<ViewState> &view = session_.activeView();
-	int	dimid, fileid;
+	int	dimid;
 	NCDim	*dim;
 
 	if( view == NULL ) {
@@ -710,8 +709,7 @@ ViewerController::setCurDimIndex( const char *dim_name, long place )
 	if( view->data_status == ViewDataStatus::Edited )
 		view_data_edit_warn();
 
-	fileid = view->variable->files.front().get()->id();
-	dimid  = fi_dim_name_to_id( fileid,
+	dimid  = view->variable->files.front()->file->dimNameToId(
 				const_cast<char *>(view->variable->name.c_str()),
 				const_cast<char *>(dim_name) );
 	if( (dimid == view->x_axis_id) ||

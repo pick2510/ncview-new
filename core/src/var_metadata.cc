@@ -45,6 +45,7 @@
 #include <vector>
 
 #include "ncview/includes.h"
+#include "ncview/dataset.h"	/* NetCDFFile -- file0->dimUnits()/etc. below (Phase 6) */
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 
@@ -75,7 +76,7 @@ virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **fil
 	int	i, n_dims;
 
 	f       = var->files.front().get();
-	n_dims  = fi_n_dims( f->id(), const_cast<char *>(var->name.c_str()) );
+	n_dims  = f->file->nDims( const_cast<char *>(var->name.c_str()) );
 	v_place = *(virt_pl);
 
 	if( v_place >= var->size[0] ) {
@@ -228,7 +229,7 @@ handle_dim_mapping_scalar( NCVar *v, char *coord_var_name, char *coord_att )
 	 * in view.cc, so an absent-units result must stay empty here rather
 	 * than something that would render as blank text either way -- the
 	 * empty-string convention is unambiguous now that this is std::string. */
-	tmi->coord_var_units = fi_var_units( v->files.front()->id(), coord_var_name );
+	tmi->coord_var_units = v->files.front()->file->varUnits( coord_var_name );
 	tmi->scalar_all_same = 0;
 
 	/* Same check handle_time_dim() runs for a real dimension's own units --
@@ -490,18 +491,19 @@ fill_dim_structs( NCVar *v )
 	if( debug == 1 ) printf( "fill_dim_structs: entering for var %s, which has %d dims\n", v->name.c_str(), v->n_dims );
 
 	fileid = v->files.front()->id();
+	NetCDFFile *file0 = v->files.front()->file;
 	v->dim.clear();
 	v->dim.resize( v->n_dims );
 	for( i=0; i<v->n_dims; i++ ) {
-		dim_name = fi_dim_id_to_name( fileid, v->name, i );
+		dim_name = file0->dimIdToName( v->name, i );
 		if( debug == 1 ) printf( "fill_dim_structs: dim %d has name %s and length %zu\n", i, dim_name.c_str(), v->size[i] );
 		if( is_scannable( v, i ) ) {
 			v->dim[i] = std::make_unique<NCDim>();
 			d            	= v->dim[i].get();
 			d->name      	= dim_name;
-			d->long_name 	= fi_dim_longname( fileid, dim_name );
+			d->long_name 	= file0->dimLongname( dim_name );
 			d->have_calc_minmax = 0;
-			d->units = fi_dim_units( fileid, dim_name );
+			d->units = file0->dimUnits( dim_name );
 			d->units_change = 0;
 			d->size      	= v->size[i];
 			d->calendar = fi_dim_calendar( fileid, dim_name );
@@ -516,7 +518,7 @@ fill_dim_structs( NCVar *v )
 			v->dim[i].reset();
 			if( options.debug )
 				printf( "adding non-scannable dim to var %s: dim name: %s size: %zu\n",
-					v->name.c_str(), fi_dim_id_to_name( fileid, v->name, i).c_str(), v->size[i] );
+					v->name.c_str(), file0->dimIdToName( v->name, i).c_str(), v->size[i] );
 			}
 		}
 
@@ -539,7 +541,7 @@ fill_dim_structs( NCVar *v )
 			 * v->files is a vector here, so just index it instead of
 			 * carrying that bug forward. */
 			for( size_t ifile = 1; ifile < v->files.size(); ifile++ ) {
-				tmp_units = fi_dim_units( v->files[ifile]->id(), d->name );
+				tmp_units = v->files[ifile]->file->dimUnits( d->name );
 				if( d->units != tmp_units ) {
 					printf( "** Warning: different time units found in different files.  Trying to compensate...\n" );
 					d->units_change = 1;

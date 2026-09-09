@@ -91,24 +91,18 @@ void	useage			    ( void );
 
 /******************************************************************************
  * in file.c
+ *
+ * The 13 single-file fi_*() forwarders that used to live here (fi_list_vars,
+ * fi_n_dims, fi_var_size, fi_scannable_dims, fi_title, fi_long_var_name,
+ * fi_var_units, fi_dim_units, fi_dim_longname, fi_dim_id_to_name,
+ * fi_dim_name_to_id, fi_fill_aux_data, fi_recdim_id) were collapsed onto
+ * NetCDFFile methods (Phase 6 of the "refine the architecture" plan) --
+ * see core/include/ncview/dataset.h.
  */
 int 	fi_initialize    ( char *name );
-Stringlist *fi_list_vars ( int fileid );
-int	fi_n_dims	 ( int fileid, char *var_name );
-size_t	*fi_var_size	 ( int fileid, char *var_name );
 void 	fi_close         ( int fileid );
 void	determine_file_type( Stringlist *input_files );
-Stringlist *fi_scannable_dims( int fileid, char *var_name );
-std::string fi_title        ( int fileid );
-std::string fi_long_var_name( int fileid, std::string_view var_name );
-std::string fi_var_units    ( int fileid, std::string_view var_name );
-std::string fi_dim_units    ( int fileid, std::string_view dim_name );
 std::string fi_dim_calendar ( int fileid, std::string_view dim_name );
-std::string fi_dim_longname ( int fileid, std::string_view dim_name );
-std::string fi_dim_id_to_name( int fileid, std::string_view var_name, int dim_id );
-int 	fi_dim_name_to_id( int fileid, char *var_name, char *dim_name );
-void 	fi_fill_aux_data ( int id, char *var_name, FDBlist *fdb );
-int 	fi_recdim_id     ( int fileid );
 
 /******************************************************************************
  * in file_netcdf.c, netcdf specific routines
