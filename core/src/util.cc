@@ -1343,26 +1343,6 @@ limit_string( std::string_view s )
 	return( ret );
 }
 
-/******************************************************************************
- * If we try to print to an already existing file, then warn the user
- * before clobbering it.
- */
-	Message
-warn_if_file_exits( char *fname )
-{
-	Message	retval;
-	FILE	*f;
-	char	message[1024];
-
-	if( (f = fopen(fname, "r")) == NULL )
-		return( Message::OK );
-	fclose(f);
-
-	snprintf( message, 1022, "OK to overwrite existing file %s?\n", fname );
-	retval = in_dialog( message, true );
-	return( retval );
-}
-
 /******************************************************************************/
 
 	static void
@@ -1576,28 +1556,6 @@ int count_nslashes( const char *s )
 			nslash++;
 
 	return( nslash );
-}
-
-/*******************************************************************************************
- * Given a list of variables, this returns a stringlist of unique group names. If ANY var
- * lives in the root group, then the return list includes "/". If no var lives in the root
- * group, then the list does NOT include "/".
- */
-Stringlist *get_group_list( const std::vector<std::unique_ptr<NCVar>> &vars )
-{
-	Stringlist	*retval = NULL;
-	char		group_name[ MAX_NC_NAME*20 ];	/* Assume no more than 20 levels of groups */
-
-	for( const auto &cursor : vars ) {
-
-		unpack_groupname( cursor->name.c_str(), -1, group_name );	/* -1 means get full group name */
-
-		/* Only add to list if not already there */
-		if( stringlist_match_string_exact( retval, group_name ) == nullptr )
-			stringlist_add_string( &retval, group_name );
-		}
-
-	return( retval );
 }
 
 /*******************************************************************************************

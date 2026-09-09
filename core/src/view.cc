@@ -70,6 +70,7 @@ static NCDim *plot_XY_dim[MAX_PLOT_XY];
 #define	BUTTONS_ALL_OFF		3
 
 /* Prototypes applicable to routines used ONLY in this file */
+static void 		beep();
 static void 		set_buttons( int to_state );
 static void 		draw_file_info( NCVar *var );
 static void 		view_data_edit_warn();
@@ -1728,7 +1729,10 @@ View::setRangeFrame()
 }
 
 /**************************************************************************************/
-	void
+/* Sole caller is stepView()'s stop_on_restart branch, above -- static,
+ * not declared in protos.h (Phase 3d; it was public with no external
+ * caller before). */
+	static void
 beep()
 {
 	fprintf( stderr, "" );

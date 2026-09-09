@@ -92,8 +92,6 @@ void	useage			    ( void );
 /******************************************************************************
  * in file.c
  */
-int 	fi_confirm       ( char *name );
-int	fi_writable      ( char *name );
 int 	fi_initialize    ( char *name, int nfiles );
 Stringlist *fi_list_vars ( int fileid );
 int	fi_n_dims	 ( int fileid, char *var_name );
@@ -107,14 +105,12 @@ std::string fi_long_var_name( int fileid, std::string_view var_name );
 std::string fi_var_units    ( int fileid, std::string_view var_name );
 std::string fi_dim_units    ( int fileid, std::string_view dim_name );
 std::string fi_dim_calendar ( int fileid, std::string_view dim_name );
-int 	fi_has_dim_values( int fileid, char *dim_name );
 std::string fi_dim_longname ( int fileid, std::string_view dim_name );
 nc_type fi_dim_value     ( NCVar *v, int dim_id, size_t place, double *ret_val_double, char *ret_val_char,
 				int *return_has_bounds, double *return_bounds_min, double *return_bounds_max,
 				size_t *complete_ndim_virt_place );
 std::string fi_dim_id_to_name( int fileid, std::string_view var_name, int dim_id );
 int 	fi_dim_name_to_id( int fileid, char *var_name, char *dim_name );
-size_t 	fi_n_dim_entries ( int fileid, char *dim_name );
 void 	fi_fill_aux_data ( int id, char *var_name, FDBlist *fdb );
 void 	fi_fill_value	 ( NCVar *var, float *fillval );
 int 	fi_recdim_id     ( int fileid );
@@ -125,7 +121,6 @@ int 	fi_recdim_id     ( int fileid );
 std::string netcdf_att_string       ( int fileid, std::string_view var_name );
 std::string netcdf_global_att_string( int fileid );
 int 	netcdf_fi_confirm	( char *name );
-int 	netcdf_fi_writable	( char *name );
 int 	netcdf_fi_initialize	( char *name );
 Stringlist *netcdf_fi_list_vars	( int fileid );
 int	netcdf_fi_n_dims	( int fileid, char *var_name );
@@ -178,17 +173,12 @@ std::vector<int> gen_overlay       ( View *v, char *overlay_fname );
 void 	fmt_time	   ( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity );
 int	n_vars_in_list	   ( const std::vector<std::unique_ptr<NCVar>> &v );
 void 	set_blowup_type	   ( BlowupType new_type );
-int 	n_strings_in_list  ( Stringlist *s );
 int 	strncmp_nocase     ( const char *s1, const char *s2, size_t n );
-Message	warn_if_file_exits ( char *fname );
 void 	virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **file );
 int     is_scannable        ( NCVar *v, int i );
-void 	sl_cat		    ( Stringlist **dest, Stringlist **src );
 int 	unpack_groupname( const char *varname, int ig, char *groupname );
 int 	count_nslashes	    ( const char *s );
-Stringlist *get_group_list  ( const std::vector<std::unique_ptr<NCVar>> &vars );
 void 	varname_no_groups   ( const char *varname, char *varname_sans_groups, char *groupname );
-unsigned char interp( int i, int range_i, unsigned char *mat, int n_entries );
 
 /******************************************************************************
  * in do_buttons.c
@@ -228,7 +218,6 @@ int 	set_scan_variable    ( NCVar *var );
  * around view_draw() with zero callers, removed along with its
  * definition in view.cc). */
 void 	view_report_position_vals( float xval, float yval, int plot_index );
-void	beep		     ( void );
 void	view_get_scaled_size ( int blowup, size_t old_nx, size_t old_ny, size_t *new_nx, size_t *new_ny );
 void 	view_change_transform( int delta );
 

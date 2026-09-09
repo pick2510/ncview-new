@@ -44,32 +44,6 @@ extern Options options;
 static void fi_get_data_iterate( NCVar *var, size_t *virt_start_pos, size_t *count, void *data );
 
 /************************************************************************************/
-/* return true if passed the name of a file which these routines were designed
- * to read, and false otherwise.
- */
-	int
-fi_confirm( char *name )
-{
-	return( netcdf_fi_confirm( name ));
-}
-
-/************************************************************************************/
-/* return true if the passed filename is writable, and false otherwise.
- * It is assumed that the file exists and is readable.
- */
-	int
-fi_writable( char *name )
-{
-	if( file_type != FILE_TYPE_NETCDF )
-		{
-		fprintf( stderr, "?unknown file_type passed to fi_writable: %d\n",
-			file_type );
-		exit( -1 );
-		}
-	return( netcdf_fi_writable( name ));
-}
-
-/************************************************************************************/
 /* Do all file opening and initialization for the passed filename.
  * Return a unique integer ID by which this file will be indicated
  * in the future.  Passed arg 'nfiles' is total number of files that
@@ -521,21 +495,6 @@ for( i=0; i<var->n_dims; i++ ) {
 #endif
 
 	return( ret_val );
-}
-
-/*************************************************************************************
- * Does this data file have *values* for the dimensions?
- */
-	int
-fi_has_dim_values( int fileid, char *dim_name )
-{
-	if( file_type != FILE_TYPE_NETCDF )
-		{
-		fprintf( stderr, "?unknown file_type passed to fi_has_dim_values: %d\n",
-			file_type );
-		exit( -1 );
-		}
-	return( netcdf_has_dim_values( fileid, dim_name ) );
 }
 
 /*************************************************************************************

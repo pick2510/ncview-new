@@ -328,29 +328,12 @@ is_unique( char *units )
 	return( true );
 }
 
-/******************************************************************************/
-#else
-
-void udu_utinit( char *path )
-{
-	;
-}
-
-int udu_utistime( char *dimname, char *units )
-{
-	return( 0 );
-}
-
-TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
-{
-	/* No-UDUNITS2 build stub, preserved verbatim: upstream returned a
-	 * bare 0 here, not one of the TGRAN_* values. */
-	return( static_cast<TimeGranularity>(0) );
-}
-
-void udu_fmt_time( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity )
-{
-	snprintf( temp_string, temp_string_len-1, "%g", new_dimval );
-}
-
+/* No `#else` stub branch here: core/CMakeLists.txt unconditionally
+ * defines HAVE_UDUNITS2 and always builds the vendored UDUNITS-2, so a
+ * no-udunits build is not a supported configuration today (see
+ * PORTING.md's "refine the architecture" plan, Baseline section) -- the
+ * stub implementations of udu_utinit/udu_utistime/udu_calc_tgran/
+ * udu_fmt_time that used to live in an `#else` here could never actually
+ * be compiled, and were deleted as dead code (Phase 3d) rather than kept
+ * as a fallback for a configuration axis that doesn't exist. */
 #endif

@@ -181,7 +181,7 @@ determine_overlay_base_dir( char *overlay_base_dir, size_t n )
  * NOTE: 'nvals' is the total number of data values in array data.  Since there are
  * two data values per location, nvals is TWICE the number of locations.
  */
-	void
+	static void
 gen_overlay_internal_mapped( View *v, float *data, long nvals, std::vector<int> &overlay )
 {
 	NCDim	*dim_x, *dim_y;
@@ -453,8 +453,8 @@ overlay_custom_n( void )
  * (0,0) -----
  *
  */
-	void
-overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size_t init_guess_idxy, 
+	static void
+overlay_find_closest_pt_inner( size_t point_number, size_t init_guess_idxx, size_t init_guess_idxy,
 	float locx, float locy, float *xvals, float *yvals, size_t nx, size_t ny, size_t *idxx, size_t *idxy )
 {
 	float	dist[9], dx, dy, mindist, tdist[9] = {}, prev_d4;

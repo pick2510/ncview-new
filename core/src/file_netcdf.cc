@@ -78,19 +78,6 @@ int netcdf_fi_confirm( char *name )
 }
 
 /*******************************************************************************************/
-int netcdf_fi_writable( char *name )
-{
-	int	fd, ierr;
-
-	ierr = nc_open( name, NC_WRITE, &fd );
-	if( ierr != NC_NOERR )
-		return( false );
-
-	nc_close( fd );
-	return( true );
-}
-
-/*******************************************************************************************/
 int netcdf_fi_initialize( char *name )
 {
 	int	cdfid, ierr;
@@ -853,35 +840,7 @@ int netcdf_n_dims( int cdfid, char *varname )
 }
 
 /*******************************************************************************************/
-/* What type of variable is this? 
-*/
-int netcdf_vartype( int cdfid, char *varname )
-{
-	int	varid, err, n_dims;
-	char 	var_name[MAX_NC_NAME];	
-	nc_type	var_type;
-	int	n_atts, dim[MAX_VAR_DIMS];
-
-	err = nc_inq_varid( cdfid, varname, &varid );
-	if( err != NC_NOERR ) {
-		fprintf( stderr, "Error in netcdf_vartype: could not find var named \"%s\" in file!\n",
-			varname );
-		exit(-1);
-		}
-
-	err = nc_inq_var( cdfid, varid, var_name, &var_type, &n_dims, dim, &n_atts );
-	if( err != NC_NOERR ) {
-		fprintf( stderr, "netcdf_n_dims: error calling nc_inq_var for cdfid=%d, ", 
-					cdfid);
-		fprintf( stderr, "varname=%s\n", varname );
-		exit( -1 );
-		}
-
-	return( var_type );
-}
-
-/*******************************************************************************************/
-/* Given the variable INDEX, what is the variable's name? 
+/* Given the variable INDEX, what is the variable's name?
 */
 char *netcdf_varindex_to_name( int cdfid, int index )
 {
