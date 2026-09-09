@@ -496,6 +496,32 @@ otherwise touch -- found and fixed because the new isolation
 infrastructure finally exercised a destruction path nothing had before,
 not because either was being hunted for.
 
+### Phase 0b (partial): a real fake timer, and playback tests
+
+`stub_interface.cc`'s `RecordingViewerUi::in_timer_set()` used to just
+record its own name and drop the `std::function` callback core handed it
+-- meaning nothing had ever actually driven playback
+(`ViewerController::rewind`/`fastforward`, whose `Modifier::M1` paths
+only advance the movie because their timer callback re-arms itself and
+steps again) or the file-growth poll (`View::checkNewData()`) under test.
+`stub_interface.cc` now keeps the pending callback in a real one-shot
+queue (`g_pending_timer_callback`/`g_timer_armed`), with `fireTimer()`
+taking ownership of the callback and clearing the armed flag *before*
+invoking it -- reproducing genuine one-shot timer semantics, so a
+callback that re-arms itself (as every real one does) doesn't step on
+the timer being fired. `timerIsArmed()`/`timerDelayMs()`/`fireTimer()`
+are exposed via `tests/support/session_fixture.h`, and
+`resetStubRecording()` clears the queue along with everything else it
+already reset.
+
+`tests/test_playback.cc` exercises this end to end: `rewind`/
+`fastforward` arm a timer and advance one frame per fired callback,
+`pause` clears the pending timer (and a stale `fireTimer()` afterward is
+correctly a no-op), and `restart` seeks to frame 0 without itself arming
+one. The rest of Phase 0b (a shared NetCDF fixture builder, scripted
+dialog answers beyond what already existed, pixel goldens) is still
+open.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds

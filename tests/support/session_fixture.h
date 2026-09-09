@@ -50,6 +50,15 @@ extern Message g_printer_options_response;
 extern int g_set_scan_dims_response;
 extern void resetStubRecording();
 
+// The fake one-shot timer queue (stub_interface.cc) -- lets a test drive
+// playback (rewind/fastforward's re-arming) and the file-growth poll
+// (View::checkNewData()) by firing the callback core handed the UI,
+// instead of that callback being silently dropped. See fireTimer()'s own
+// comment for the one-shot semantics this reproduces.
+extern bool timerIsArmed();
+extern unsigned long timerDelayMs();
+extern bool fireTimer();
+
 namespace ncview_test {
 
 // Construct at the top of any TEST_CASE that selects a variable, opens a

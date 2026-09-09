@@ -17,6 +17,7 @@
 // runs.
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,25 @@ Message g_range_response = Message::OK;
 Message g_printer_options_response = Message::OK;
 int g_set_scan_dims_response = 0;
 
+// --- Fake timer queue ---------------------------------------------------
+// "Refine the architecture" plan, Phase 0b: in_timer_set() used to just
+// record its own name and drop the callback, which is why playback
+// (do_buttons.cc's rewind()/fastforward(), whose Modifier::M1 paths only
+// ever advance by re-arming this same one-shot slot from inside their own
+// callback -- see view.cc's comment on the shared timer slot) and the
+// file-growth poll (view_check_new_data()) had zero test coverage: there
+// was no way to actually fire the callback core handed over. Upstream's
+// real interface.h contract is a genuine one-shot timer (the callback
+// must re-arm itself via a fresh in_timer_set() call if it wants to run
+// again, exactly like an X/FLTK timeout) -- fireTimer() reproduces that:
+// it takes ownership of the pending callback and clears the "armed" flag
+// *before* invoking it, so a callback that calls in_timer_set() again
+// (as every real one does) correctly re-arms a fresh timer rather than
+// stepping on the one being fired.
+std::function<void()> g_pending_timer_callback;
+unsigned long g_pending_timer_delay_ms = 0;
+bool g_timer_armed = false;
+
 void resetStubRecording()
 {
 	g_recorded_calls.clear();
@@ -52,6 +72,26 @@ void resetStubRecording()
 	g_range_response = Message::OK;
 	g_printer_options_response = Message::OK;
 	g_set_scan_dims_response = 0;
+	g_pending_timer_callback = nullptr;
+	g_pending_timer_delay_ms = 0;
+	g_timer_armed = false;
+}
+
+bool timerIsArmed() { return g_timer_armed; }
+unsigned long timerDelayMs() { return g_pending_timer_delay_ms; }
+
+// Fires the pending timer, if one is armed; a no-op (returns false)
+// otherwise -- callers that don't know whether a timer is pending (e.g.
+// a test loop simulating several seconds passing) should check the
+// return value rather than assuming REQUIRE(timerIsArmed()) beforehand.
+bool fireTimer()
+{
+	if (!g_timer_armed) return false;
+	std::function<void()> callback = std::move(g_pending_timer_callback);
+	g_pending_timer_callback = nullptr;
+	g_timer_armed = false;
+	callback();
+	return true;
 }
 
 // Captured for test_view_data_edit.cc: view_data_edit() builds this array
@@ -92,9 +132,18 @@ public:
 	void in_query_pointer_position(int *x, int *y) override { g_recorded_calls.push_back("in_query_pointer_position"); if (x) *x = 0; if (y) *y = 0; }
 	void in_popup_2d_window() override { g_recorded_calls.push_back("in_popup_2d_window"); }
 	void in_popdown_2d_window() override { g_recorded_calls.push_back("in_popdown_2d_window"); }
-	void in_timer_clear() override { g_recorded_calls.push_back("in_timer_clear"); }
+	void in_timer_clear() override {
+		g_recorded_calls.push_back("in_timer_clear");
+		g_pending_timer_callback = nullptr;
+		g_timer_armed = false;
+	}
 	int in_report_auto_overlay() override { g_recorded_calls.push_back("in_report_auto_overlay"); return 0; }
-	void in_timer_set(std::function<void()>, unsigned long) override { g_recorded_calls.push_back("in_timer_set"); }
+	void in_timer_set(std::function<void()> callback, unsigned long delay_millisec) override {
+		g_recorded_calls.push_back("in_timer_set");
+		g_pending_timer_callback = std::move(callback);
+		g_pending_timer_delay_ms = delay_millisec;
+		g_timer_armed = true;
+	}
 	char *in_install_prev_colormap(int) override { g_recorded_calls.push_back("in_install_prev_colormap"); return nullptr; }
 	char *in_install_colormap_by_name(const char*, int) override { g_recorded_calls.push_back("in_install_colormap_by_name"); return nullptr; }
 	Stringlist *in_choose_input_files() override { g_recorded_calls.push_back("in_choose_input_files"); return nullptr; }
