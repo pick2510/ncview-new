@@ -116,6 +116,13 @@ public:
 	SessionDisplayPrefs& sessionDisplayPrefs() { return session_display_prefs_; }
 	StartupSettings& startupSettings() { return startup_settings_; }
 
+	/* Formerly a lone `static PrintOptions printopts;` module-static in
+	 * do_print.cc with no getter or setter -- print_init() was the only
+	 * way to reach it, which is why every test that exercises printing
+	 * has to call print_init() by hand before anything else can see sane
+	 * defaults ("Refine the architecture" plan, Phase 5b). */
+	PrintOptions& printSettings() { return print_settings_; }
+
 	/* Builds FrameRenderer's settings from Options's render-shaped field
 	 * group (transform, invert_colors, invert_physical, n_colors,
 	 * n_extra_colors, display_type). Options itself is passed in rather
@@ -143,4 +150,5 @@ private:
 	PlaybackSettings playback_settings_;
 	SessionDisplayPrefs session_display_prefs_;
 	StartupSettings startup_settings_;
+	PrintOptions print_settings_;
 };

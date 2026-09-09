@@ -49,8 +49,6 @@
 extern std::unique_ptr<ViewState> &view;
 extern Options 	options;
 
-static PrintOptions printopts;
-
 /* getlogin() is POSIX-only -- not provided by MinGW-w64's Windows CRT --
  * used only to stamp a username on the "include ID" printout footer, so a
  * portable fallback via the USERNAME environment variable (always set on
@@ -74,6 +72,8 @@ static void build_print_info( PrintInfo *info, size_t x_size, size_t y_size );
 	void
 print_init( void )
 {
+	PrintOptions &printopts = g_app.session.printSettings();
+
 	printopts.page_x_margin 	= PAGE_X_MARGIN;
 	printopts.page_upper_y_margin 	= PAGE_UPPER_Y_MARGIN;
 	printopts.page_lower_y_margin 	= PAGE_LOWER_Y_MARGIN;
@@ -99,6 +99,7 @@ print_init( void )
 do_print( void )
 {
 	size_t	x_size, y_size, scaled_x_size, scaled_y_size;
+	PrintOptions &printopts = g_app.session.printSettings();
 
 #ifdef DEBUG
 	fprintf( stderr, "entering do_print()\n" );
@@ -153,6 +154,7 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 	int	i, type, has_bounds;
 	time_t	sec_since_1970;
 	double	temp_double, bound_min, bound_max;
+	PrintOptions &printopts = g_app.session.printSettings();
 
 #ifdef DEBUG
 	fprintf( stderr, "build_print_info: entering\n" );
