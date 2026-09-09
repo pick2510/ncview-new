@@ -1253,7 +1253,7 @@ survives.
 This completes Phase 5 (5a/5b/5c) as scoped in the round-3 reassessment.
 Phase 6 (the `fi_*`/`netcdf_*` collapse) is unblocked.
 
-## Phase 6: collapse the `fi_*`/`netcdf_*` double layer (partial)
+## Phase 6: collapse the `fi_*`/`netcdf_*` double layer (partial, then completed below)
 
 The largest remaining structural phase (~2,780 lines across `file.cc` and
 `file_netcdf.cc`), landed as a coherent, fully-verified **subset** of the
@@ -1359,32 +1359,132 @@ special case also transforms `valid_min`/`valid_max` in place — not a
 bug, but easy to assume otherwise, and now pinned rather than silently
 assumed away.
 
-**Deferred, and why.** The 13 pure single-file forwarders (`fi_list_vars`,
-`fi_title`, `fi_long_var_name`, `fi_var_units`, `fi_dim_units`,
-`fi_n_dims`, `fi_scannable_dims`, `fi_var_size`, `fi_dim_id_to_name`,
-`fi_dim_name_to_id`, `fi_dim_longname`, `fi_recdim_id`,
-`fi_fill_aux_data`) were *not* migrated onto `NetCDFFile` methods this
-round. Unlike the multi-file functions, most call sites hold only a bare
-`int fileid` threaded down through several layers of their own callers
-(`view.cc`, `viewer_controller.cc`, `viewer_session.cc`, `do_print.cc`,
-`var_metadata.cc` — 40+ call sites total, confirmed by grep before
-scoping this phase), not an `NCVar*`/`FDBlist*`/`NetCDFFile*` already in
-hand — turning each into a method call means first getting a
-`NetCDFFile*` to call it on, which ripples into the signature of
-whatever function held the bare `int` in the first place. That's a real,
-separate migration with its own per-call-site verification burden, not
-a mechanical finish to this phase; it stays queued as Phase 6's
-remaining half rather than rushed here. Also deferred:
-`test_file_metadata.cc` for the ~350 lines of netCDF-4 group-handling
-code (`file_netcdf.cc`) still at zero coverage — orthogonal to
-everything else in this phase and sizable enough to deserve its own
-tests-first pass.
+**Deferred at the time, and why** (both resolved below). The 13 pure
+single-file forwarders (`fi_list_vars`, `fi_title`, `fi_long_var_name`,
+`fi_var_units`, `fi_dim_units`, `fi_n_dims`, `fi_scannable_dims`,
+`fi_var_size`, `fi_dim_id_to_name`, `fi_dim_name_to_id`, `fi_dim_longname`,
+`fi_recdim_id`, `fi_fill_aux_data`) were *not* migrated onto `NetCDFFile`
+methods this round. Unlike the multi-file functions, most call sites hold
+only a bare `int fileid` threaded down through several layers of their
+own callers (`view.cc`, `viewer_controller.cc`, `viewer_session.cc`,
+`do_print.cc`, `var_metadata.cc` — 40+ call sites total, confirmed by grep
+before scoping this phase), not an `NCVar*`/`FDBlist*`/`NetCDFFile*`
+already in hand. Also deferred: `test_file_metadata.cc` for the ~350
+lines of netCDF-4 group-handling code (`file_netcdf.cc`) still at zero
+coverage.
 
-169→190 tests, 4596→4831 assertions across the phase. Full verification
-(4-gate + ASan/UBSan/LSan + shuffled order across many seeds) clean at
-every commit; `grep -rn` confirms no reference survives to any
-renamed/moved/deleted symbol, and the circular dependency is actually
-broken, not relocated.
+169→190 tests, 4596→4831 assertions across this half of the phase. Full
+verification (4-gate + ASan/UBSan/LSan + shuffled order across many
+seeds) clean at every commit; `grep -rn` confirms no reference survives
+to any renamed/moved/deleted symbol, and the circular dependency is
+actually broken, not relocated.
+
+## Phase 6, continued: the 13 forwarders, and group-handling coverage
+
+Both items deferred above turned out smaller than the deferral reasoning
+assumed, once actually read rather than estimated from a grep count.
+
+**The 13 forwarders, migrated onto `NetCDFFile` methods.** The premise
+for deferring this — "most call sites hold only a bare `int fileid`...
+not an object already in hand" — was checked directly against every one
+of the 40+ call sites (`grep -rn` for each of the 13 function names
+across `core/` and `ui/`) and turned out backwards: **every single call
+site** already computed its `fileid` via
+`some_fdblist_or_ncvar->files.front().get()->id()` (or the equivalent for
+a specific file index), immediately before handing that bare `int` to the
+dispatcher. None of them held a fileid with no object behind it — they
+all held the `FDBlist`, and `FDBlist::file` (a public `NetCDFFile*`
+member, already there for `id()` itself to read) was the direct
+replacement with no lookup table, no new `Dataset` accessor, and no
+signature change to any of the functions that used to compute the bare
+`fileid` locally. `view.cc` (largest by far — 8 different methods),
+`do_print.cc`, `var_metadata.cc`, `dataset.cc`'s `addVariable()`,
+`viewer_session.cc`, and `viewer_controller.cc` (×2) all changed the same
+way: drop the `->id()` extraction, call the method on `->file` directly.
+A few of `view.cc`'s methods repeated the same `->files.front().get()->id()`
+call four or five times in a row for different forwarders — those got one
+local `NetCDFFile *file0 = ...` instead of one per call, which is a
+readability improvement riding on top of the move but not a behavior
+change (each call site still resolves the exact same object it did
+before).
+
+Each method body is the `netcdf_*()` call the old forwarder made,
+unchanged — `NetCDFFile::listVars()`/`title()`/`longVarName()`/
+`varUnits()`/`dimUnits()`/`nDims()`/`scannableDims()`/`varSize()`/
+`dimIdToName()`/`dimNameToId()`/`dimLongname()`/`recdimId()`/
+`fillAuxData()`, all declared in `dataset.h` alongside the class's
+existing `open()`. `fi_initialize()` (the one production caller of
+`fi_list_vars()`) now calls `g_dataset.trackFile(id)` to get the
+`NetCDFFile*` *before* listing variables (`trackFile()` is idempotent by
+fileid, so `addVariables()`'s own later `trackFile()` calls for the same
+id just return the same object) — the one place production code needed a
+few lines rearranged rather than a pure call-site swap.
+
+`file.cc` drops from 351 to 161 lines, keeping only `fi_initialize()`,
+`fi_dim_calendar()` (adds a real command-line-override check beyond
+dispatch), `fi_close()`, and `determine_file_type()` — none of which are
+pure forwarders, so none collapse further.
+
+`tests/test_file_layer.cc` (Phase 5a's characterization suite, the whole
+reason this collapse was provably safe) needed a genuine, deliberate
+call-surface update: it used to call the 13 free functions by name, which
+no longer exist, so it now calls the `NetCDFFile` methods directly —
+still asserting the exact same equivalence against each `netcdf_*()`
+counterpart, and still pinning the one real behavioral quirk found in
+Phase 5a (`fi_recdim_id()`/now `recdimId()` has no `file_type` guard at
+all, unlike its 12 siblings — the collapse must not have added one as an
+incidental side effect, and it didn't). `BareFile`, the fixture's test
+helper, now owns a `NetCDFFile` member that closes itself on destruction
+instead of calling `fi_close()` by hand — the same real close path
+production code uses. A second, smaller stale-comment fix landed
+alongside: `test_file_netcdf.cc`'s header comment claimed
+`netcdf_dim_name_to_id()`/`netcdf_dim_id_to_name()` still routed through
+the dispatching `fi_n_dims()` — they don't, since this phase's earlier
+circular-dependency break — corrected to describe what's actually true
+now rather than repeat a claim already falsified by this phase's own
+step 1.
+
+190 tests / 4831 assertions, unchanged — pure motion, no behavior change.
+
+**`test_file_metadata.cc`: coverage for the netCDF-4 group-handling
+code.** `NcFixture` documents group support as out of scope, so this
+fixture is hand-rolled with raw `nc_*()` calls (`nc_def_grp()` for a
+one-level and a two-level-nested group), the same pattern
+`test_file_layer.cc`/`test_multifile.cc` already use for shapes
+`NcFixture` doesn't cover. Nine new cases: a variable one level and one
+two levels deep both show up on `netcdf_fi_list_vars()`'s displayable
+list (proving the recursive group walk actually recurses); an explicit
+`"grp1/g1_var"`/`"grp1/grp2/g2_var"` path resolves correctly for both
+metadata (`netcdf_fi_n_dims()`/`netcdf_fi_var_size()`/
+`netcdf_scannable_dims()`) and real data, including a variable in a
+child group referencing its *parent's* dimension by id rather than
+redeclaring it (confirmed via the plain netCDF-C group API directly,
+independent of ncview's own resolution); the three attribute-precedence
+edge cases `netcdf_get_char_att()`'s own comment documents but nothing
+tested before now — an attribute missing entirely, present but a
+zero-length string, and present but stored as the wrong netCDF type
+(`NC_INT` where `NC_CHAR` was expected) — all three collapse to the same
+empty-string result, now pinned instead of assumed; an unlimited (record)
+dimension variable read through the group-aware call path; and a
+char-typed (`NC_CHAR`) text variable's storage dimension, which surfaced
+a real, previously-invisible quirk worth pinning rather than "fixing":
+reading `file_netcdf.cc` directly shows neither
+`netcdf_fi_list_vars_inner()` nor `netcdf_scannable_dims()` excludes by
+`nc_type` at all — displayability and scannability are decided purely by
+dimension count and size, so a sufficiently large text field is listed
+and scanned exactly like a numeric variable. Not a bug this pass fixed;
+a fact this pass made provable instead of merely suspected.
+
+190→199 tests, 4831→5080 assertions.
+
+**Phase 6 is now fully complete.** Both halves — the collapse itself and
+the coverage gap it depended on — landed with full verification (4-gate +
+ASan/UBSan/LSan + shuffled order across multiple seeds) clean at every
+commit, and `grep -rn` confirms zero surviving references to any of the
+13 deleted free functions outside of explanatory comments and unrelated
+error-message text that was never a symbol reference to begin with.
+169→199 tests, 4596→5080 assertions across the whole phase (both halves
+combined).
 
 ## Post-v0.2.0 defect audits
 
