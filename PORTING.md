@@ -1613,6 +1613,87 @@ change in this phase.
 **Next: 7b** -- close Phase 6's residue (the 17 remaining direct
 `netcdf_*` bypasses, and `epic_time.cc`, never migrated).
 
+## Phase 7b: close Phase 6's residue
+
+Small, mechanical, no behavior change. Every one of the remaining
+direct `netcdf_*` bypasses the round-4 survey found was checked
+individually against the actual current code before touching it, per
+this plan's "verify before acting" discipline -- and one of the two
+biggest findings this phase surfaced is a case where blindly following
+the survey's grep would have introduced a real bug.
+
+**Four new single-file `NetCDFFile` forwarders** (`dataset.h`/
+`dataset.cc`): `charAtt`, `attString`, `dimValue`, `getData`. These
+weren't part of Phase 6's 13-forwarder migration because they were never
+routed through the `fi_*()`/`file.cc` dispatch layer that phase collapsed
+-- no `fi_get_char_att`/`fi_att_string`/`fi_dim_value_single_file`/
+`fi_get_data_single_file` ever existed. But every call site already held
+the owning `NetCDFFile*` the same way the 13 did, so the same treatment
+applies: one-line bodies forwarding straight to the underlying
+`netcdf_*()` call, unchanged.
+
+**`var_metadata.cc`'s 8 direct calls**: 6 migrated onto the object
+(`charAtt` for the "coordinates" attribute lookup, `varSize` x2,
+`dimIdToName` x2, `getData` for the coordinate-mapping-variable read),
+**2 deliberately left alone and documented**: `netcdf_n_dims()` at both
+call sites in `handle_dim_mapping`/`handle_dim_mapping_2d`. This is the
+real finding -- `netcdf_n_dims()` (`file_netcdf.cc:837`) and
+`netcdf_fi_n_dims()` (the function `->nDims()` forwards to,
+`file_netcdf.cc:352`) are **two different functions**, not the same
+function under two names: `netcdf_fi_n_dims()` resolves group-prefixed
+variable names via `nc_inq_varid_grp()`, `netcdf_n_dims()` does a plain
+`nc_inq_varid()` with no group support. The round-4 survey's grep found
+both under a generic "n_dims-shaped bypass" heading and implicitly
+treated them as the same target; reading both functions' actual bodies
+before migrating (rather than pattern-matching the name) caught this --
+routing these two call sites through `->nDims()` would have silently
+changed which variable lookup runs for any coordinate-mapping variable
+living inside a netCDF-4 group. Left as direct `netcdf_n_dims()` calls
+with a comment explaining why, rather than migrated.
+
+**`view.cc`'s 3 calls**: `View::information()`'s `netcdf_att_string()`
+migrated onto the new `->attString()`. The other two, in
+`View::checkNewData()`, **deliberately left alone**: they open a second,
+throwaway `fileid` for the *same path* the tracked `NetCDFFile` already
+has open, specifically to read the on-disk file's *current* size --
+the tracked object's fileid is the stale, already-open handle whose
+possible growth is exactly what this function exists to detect. Routing
+this through the tracked object would defeat the function's own purpose.
+Scoped and closed within the function via a raw `nc_close()`, not
+`fi_close()`/`NetCDFFile::close()`, since it was never tracked. Documented
+in place with a comment rather than left as a silent-looking exception.
+
+**`epic_time.cc`, migrated in full** -- the one file Phase 6 skipped
+entirely. `handle_time_dim()` and `months_calc_tgran()` took a bare
+`int fileid` and called `netcdf_dim_value()` directly; both now take a
+`NetCDFFile *file` instead (the one caller, `var_metadata.cc`'s
+`fill_dim_structs()`, already had the object in hand as `file0`), and
+`months_calc_tgran()`'s two `netcdf_dim_value()` calls became
+`file->dimValue()`. `fi_dim_calendar()` stayed a direct call in the same
+function (`fill_dim_structs`) -- it's `file.cc`'s free function, not a
+`netcdf_*` bypass, out of scope here.
+
+**`file.cc`'s `file_type` switch: left in place.** After the above, 3
+functions still branch on it (`fi_initialize`, `fi_dim_calendar`,
+`fi_close`) -- exactly at the plan's own stated threshold ("don't feel
+obligated to remove it if fewer than 2-3 sites still route through it").
+It can still only ever hold `FILE_TYPE_NETCDF`, same dead-switch
+situation as Phase 6's main pass, but these three are the last vestige
+of the abstraction and read as honest guard clauses rather than active
+cruft; removing them would touch three genuinely-still-in-use functions
+for a purely cosmetic gain. Left as-is.
+
+Pure relocation throughout: 216 tests / 5733 assertions, unchanged, at
+every commit. Full verification (4-gate + a fresh ASan/UBSan/LSan
+scratch build + 2-seed shuffled order) clean. `grep -rn` confirms no
+undocumented direct `netcdf_*` bypass remains in `var_metadata.cc`,
+`view.cc`, or `epic_time.cc` -- the two survivors in each of the first
+two files are exactly the ones documented above.
+
+**Phase 7 (7a + 7b) is now complete.** Phase 8 (splitting `ncview.cc`),
+Phase 9 (`ui/`), and Phase 10 (coverage/fuzz CI) are all available next,
+fully specified, per the plan file's status table.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
