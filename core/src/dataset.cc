@@ -30,6 +30,19 @@ NetCDFFile::~NetCDFFile()
 	close();
 }
 
+std::optional<NetCDFFile> NetCDFFile::open( const std::string &path, int *nc_errcode )
+{
+	int fileid, ierr;
+
+	ierr = nc_open( path.c_str(), NC_NOWRITE, &fileid );
+	if( nc_errcode != nullptr )
+		*nc_errcode = ierr;
+	if( ierr != NC_NOERR )
+		return std::nullopt;
+
+	return NetCDFFile( fileid );
+}
+
 NetCDFFile *Dataset::trackFile( int fileid )
 {
 	for( auto &f : files_ )

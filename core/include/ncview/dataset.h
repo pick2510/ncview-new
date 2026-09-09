@@ -36,6 +36,8 @@
 #pragma once
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "ncview/defines.h"
@@ -62,6 +64,19 @@ public:
 	}
 
 	int id() const { return fileid_; }
+
+	/* Opens 'path' read-only via nc_open(), returning nullopt (instead of
+	 * netcdf_fi_initialize()/fi_initialize()'s exit(-1)) for the
+	 * nonexistent, unreadable, or not-a-netCDF-file cases -- Phase 6 of
+	 * the "refine the architecture" plan added this as a testable
+	 * open primitive; it is NOT wired into the production startup path
+	 * (determine_file_type()/fi_initialize()), which keeps its existing
+	 * exit()-on-failure behavior deliberately unchanged (a production
+	 * error-handling change was out of scope for this phase). If
+	 * nc_errcode is non-null, *nc_errcode is set to nc_open()'s return
+	 * code (an netCDF NC_* constant; see <netcdf.h>/nc_strerror()) on
+	 * both success (NC_NOERR) and failure, so a caller can report why. */
+	static std::optional<NetCDFFile> open( const std::string &path, int *nc_errcode = nullptr );
 
 private:
 	void close();
