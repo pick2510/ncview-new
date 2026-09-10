@@ -3283,6 +3283,104 @@ uninitialized 1024-byte buffer into a UI label), the "read a variable's
 data" cascade, and the full file-open startup cascade remain deferred,
 to be re-scoped against the tree at pickup time.
 
+## Part V, Phase 12f: fix `netcdf_dim_value()`'s own bugs, ahead of hardening its callers
+
+**Scoped in plan mode first, and the scoping inverted 12e's framing
+rather than repeating it.** Picked up `netcdf_dim_value()`'s deferred
+audit. In 12e, the failure sentinel (`-1`) was already reaching unsafe
+callers *today*, in normal operation -- the audit found live bugs. Here,
+`netcdf_dim_value()`'s failure sentinel (`NC_NAT`) cannot be produced by
+the function at all today -- every one of its `exit()` sites is the only
+way it currently reports failure. So converting them wouldn't have
+exposed anything live right now; it's what would make `NC_NAT` real for
+the first time, meaning caller-hardening has to come *before* the
+conversion, not alongside it. That caller-hardening (9 unsafe call
+sites) and the conversion itself are deferred to a future phase.
+
+But reading the function with the same skepticism that found 12e's bugs
+surfaced several defects **already live today, independent of the
+exit()-conversion question entirely**:
+
+### The function's own hottest read path ignored its own netCDF error code
+
+`nc_get_var1_double()` (the numeric-dimension path -- every ordinary
+dimension-value read in the program) and two `nc_get_var1_uchar()` calls
+(the char-dimension paths) assigned `err` and never checked it. On
+failure, the output buffer was left untouched and the function returned
+success anyway (`NC_DOUBLE`/`NC_CHAR`), so a caller believed its own
+uninitialized stack memory was real data. This is the actual mechanism
+by which a bad value would reach a caller -- fixing it is a prerequisite
+for the sentinel work to mean anything, not a side effect of it. Now
+checked at all three sites, matching the exit(-1)-on-failure idiom the
+function already used for its sibling `nc_get_vara_double()` call two
+lines below one of them.
+
+### `*return_has_bounds` left uninitialized on two live return paths
+
+The `default:` case -- covering every netCDF type added since 1993
+(`NC_UBYTE`, `NC_UINT`, `NC_INT64`, `NC_STRING`, etc.) -- returned
+`NC_DOUBLE` (success) without ever writing `*return_has_bounds`. A
+caller's `if( has_bounds )` then branched on garbage, and if it read
+nonzero, uninitialized `bound_min`/`bound_max` would format straight
+into a UI label. Reachable on an ordinary netCDF-4 file with an
+unsigned-integer coordinate variable -- no malformed file needed. The
+`NC_CHAR` case had the identical gap. Fixed by initializing
+`*return_has_bounds = 0` and both bounds values to `0.0` unconditionally
+right before the `switch`, overwritten only by the branch that actually
+found a bounds variable.
+
+`Dataset::dimValue()`'s 2-D-mapped early return (`dataset.cc`) had the
+same gap one layer up -- only `*return_val_double` was written before
+returning. Fixed the same way.
+
+### `Dataset::dimValue()` already ran unit conversion on uninitialized bounds, and an existing test already walked into it undetected
+
+`dataset.cc` called `dimValueConvert()` on `*return_bounds_min`/
+`*return_bounds_max` whenever the type wasn't `NC_CHAR`, without
+checking `*return_has_bounds` first. `netcdf_dim_value()` only ever
+wrote those two out-params in its has-bounds branch. `test_multifile.cc`'s
+existing cross-file time-unit-mismatch test took exactly this path on
+every run, invisibly -- **neither ASan nor UBSan catches a read of
+uninitialized stack memory** (that needs MSan or Valgrind, neither
+configured in this project), so this had been running clean the whole
+time. Fixed by gating the two bounds conversions on `*return_has_bounds`.
+The existing test now asserts `bound_min`/`bound_max` come back
+deterministically `0.0`; this can only prove the values are now
+deterministic, not that they were previously garbage on any specific
+prior run -- documented as a limitation rather than overclaimed. A new
+test in `test_file_netcdf.cc` exercises the `default:`-branch gap
+directly with an `NC_UINT` coordinate variable.
+
+### Index-array-rank mismatch
+
+Both the char-dimension and numeric-dimension read paths assumed a
+specific rank (2 or 1 respectively) without validating it first --
+`nc_get_var1_*()` was driven with a fixed-size index array (`place1[1]`
+or `char_place[2]`) regardless of the dimvar's actual rank, so a
+differently-shaped (non-CF-conforming) dimvar could have made the
+netCDF library read past the end of that stack array. Fixed by
+validating `n_dims` before choosing the index array, with a clear
+`exit(-1)` on the (unsupported) shapes this function doesn't handle --
+consistent with the file's existing failure idiom, not a new one.
+
+254->255 tests, 6863->6877 assertions. Full six-gate verification
+clean: `-Werror` build; `ctest` normal + `--order-by=rand` across 3
+seeds, identical counts; `ncview_core_linkcheck` exit 0; all 15
+`ui_smoke.sh` goldens byte-identical; a full scratch ASan/UBSan build
+clean; `grep -rn` confirming the 9 callers of `dimValue()`/
+`netcdf_dim_value()` are unchanged (deliberately -- their hardening is
+Phase 12g's job, not this one's).
+
+**Deferred to Phase 12g**, prerequisite now satisfied: hardening
+`Dataset::dimValue()`'s/`NetCDFFile::dimValue()`'s 9 currently-unsafe
+call sites against a real `NC_NAT` return; converting
+`netcdf_dim_value()`'s remaining `exit()` sites to error returns; and
+building the bounds-variable fixture support needed to exercise those
+paths directly in a test. Also still deferred, unrelated to this
+cluster: `overlay.cc`'s wrong loop variable (`ii` where every
+neighboring line uses `jj`), and 3 caller buffers smaller than the
+function's own documented >=1024-byte contract.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
