@@ -172,6 +172,30 @@ if(NCVIEW_SANITIZE)
     target_link_options(ncview_sanitize_flags INTERFACE -fsanitize=${NCVIEW_SANITIZE})
 endif()
 
+# modernization.md Phase 0c/10: `--coverage` (GCC/gcov's combined
+# -fprofile-arcs -ftest-coverage compile flag plus the matching link flag
+# that pulls in libgcov) applied to our own targets only, same
+# opt-in-INTERFACE-library pattern as NCVIEW_SANITIZE just above. GCC/gcov
+# rather than Clang/llvm-cov because every CI job that could plausibly run
+# this (linux, sanitize) already builds with GCC (ubuntu-latest's default
+# `cc`/`c++`) -- see scripts/coverage.sh, which drives a full
+# configure-build-test-report cycle and is what both a developer and CI
+# actually invoke.
+option(NCVIEW_COVERAGE "Build with GCC/gcov coverage instrumentation (see scripts/coverage.sh)" OFF)
+add_library(ncview_coverage_flags INTERFACE)
+if(NCVIEW_COVERAGE)
+    target_compile_options(ncview_coverage_flags INTERFACE --coverage -O0)
+    target_link_options(ncview_coverage_flags INTERFACE --coverage)
+    # gcov's counters are normally flushed to .gcda files by an atexit()
+    # handler libgcov registers -- but tests/fast_exit.h deliberately calls
+    # std::_Exit()/TerminateProcess() to skip exit-time teardown (a Windows
+    # CI hang, see that file's own comment), which skips atexit() too and
+    # silently produces zero .gcda files / 0% coverage with no error at all.
+    # This define tells fast_exit.h to call __gcov_dump() itself first,
+    # only when this option is actually on.
+    target_compile_definitions(ncview_coverage_flags INTERFACE NCVIEW_COVERAGE_BUILD)
+endif()
+
 # HPC clusters routinely lack (or have mismatched-version) shared libraries
 # for anything outside their own module system -- this pulls netCDF/HDF5 and
 # the C++ runtime in statically so the binary doesn't touch either at

@@ -29,7 +29,7 @@ add_library(ncview_core STATIC
     src/viewer_ui_bridge.cc
 )
 set_target_properties(ncview_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(ncview_core PRIVATE ncview_warning_flags ncview_sanitize_flags)
+target_link_libraries(ncview_core PRIVATE ncview_warning_flags ncview_sanitize_flags ncview_coverage_flags)
 # modernization.md Phase 9: core/WARNINGS.md is empty as of this phase, so
 # -Werror is enabled here -- only for ncview_core, not ncview_ui/app/tests,
 # which haven't had the same warning sweep done on their own sources.

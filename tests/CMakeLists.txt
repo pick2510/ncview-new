@@ -87,7 +87,7 @@ target_include_directories(ncview_core_tests PRIVATE
     # included unqualified from tests/ itself.
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_link_libraries(ncview_core_tests PRIVATE ncview_core ncview_sanitize_flags)
+target_link_libraries(ncview_core_tests PRIVATE ncview_core ncview_sanitize_flags ncview_coverage_flags)
 add_dependencies(ncview_core_tests ncview_core_linkcheck)
 add_test(NAME ncview_core_tests COMMAND ncview_core_tests)
 # Defense in depth against a hang like the HDF5 file-locking one this suite
