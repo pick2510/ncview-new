@@ -2905,6 +2905,81 @@ remains in `view.cc` (only the RAII guard's own set/reset and
 **Next: Phase 12b** -- fix `View::dataEdit()`'s confirmed live memory
 leak by giving the seam's `char**` handoff a real owning type.
 
+## Part V, Phase 12b: fix `View::dataEdit()`'s confirmed live memory leak
+
+**The bug**: `View::dataEdit()` (`view.cc`) manually built a `char**` --
+one `malloc` for the pointer array, one 32-byte `malloc` per cell -- and
+handed it across the `ViewerUi` seam via `x_dataedit(char **text, int
+nx)`. The ownership contract ("the UI frees it") was documented in prose
+(`modernization.md`, comments in `stub_interface.cc`) but never actually
+honored by the real implementation: `ui/src/interface_fltk.cc` contained
+zero `free()`/`delete` calls anywhere in the file (re-confirmed by grep
+before touching anything). Every data-edit dialog open in the real
+application leaked the whole buffer; only the test stub freed it, by
+hand, after inspecting the content.
+
+**Fix**: replaced the raw handoff with `std::vector<std::string>
+&cells`, changed together across the four places that all touch the same
+contract in one commit: `viewer_ui.h`'s virtual declaration,
+`FltkViewerUi::x_dataedit`'s real implementation
+(`interface_fltk.cc`), `RecordingViewerUi`'s test override
+(`stub_interface.cc`), and `View::dataEdit()`'s own construction
+(`view.cc`) -- now a `std::vector<std::string> cells(n_entries)` filled
+with the same `snprintf(..., "%-10.5g", val)` formatting as before, no
+separate malloc, no NULL-terminator slot to size correctly (the vector's
+own `size()` is the count).
+
+`interface_fltk.cc`'s `DataEditTable` held a raw `char **text_` member
+purely to read cell content for drawing and for the click-to-edit
+callback (reached via `Fl_Widget::user_data()`, a `void*` stash). Traced
+the actual lifetime before assuming a straight type swap would be safe:
+`x_dataedit()`'s `table` is a local object on its own stack frame for the
+whole blocking `Fl::wait()` loop, and the caller's `cells` vector (also a
+local, in `View::dataEdit()`) stays alive for that entire call since it's
+passed by reference and the call is synchronous -- so `DataEditTable`
+holding `std::vector<std::string> &cells_` as a reference member is sound,
+no dangling risk. Replaced the `user_data()` `void*` stash (which the
+table's own click callback previously reinterpreted as `char**`) with two
+accessor methods on the table itself (`cellCount()`, `cellAt(index)`),
+reached by casting the callback's own widget pointer -- removing the
+`Fl_Widget::user_data()` indirection entirely rather than just retyping
+it, since nothing else needed it once the table could answer for itself.
+
+**Verification is structural, not just runtime**: for a "leak fixed by
+making ownership automatic" bug there is no longer a runtime event to
+catch (LeakSanitizer wouldn't reliably flag a leak scoped to one blocking
+dialog's lifetime, and the FLTK path isn't exercised by the headless test
+binary regardless). The proof is a project-wide grep confirming zero
+`malloc`/`free`/raw `char**` remains anywhere in the `x_dataedit`/
+`dataEdit` call path -- across `view.cc`, `interface_fltk.cc`,
+`viewer_ui.h`, `stub_interface.cc` -- leaving only unrelated `malloc`/
+`free` call sites elsewhere in `view.cc` (a different function, and
+debug/diagnostic prints). `tests/test_view_data_edit.cc` (originally a
+Phase 0d regression test for a heap-buffer-overflow one slot past the old
+`char**`'s end -- that specific off-by-one class of bug can no longer
+occur, since there's no separate terminator slot to size) was adapted to
+the new type: it still confirms every cell's formatted value round-trips
+through `strtof` to the original float, in the same row-major order, now
+via `std::string`/`std::vector::size()` instead of manual
+pointer-chasing and a manual `free()` loop. `ui_smoke.sh`'s
+`dialog_dataedit` golden byte-identical is the strongest evidence the
+real FLTK-facing behavior is unchanged despite the ownership-model
+rewrite underneath it.
+
+247 tests / 6710 assertions (down from 6723 -- the old test's separate
+NULL-terminator check and manual free loop were structurally removed,
+not replaced with equivalent new assertions, since there's nothing left
+to check once the type itself rules the bug out; same 247 test cases).
+Full six-gate verification clean: `-Werror` build; `ctest` normal +
+shuffled across several seeds, zero variance holding; `ncview_core_linkcheck`
+exit 0; all 15 `ui_smoke.sh` goldens byte-identical including
+`dialog_dataedit`; scratch ASan/UBSan/LSan build clean, no reports; the
+leak-closure grep described above. **Next: Phase 12c** -- small,
+mechanical cleanups (`file.cc`'s dead `file_type` switch,
+`file_netcdf.cc:2185`'s `exit(0)`-on-error, `app/CMakeLists.txt`'s stale
+duplicated link line and wrong comment, `MainWindow`'s two leaked
+comparison statics).
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
