@@ -2012,16 +2012,21 @@ View::dataEdit()
 	size_t	i, j;
 	int	j2;
 	size_t	x_size, y_size;
-	char	**line_array;
 	size_t	index, n_entries;
 	float	val;
+	char	buf[32];
 
 	x_size = view->variable->size[view->x_axis_id];
 	y_size = view->variable->size[view->y_axis_id];
 
 	n_entries  = x_size * y_size;
-	/* +1 for the NULL terminator written after the loop below */
-	line_array = (char **)malloc( sizeof(char *)*(n_entries+1) );
+	/* Phase 12b: was a manual double-malloc'd char** (one alloc for the
+	 * pointer array, one per cell) that FltkViewerUi::x_dataedit never
+	 * freed -- a real leak on every data-edit dialog open in the actual
+	 * application. A std::vector<std::string> owns its own storage, so
+	 * there's no allocation to leak and no separate NULL-terminator slot
+	 * to size correctly (the vector's own size() is the count). */
+	std::vector<std::string> cells( n_entries );
 
 	index = 0L;
 	for( j=0; j<y_size; j++)
@@ -2031,13 +2036,12 @@ View::dataEdit()
 		else
 			j2 = y_size - j - 1;
 		val = view->data[i + j2*x_size];
-		line_array[index] = (char *)malloc( 32 );
-		snprintf( line_array[index], 31, "%-10.5g", val );
+		snprintf( buf, sizeof(buf), "%-10.5g", val );
+		cells[index] = buf;
 		index++;
 		}
-	line_array[index] = NULL;
 
-	g_app.ui->x_dataedit( line_array, x_size );
+	g_app.ui->x_dataedit( cells, x_size );
 }
 
 /**************************************************************************************/

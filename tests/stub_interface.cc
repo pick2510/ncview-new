@@ -173,14 +173,14 @@ bool fireTimer()
 // (Declared up near the top of the file, alongside the other captured
 // globals, so resetStubRecording() below can clear them.)
 
-// Captured for test_view_data_edit.cc: view_data_edit() builds this array
-// and hands ownership to x_dataedit(), which upstream's real FLTK dialog
-// consumes and frees once the user closes it. The stub can't reproduce
-// that dialog, so it stashes the pointer/count here and the test frees it
-// after inspecting the content -- this is also what let ASan's
-// heap-buffer-overflow report (modernization.md's Phase 0d findings) point
-// straight at view_data_edit()'s allocation instead of some later dialog code.
-char **g_last_dataedit_lines = nullptr;
+// Captured for test_view_data_edit.cc: View::dataEdit() builds this vector
+// and hands it to x_dataedit() by reference. Historical note: this used to
+// be a raw char** with a "the UI frees it" contract that FltkViewerUi's
+// real implementation never actually honored (a genuine leak, fixed in
+// Phase 12b by making ownership structural via std::vector<std::string> --
+// see PORTING.md's Phase 12b entry). The stub just copies it here for the
+// test to inspect; no manual free is needed any more.
+std::vector<std::string> g_last_dataedit_lines;
 int g_last_dataedit_nx = 0;
 
 class RecordingViewerUi : public ViewerUi {
@@ -288,9 +288,9 @@ public:
 		if (allvars) *allvars = 0;
 		return g_range_response;
 	}
-	void x_dataedit(char **text, int nx) override {
+	void x_dataedit(std::vector<std::string> &cells, int nx) override {
 		g_recorded_calls.push_back("x_dataedit");
-		g_last_dataedit_lines = text;
+		g_last_dataedit_lines = cells;
 		g_last_dataedit_nx = nx;
 	}
 	int x_seen_colormap_name(const char *name) override {

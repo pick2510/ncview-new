@@ -56,7 +56,7 @@ public:
 	Message	printer_options		( PrintOptions *po ) override;
 	Message x_range( float old_min, float old_max, float global_min, float global_max,
 			float *new_min, float *new_max, int *allvars ) override;
-	void	x_dataedit( char **text, int nx ) override;
+	void	x_dataedit( std::vector<std::string> &cells, int nx ) override;
 	int	x_seen_colormap_name( const char *name ) override;
 	void	x_check_legal_colormap_loaded( void ) override;
 	void	x_create_colorbar( float user_min, float user_max, Transform transform ) override;

@@ -1,14 +1,16 @@
 // Copyright (C) 2026 Dominik Strebel
 //
-// Regression test for the heap-buffer-overflow found in View::dataEdit()
-// during Phase 0d's ASan sweep (see modernization.md's "Sanitizer findings"
-// section): it allocated exactly n_entries char* slots but then wrote a
-// terminating NULL at line_array[n_entries], one past the end. This test
-// exercises View::dataEdit() directly (its bug is entirely on the core
-// side of the interface.h seam -- x_dataedit() is a no-op stub, see
-// stub_interface.cc) so a plain build catches wrong values and the ASan/
-// UBSan CI job (Phase 0d) catches the overflow itself if it ever returns.
+// Originally a regression test for the heap-buffer-overflow found in
+// View::dataEdit() during Phase 0d's ASan sweep (it allocated exactly
+// n_entries char* slots but then wrote a terminating NULL at
+// line_array[n_entries], one past the end). Phase 12b replaced the manual
+// char**/NULL-terminator scheme with a std::vector<std::string> the
+// caller owns outright -- that specific off-by-one class of bug can no
+// longer occur (there's no separate terminator slot to size correctly),
+// so this test now just confirms the values/count/ordering are still
+// exactly right under the new type.
 #include <cstdlib>
+#include <string>
 #include <vector>
 
 #include <doctest/doctest.h>
@@ -19,7 +21,7 @@
 #include "test_udunits_helper.h"
 
 extern std::unique_ptr<ViewState> &view;
-extern char **g_last_dataedit_lines;
+extern std::vector<std::string> g_last_dataedit_lines;
 extern int g_last_dataedit_nx;
 
 TEST_CASE("view_data_edit: allocates exactly n_entries+1 slots and fills them correctly") {
@@ -48,29 +50,25 @@ TEST_CASE("view_data_edit: allocates exactly n_entries+1 slots and fills them co
 
     options.invert_physical = true; // so row j in line_array matches row j in `data` directly
 
-    g_last_dataedit_lines = nullptr;
+    g_last_dataedit_lines.clear();
     g_last_dataedit_nx    = 0;
 
     view->dataEdit();
 
-    REQUIRE(g_last_dataedit_lines != nullptr);
+    REQUIRE(g_last_dataedit_lines.size() == nx * ny);
     CHECK(g_last_dataedit_nx == (int)nx);
 
     // Every one of the nx*ny data values must have been formatted, in
-    // row-major (x fastest) order, with no overflow past the last one.
+    // row-major (x fastest) order. (No separate NULL-terminator slot to
+    // check any more -- the vector's own size() is the authoritative
+    // count, which is the point of Phase 12b's fix.)
     for (size_t j = 0; j < ny; j++) {
         for (size_t i = 0; i < nx; i++) {
             size_t idx = j * nx + i;
-            REQUIRE(g_last_dataedit_lines[idx] != nullptr);
-            CHECK(std::strtof(g_last_dataedit_lines[idx], nullptr) == doctest::Approx(data[idx]));
+            CHECK(std::strtof(g_last_dataedit_lines[idx].c_str(), nullptr) == doctest::Approx(data[idx]));
         }
     }
-    // The terminating NULL this test is guarding: previously written one
-    // slot past the malloc'd buffer (a heap-buffer-overflow under ASan).
-    CHECK(g_last_dataedit_lines[nx * ny] == nullptr);
 
-    for (size_t k = 0; k < nx * ny; k++) free(g_last_dataedit_lines[k]);
-    free(g_last_dataedit_lines);
-    g_last_dataedit_lines = nullptr;
+    g_last_dataedit_lines.clear();
     view.reset();
 }

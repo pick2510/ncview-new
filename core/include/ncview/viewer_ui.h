@@ -26,6 +26,8 @@
 #pragma once
 
 #include <functional>
+#include <string>
+#include <vector>
 
 #include "ncview/defines.h"
 #include "ncview/stringlist.h"
@@ -73,7 +75,15 @@ public:
 	virtual Message	printer_options		( PrintOptions *po ) = 0;
 	virtual Message x_range( float old_min, float old_max, float global_min, float global_max,
 			float *new_min, float *new_max, int *allvars ) = 0;
-	virtual void	x_dataedit( char **text, int nx ) = 0;
+	/* Phase 12b: was `char **text` -- a raw double-malloc'd buffer whose
+	 * ownership contract ("the UI frees it") was documented in prose but
+	 * never actually honored by FltkViewerUi::x_dataedit (a real leak on
+	 * every data-edit dialog open). std::vector<std::string> makes the
+	 * ownership structural instead: View::dataEdit() builds it, hands a
+	 * reference across the seam, and it's destroyed automatically when
+	 * the caller's local goes out of scope -- there is no longer a
+	 * "who frees this" question to get wrong. */
+	virtual void	x_dataedit( std::vector<std::string> &cells, int nx ) = 0;
 	virtual int	x_seen_colormap_name( const char *name ) = 0;
 	virtual void	x_check_legal_colormap_loaded( void ) = 0;
 	virtual void	x_create_colorbar( float user_min, float user_max, Transform transform ) = 0;

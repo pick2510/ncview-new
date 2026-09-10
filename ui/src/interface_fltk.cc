@@ -25,6 +25,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <FL/Fl.H>
@@ -420,13 +421,14 @@ namespace {
 
 // One data-edit window can be open at a time (matches upstream: x_dataedit()
 // runs its own blocking mini event loop, so only one is ever live). The
-// table cells are backed directly by the char** upstream hands us (each
-// entry is a 32-byte buffer from View::dataEdit()), so editing a cell just
-// rewrites that buffer in place.
+// table cells are backed by a reference to the std::vector<std::string>
+// View::dataEdit() built and handed us (Phase 12b -- was a raw char**
+// nobody freed); editing a cell rewrites that string in place, same as the
+// old fixed-size buffer did.
 class DataEditTable : public Fl_Table {
 public:
-	DataEditTable( int x, int y, int w, int h, int nx, int ny, char **text )
-		: Fl_Table( x, y, w, h ), nx_( nx ), text_( text )
+	DataEditTable( int x, int y, int w, int h, int nx, int ny, std::vector<std::string> &cells )
+		: Fl_Table( x, y, w, h ), nx_( nx ), cells_( cells )
 	{
 		rows( ny );
 		cols( nx );
@@ -438,6 +440,8 @@ public:
 	}
 
 	int nx() const { return nx_; }
+	size_t cellCount() const { return cells_.size(); }
+	std::string &cellAt( int index ) { return cells_[index]; }
 
 protected:
 	void draw_cell( TableContext context, int R, int C, int X, int Y, int W, int H ) override
@@ -448,15 +452,15 @@ protected:
 		fl_color( FL_WHITE );
 		fl_rectf( X, Y, W, H );
 		fl_color( FL_BLACK );
-		if( text_ && text_[index] )
-			fl_draw( text_[index], X + 3, Y, W - 6, H, FL_ALIGN_LEFT );
+		if( index >= 0 && (size_t)index < cells_.size() )
+			fl_draw( cells_[index].c_str(), X + 3, Y, W - 6, H, FL_ALIGN_LEFT );
 		fl_rect( X, Y, W, H );
 		fl_pop_clip();
 	}
 
 private:
 	int nx_;
-	char **text_;
+	std::vector<std::string> &cells_;
 };
 
 DataEditTable *g_dataedit_table = nullptr;
@@ -474,16 +478,15 @@ void dataeditDumpCallback( Fl_Widget *, void * )
 
 } // namespace
 
-void FltkViewerUi::x_dataedit( char **text, int nx )
+void FltkViewerUi::x_dataedit( std::vector<std::string> &cells, int nx )
 {
-	int n = 0;
-	while( text[n] != nullptr ) n++;
+	int n = (int)cells.size();
 	int ny = nx > 0 ? n / nx : 0;
 	if( ny <= 0 ) return;
 
 	Fl_Double_Window win( 520, 420, "Data Edit" );
 	win.begin();
-	DataEditTable table( 10, 10, 500, 350, nx, ny, text );
+	DataEditTable table( 10, 10, 500, 350, nx, ny, cells );
 	table.when( FL_WHEN_RELEASE );
 	auto *dump_btn = new Fl_Button( 10, 370, 100, 30, "Dump Data" );
 	dump_btn->callback( dataeditDumpCallback );
@@ -500,11 +503,11 @@ void FltkViewerUi::x_dataedit( char **text, int nx )
 		if( t->callback_context() != Fl_Table::CONTEXT_CELL || Fl::event() != FL_RELEASE ) return;
 		int row = t->callback_row(), col = t->callback_col();
 		int index = row * t->nx() + col;
-		char **cells = static_cast<char**>( t->user_data() );
-		if( cells == nullptr || cells[index] == nullptr ) return;
+		if( index < 0 || (size_t)index >= t->cellCount() ) return;
+		std::string &cell = t->cellAt( index );
 
 		char line[132];
-		strncpy( line, cells[index], sizeof(line)-1 );
+		strncpy( line, cell.c_str(), sizeof(line)-1 );
 		line[sizeof(line)-1] = '\0';
 		const char *result = fl_input( "Value:", line );
 		if( result == nullptr ) return;
@@ -513,15 +516,11 @@ void FltkViewerUi::x_dataedit( char **text, int nx )
 		if( sscanf( result, "%f %f", &new_val, &dummy ) != 1 ) return;
 
 		view->changeDat( (size_t)index, new_val );
-		snprintf( cells[index], 32, "%-10.5g", new_val );
+		char buf[32];
+		snprintf( buf, sizeof(buf), "%-10.5g", new_val );
+		cell = buf;
 		t->redraw();
 	} );
-	// Fl_Widget::argument() stores its value as a plain `long`, which
-	// truncates a pointer on Windows' LLP64 model (long stays 32-bit
-	// there even in a 64-bit build); user_data() stores a real void*
-	// with no such width loss, for the exact same "opaque callback
-	// payload" purpose here.
-	table.user_data( (void *)text );
 
 	g_dataedit_table = &table;
 
