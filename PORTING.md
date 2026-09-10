@@ -2806,6 +2806,105 @@ outside explanatory comments. **This completes Part IV as scoped** (11a
 through 11f implemented, 11g reassessed and declined, 11h closing the
 one concrete bug that reassessment found).
 
+## Part V, Phase 12a: fix two independently confirmed, exploitable bugs found by an external review
+
+**Context**: an external code review of the tree post-Part IV raised
+seven findings; each was independently re-verified before acting on any
+of it (three parallel investigations reading the cited code in full,
+not trusting the citations). Most held up; one ("core and UI are
+cyclically coupled") was refuted at the symbol level (`core`'s CMake
+target links only `netCDF`/`udunits2`, never `ncview_ui`/FLTK --
+confirmed via `nm` on the built archives, and the project's own
+`ncview_core_linkcheck` target already proves this by construction).
+Two of the confirmed findings turned out worse than the review itself
+described. This phase fixes both. See the plan file's Part V section
+for the full verified verdict on all seven findings.
+
+### Bug 1: `FrameCache::store()` had no bounds checking -- a real, concretely reachable heap buffer overflow, not a hygiene gap
+
+`store()` wrote `count` pixels at `frameno*count` into `frame_` with no
+validation, unlike `lookup()` (already checks `frameno` against
+capacity and uses the cache's own `nx_*ny_` as the stride, not a
+caller-supplied count). Confirmed reachable through ordinary UI actions,
+no malformed file needed: open a variable (frame-saving on by default)
+-> toggle "Save frames in memory" off -> `initSaveframes()` (`view.cc`)
+now no-ops on every subsequent call, guarded by `if (options.save_frames
+== false) return;` -> increase blowup or select a larger variable
+(`view->pixels` *does* resize to the new geometry) -> `draw()`
+(`viewer_controller.cc:621-622`) still sees `framestore.valid() ==
+true` from before the toggle and calls `store()` with the new, larger
+frame against the old, smaller buffer.
+
+Traced whether a call-site fix (disabling the cache inside
+`initSaveframes()` when `save_frames` is off) would be sufficient
+instead of hardening `store()` itself, and found it would not:
+`view.cc`'s blowup-change path resizes `view->pixels` and returns
+*without ever calling* `initSaveframes()` while `save_frames` is off, so
+a fix living only inside `initSaveframes()` would never run on that
+path. Hardening `store()` is the correct fix, not just the more
+defensive one -- confirmed by tracing every caller, not assumed.
+
+**Fix**: `store()` now validates `frameno` against `frame_valid_.size()`
+and `count` against the cache's own `nx_*ny_` before writing anything;
+on a mismatch it marks the whole cache invalid (not just refuses the one
+write) rather than corrupt memory, since every other stored frame was
+sized for the same now-stale geometry and can't be trusted either once
+the display has moved to a different size.
+
+New direct test in `tests/test_frame_cache.cc` ("`store()` refuses a
+write whose count doesn't match the cache's own geometry") drives
+`store()` itself with an oversized count and an out-of-range `frameno`
+-- simpler and more precise than reproducing the full toggle-then-resize
+UI sequence. Confirmed it reproduces a genuine ASan heap-buffer-overflow
+(`frame_cache.cc:69`, the old write loop) against the unfixed code
+before applying the fix, then passes cleanly after.
+
+### Bug 2: `lockout_view_changes` could be left stuck on a real, reachable error path
+
+`set_scan_variable()` and `View::changeDat()` each set
+`lockout_view_changes = true` immediately before calling
+`dataToPixels()`, then reset it to `false` on the next line -- but
+`dataToPixels()` (`render_pipeline.cc`) returns `-1` on two real,
+reachable failure paths, one of them the user pressing Cancel on the
+"min and max both 0" dialog, and both functions `return` from inside
+that failure branch before ever reaching the reset. Left stuck,
+`ViewerController::draw()` checks the flag first thing and no-ops
+(returning 0, success) without drawing, and can never clear a flag it
+didn't set itself -- every later expose/animation/colormap-change
+silently does nothing until the next *successful*
+`set_scan_variable()`/`changeDat()` call. Checked `ViewerController::
+draw()`'s own hand-managed set/reset pairs for the same defect and found
+they were never buggy -- every one of its return paths already resets
+the flag before returning.
+
+**Fix**: a small RAII guard, `LockoutViewChangesGuard`
+(`view_internal.h`, next to the flag's own declaration), replacing the
+old `true; ... return...; false;` sequence with a scoped block so the
+reset is unconditional regardless of how the scope is exited. Applied
+identically at both sites.
+
+New regression test in `tests/test_view_draw.cc` drives `View::
+changeDat()` directly: forces `dataToPixels()`'s "min and max both 0"
+branch on a Ramp-generated variable (`global_min != global_max`, so the
+failure path doesn't also trigger `invalidate_variable()`, which would
+null the view out from under the test), scripts a Cancel response, then
+confirms a subsequent `draw()` actually reaches `in_draw_2d_field`
+rather than silently no-op'ing. Confirmed it fails against the unfixed
+code first (`drew == false`) before applying the fix, then passes after.
+
+247 tests / 6723 assertions (up from 245/6688 -- two new regression
+tests, everything else unchanged as expected for pure bug fixes with no
+other behavior change). Full six-gate verification clean: `-Werror`
+build; `ctest` normal + shuffled across 6 seeds, zero variance
+(consistent with Phase 11h's fix still holding); `ncview_core_linkcheck`
+exit 0; all 15 `ui_smoke.sh` goldens byte-identical; scratch
+ASan/UBSan/LSan build clean at default order and `--rand-seed=1`; `grep
+-rn` confirming no dangling bare `lockout_view_changes =` assignment
+remains in `view.cc` (only the RAII guard's own set/reset and
+`viewer_controller.cc`'s already-correct hand-managed pairs remain).
+**Next: Phase 12b** -- fix `View::dataEdit()`'s confirmed live memory
+leak by giving the seam's `char**` handoff a real owning type.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
