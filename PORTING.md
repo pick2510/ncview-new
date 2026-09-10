@@ -2314,6 +2314,114 @@ and everything 11a itself deferred: `do_print`, `do_overlay`,
 -- give `ViewerController` an explicit `ViewerUi&` and delete
 `viewer_ui_bridge.cc`'s remaining forwarders.
 
+## Part IV, Phase 11c: delete the confirmed-dead bridge forwarders; the `ViewerUi&` constructor is blocked, not skipped
+
+**The literal ask -- "add `ViewerUi &ui_` to `ViewerController`'s
+constructor" -- turned out to be impossible as worded, for a reason 11a
+and 11b had already found and documented for a different class.**
+`AppContext g_app;` (`ncview.cc:43`) is a plain global with static storage
+duration, constructed before `main()` runs. `ViewerController` is a
+member of `AppContext`, so it is constructed at that same moment --
+before any `ViewerUi` implementation exists. `g_app.ui` is only assigned
+afterward, inside `main()` (`app/main.cc:21`) or a test binary's setup
+(`tests/stub_interface.cc:334`), each of which constructs the concrete
+`FltkViewerUi`/`RecordingViewerUi` as a local variable at that later
+point. A reference member has to be bound at construction; there is
+nothing to bind it to yet when `ViewerController`'s constructor runs.
+This is exactly the aggregate-construction-order problem 11b solved for
+`View` by *not* adding a member and calling `g_app.ui->in_x(...)`
+explicitly instead -- and it is why 11a's own writeup already says, of
+`ViewerController` specifically, that "11a already solved this exact
+case by calling `g_app.ui->in_x(...)` directly rather than storing a
+member." The plan's own Phase 11c heading hedges with "(or `NcviewApp`)"
+for the same reason: giving `ViewerController` a *stored* `ViewerUi&` is
+Phase 11f's job (`NcviewApp` constructed once, in order, inside `main()`)
+-- not achievable, and not worth faking, before that restructuring lands.
+Left `ViewerController`'s constructor as `ViewerController(ViewerSession
+&session)` and `AppContext`'s `ui` as the nullable pointer it already
+was, both with a comment pointing at 11f. Confirmed by direct code
+reading, not left as a guess.
+
+**What the "delete `viewer_ui_bridge.cc`'s forwarders" half of 11c
+actually required was a project-wide re-count, done carefully.** A naive
+`grep -rn <name>` overcounts badly here: most hits are either comments
+mentioning a function by name (`... see in_print() ...`), or
+`FltkViewerUi::in_x(...)`/`RecordingViewerUi::in_x(...)` -- the
+*implementation* of the `ViewerUi` virtual method, which must stay
+regardless -- not an actual bare free-function call. Wrote a small
+comment- and qualified-name-aware scan (`//`- and `/* */`-stripped,
+excluding `.`/`->`/`::`-qualified matches) over every `.cc`/`.h` in
+`core/`, `ui/`, `app/`, `tests/`, for all 48 of `interface.h`'s original
+declarations. Result: **35 have zero remaining bare free-function
+callers anywhere** -- every real call site already reaches the seam by
+method call (`ui.in_x(...)`/`g_app.ui->in_x(...)`), a direct consequence
+of 11a/11b's threading work. Deleted their `viewer_ui_bridge.cc`
+forwarders and their `interface.h` declarations in one commit; their
+`ViewerUi` virtual methods (`viewer_ui.h`) and both implementations
+(`FltkViewerUi`, `RecordingViewerUi`) are untouched -- deleting a
+forwarder only removes the now-unused free-function *spelling* of a
+call, never the capability.
+
+**13 forwarders stay, each for a real, verified reason** (see
+`viewer_ui_bridge.cc`'s own updated header comment for the same list):
+`in_set_label` (`view.cc`'s `view_report_position_vals`, one of 11a's
+own deferred free functions); `in_create_colormap` (`ncview.cc`'s
+`create_default_colormap`, confirmed dead code by 11a, plus
+`colormap_library.cc`'s two deferred `init_cmap_from_*` functions);
+`in_set_cursor_busy`/`in_set_cursor_normal`/`in_print`/`printer_options`
+(all four inside `do_print.cc`'s deferred `do_print`/`build_print_info`);
+`x_seen_colormap_name` (`colormap_library.cc`, same colormap deferral);
+`x_error` (`overlay.cc`'s deferred `do_overlay`, plus
+`ui/src/plot_window.cc` -- ui/-side, outside this phase's core-focused
+scope); `in_dialog` (not called bare anywhere in core/ui/tests, but
+`in_error()`, three lines below it in the same file, calls it as a bare
+free function -- deleting it would have broken `in_error`'s own one-line
+body); `in_flush`/`in_timer_clear`/`pix_to_rgb` (each has exactly one
+bare caller, and it is `ui/src/interface_fltk.cc` calling itself --
+`FltkViewerUi`'s own implementation reaching another of its own methods
+through the free-function seam instead of `this->`, harmless and outside
+core). `in_error` itself is untouched throughout -- it was never one of
+`interface.h`'s declarations to begin with (that header's own comment
+says so), so it isn't part of this accounting either way.
+
+**A real, if small, gap 11b had left behind, found and fixed along the
+way**: `ViewerController::draw()` (`viewer_controller.cc:614`) called
+bare `in_set_2d_size(...)` sitting one line away from `g_app.ui->
+in_draw_2d_field(...)` on the very next non-blank line -- the one
+`ViewerController::` seam call 11b's own pass missed. Converted to
+`g_app.ui->in_set_2d_size(...)` to match its neighbor and the class's
+other 26 (now 27) seam calls, all of which already went through
+`g_app.ui->` explicitly. This is what let `in_set_2d_size`'s forwarder
+join the deletable list.
+
+`interface.h` itself stays -- 13 declarations remain live, so it is not
+dead, and nothing else includes it expecting only a subset. Removed its
+now-stale `<functional>`/`ncview/stringlist.h` includes (nothing left in
+the trimmed file needs `std::function` or `Stringlist` by name) and a
+comment that had described `in_timer_set`'s signature choice, which is
+now one of the 35 deleted declarations.
+
+**Verified**: clean `-Werror` build; `ctest` (`ncview_core_tests` +
+`ncview_ui_smoke`); `ncview_core_linkcheck` exit 0; all 15 `ui_smoke.sh`
+goldens byte-identical; a scratch `NCVIEW_SANITIZE=address,undefined`
+build of `ncview_core_tests` clean (no ASan/UBSan/LSan reports); a
+comment-aware project-wide re-scan confirming zero bare calls remain to
+any of the 35 deleted names (only their still-live `ViewerUi`
+declarations/definitions match). 244 tests / 6664 assertions via
+`ctest`, unchanged. (Separately reconfirmed, and not a regression: the
+raw test binary invoked directly with no `--order-by` flag reports
+6663 assertions, not 6664, both before and after this phase's changes
+(checked against unmodified `71e680a`) -- this is `test_do_print.cc`'s
+pre-existing execution-order sensitivity, first flagged in Phase 7a's
+writeup, surfacing through a different code path (direct invocation vs.
+`ctest`'s) than the `--rand-seed=99` case already on record. Still not
+chased -- out of scope for this phase, same call Phase 7a made.)
+
+**Next: 11d** -- fix the three FLTK callback stragglers
+(`dimStepCallback`/`dimSliderCallback`/`colormapChoiceCallback`) that
+decode their payload correctly but then reach `g_app.controller`/the
+`MainWindow` singleton globally inside the body.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
