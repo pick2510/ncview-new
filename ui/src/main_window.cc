@@ -919,7 +919,7 @@ void MainWindow::rebuildColormapChoice()
 	for( size_t i = 0; i < colormaps_.size(); i++ ) {
 		std::string label = escapeMenuLabel( colormaps_[i].name.c_str() );
 		int idx = colormap_choice_->add( label.c_str(), 0, &MainWindow::colormapChoiceCallback,
-			(void *)(intptr_t)i );
+			colormap_cb_data_[i].get() );
 		if( i < colormap_previews_.size() ) {
 			auto *item = const_cast<Fl_Menu_Item *>( &colormap_choice_->menu()[idx] );
 			// Fl_Menu_Item has no native way to show an icon and text
@@ -949,10 +949,10 @@ void MainWindow::colormapChoiceCallback( Fl_Widget *w, void * )
 	auto *choice = static_cast<Fl_Choice*>( w );
 	const Fl_Menu_Item *item = choice->mvalue();
 	if( item == nullptr ) return;
-	size_t idx = (size_t)(intptr_t)item->user_data();
-	auto *mw = instance();
-	if( idx >= mw->colormaps_.size() ) return;
-	in_colormap_selected( mw->colormaps_[idx].name.c_str() );
+	auto *cb_data = static_cast<ColormapCbData*>( item->user_data() );
+	if( cb_data == nullptr || cb_data->window == nullptr ) return;
+	if( cb_data->index >= cb_data->window->colormaps_.size() ) return;
+	in_colormap_selected( cb_data->window->colormaps_[cb_data->index].name.c_str() );
 }
 
 void MainWindow::setLabel( Label label_id, const char *s )
@@ -1108,9 +1108,9 @@ void MainWindow::rebuildDimRow( DimRow &row )
 	// slider) must outlive the callback; owned by the row itself
 	// (prev_cb_data/next_cb_data/slider_cb_data) and freed in
 	// clearDimButtons() when the row is torn down.
-	row.prev_cb_data = std::make_unique<std::pair<std::string,Modifier>>( row.name, Modifier::M3 );
-	row.next_cb_data = std::make_unique<std::pair<std::string,Modifier>>( row.name, Modifier::M1 );
-	row.slider_cb_data = std::make_unique<std::string>( row.name );
+	row.prev_cb_data = std::make_unique<DimStepCbData>( DimStepCbData{ row.name, Modifier::M3, &g_app.controller } );
+	row.next_cb_data = std::make_unique<DimStepCbData>( DimStepCbData{ row.name, Modifier::M1, &g_app.controller } );
+	row.slider_cb_data = std::make_unique<DimSliderCbData>( DimSliderCbData{ row.name, &g_app.controller } );
 	row.prev_btn->callback( &MainWindow::dimStepCallback, row.prev_cb_data.get() );
 	row.next_btn->callback( &MainWindow::dimStepCallback, row.next_cb_data.get() );
 	row.value_slider->callback( &MainWindow::dimSliderCallback, row.slider_cb_data.get() );
@@ -1165,15 +1165,15 @@ void MainWindow::recenterVarPack()
 
 void MainWindow::dimStepCallback( Fl_Widget *, void *data )
 {
-	auto *p = static_cast<std::pair<std::string,Modifier>*>(data);
-	g_app.controller.changeCurDim( (char *)p->first.c_str(), p->second );
+	auto *p = static_cast<DimStepCbData*>(data);
+	p->controller->changeCurDim( (char *)p->name.c_str(), p->modifier );
 }
 
 void MainWindow::dimSliderCallback( Fl_Widget *w, void *data )
 {
-	auto *name = static_cast<std::string*>(data);
+	auto *p = static_cast<DimSliderCbData*>(data);
 	auto *slider = static_cast<Fl_Slider*>(w);
-	g_app.controller.setCurDimIndex( name->c_str(), lround( slider->value() ) );
+	p->controller->setCurDimIndex( p->name.c_str(), lround( slider->value() ) );
 }
 
 void MainWindow::makeDimButtons( const Stringlist *dim_list )
@@ -1256,6 +1256,8 @@ void MainWindow::createColormap( const char *name, const unsigned char *r, const
 	std::memcpy( cm.b, b, 256 );
 	colormaps_.push_back( cm );
 	colormap_previews_.push_back( buildColormapPreview( r, g, b ) );
+	colormap_cb_data_.push_back( std::make_unique<ColormapCbData>(
+		ColormapCbData{ colormaps_.size() - 1, this } ) );
 	if( current_colormap_ < 0 ) {
 		current_colormap_ = 0;
 		image_->setColormap( r, g, b );

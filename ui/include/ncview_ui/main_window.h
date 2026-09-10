@@ -39,6 +39,8 @@
 #include "ncview/frame_renderer.h"
 #include "ncview/protos.h"
 
+class ViewerController;
+
 namespace ncview_ui {
 
 // Displays the 2-D color-contour field. Owns nothing about the data; it's
@@ -106,6 +108,21 @@ private:
 	Transform transform_ = Transform::None;
 };
 
+// Payload for prev_btn/next_btn's callback (dimStepCallback): which dim,
+// which direction/modifier, and the controller to call -- carried
+// explicitly so the static callback never has to look one up by name.
+struct DimStepCbData {
+	std::string name;
+	Modifier modifier;
+	ViewerController *controller;
+};
+
+// Payload for value_slider's callback (dimSliderCallback): same reasoning.
+struct DimSliderCbData {
+	std::string name;
+	ViewerController *controller;
+};
+
 struct DimRow {
 	std::string name;
 	int         index        = 0;        // this row's position in dim_pack_ -- see MainWindow::recenterDimRow()
@@ -124,14 +141,25 @@ struct DimRow {
 	// Owns prev_btn/next_btn/value_slider's callback data (see
 	// rebuildDimRow()) so it's freed when this row is torn down in
 	// clearDimButtons(), instead of leaking on every rebuild.
-	std::unique_ptr<std::pair<std::string,Modifier>> prev_cb_data;
-	std::unique_ptr<std::pair<std::string,Modifier>> next_cb_data;
-	std::unique_ptr<std::string>                     slider_cb_data;
+	std::unique_ptr<DimStepCbData>   prev_cb_data;
+	std::unique_ptr<DimStepCbData>   next_cb_data;
+	std::unique_ptr<DimSliderCbData> slider_cb_data;
 };
 
 struct NamedColormap {
 	std::string name;
 	unsigned char r[256], g[256], b[256];
+};
+
+class MainWindow;
+
+// Payload for colormap_choice_'s per-item callback (colormapChoiceCallback):
+// which colormap index, and the MainWindow whose colormaps_/colormap
+// selection it applies to -- carried explicitly instead of the callback
+// reaching MainWindow::instance() by name.
+struct ColormapCbData {
+	size_t index;
+	MainWindow *window;
 };
 
 // Fl_Double_Window has no resize callback of its own; this just forwards
@@ -269,6 +297,10 @@ private:
 	// Owned for the life of this singleton, like the dim-row callback
 	// closures below -- never explicitly freed.
 	std::vector<Fl_RGB_Image*> colormap_previews_;
+	// One per colormaps_ entry, built once alongside it in createColormap()
+	// and reused across every rebuildColormapChoice() call -- same lifetime
+	// as colormap_previews_ above.
+	std::vector<std::unique_ptr<ColormapCbData>> colormap_cb_data_;
 	int current_colormap_ = -1;
 };
 
