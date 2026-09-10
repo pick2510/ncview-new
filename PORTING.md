@@ -2667,6 +2667,145 @@ anything, Stage 2's finding that ~84+17 of the four migration-bridge
 globals' remaining references are already concentrated in `tests/`
 sharpens the question 11g is meant to ask, rather than answering it.
 
+## Part IV, Phase 11g: per-test `NcviewApp` construction -- reassessed, declined
+
+**Pure investigation, no code changed.** Re-asked, with fresh numbers,
+whether constructing a fresh `NcviewApp` per test (rather than resetting
+one process-wide instance) pays for itself now that 11a-11f have made
+production code global-free. Conclusion: no -- and not merely "still not
+worth it," but that the proposal's own stated justification doesn't
+survive contact with the actual code.
+
+Corrected counts first (hand-verified, code-only, not raw grep): `variables`
+is **4** real test-side references, not the ~17 carried forward from
+11f's own writeup -- that figure was a raw grep matching the English
+word inside comments. `g_app`/`g_dataset`/`pixel_transform`/`framestore`
+(≈173 sites total) are essentially all mechanical method-call
+substitutions; the real cost lives in 11 test files' redundant
+`extern std::unique_ptr<ViewState> &view;` re-declarations,
+`test_view_data_edit.cc`'s direct hand-managed reassignment of the
+global `view`, and the deeper fact (confirmed independently, not just
+read from `session_fixture.h`'s own comment) that `ViewerController`
+holds a real `ViewerSession &session_` reference member -- which deletes
+`NcviewApp`'s implicit copy/move assignment operator, exactly why
+`SessionFixture` resets field-by-field (`g_app.session = ViewerSession();`)
+rather than replacing the object outright. A per-test `NcviewApp` can't be
+a simple reconstruction; it needs `std::optional<NcviewApp>`-style
+placement-destroy/placement-construct, plus either deleting the four
+`extern` bridge globals from `tests/` or finding another way to keep them
+valid across a rebind.
+
+Checked whether the stated benefit justifies that cost, on both halves:
+"makes parallel tests realistic" has no target to serve -- grepped every
+`.github/workflows/*.yml` and `tests/CMakeLists.txt`: there is no
+`ctest -j`/`--parallel` anywhere in this project, one single binary
+registers all 244 cases, and the only ordering-related CI gate
+(`--order-by=rand`, unseeded, Linux job only) is sequential-but-shuffled,
+not parallel. "Removes ordering sensitivity" was checked against the one
+concrete symptom that's ever actually been observed --
+`test_do_print.cc`'s long-documented (since Phase 7a) 6663-vs-6664
+assertion-count flip -- by tracing the mechanism and then **running the
+binary to confirm it**, not just reading code: the leak turned out to be
+`ViewerController::draw()`'s own function-local
+`static size_t last_x_size, last_y_size;` (`viewer_controller.cc:481`,
+now fixed -- see Phase 11h below), which lives entirely outside
+`NcviewApp`/`ViewerSession`/`ViewerController`'s member data. A per-test
+`NcviewApp` would not have touched it. The proposal's own justification
+for the one thing it was actually reacting to turned out to be false.
+
+Also found, and deliberately left alone (no observed failure tied to any
+of them, and none reachable by anything `NcviewApp` construction would
+touch either): `ViewerController::cur_button_` (never reset by
+`SessionFixture` -- only `g_app.session` is touched, not `g_app.controller`),
+`lockout_view_changes` (`view.cc`), `file.cc`'s `static int file_type`,
+`overlay.cc`'s `have_been_here_before`/`last_idxx`/`last_idxy`,
+`var_metadata.cc`'s `global_id`/`have_given_warning`, `file_netcdf.cc`'s
+`have_done_it`, several `udu.cc`/`utCalendar2_cal.cc` memo caches, and
+`tests/test_udunits_helper.h`'s own one-shot-init `static bool done`.
+Named for whoever next hits one; not fixed speculatively.
+
+**Decision: declined, not re-deferred.** Full reasoning is in the plan
+file's own Phase 11g section. `SessionFixture` + a process-wide `NcviewApp`
+reset remains the right amount of isolation for what this suite actually
+does. **Next: 11h**, the one concrete, now-fixable bug this reassessment
+found.
+
+## Part IV, Phase 11h: give `ViewerController::draw()`'s leaked frame-size statics a real owner
+
+**The confirmed bug from 11g's reassessment, fixed with the plan's
+established small-static pattern** (same move as Phase 5b's `printopts`
+and Phase 11f stage 1's `my_current_overlay`). Re-read
+`viewer_controller.cc:481` fresh before touching it: exactly as the
+reassessment found -- `static size_t last_x_size=0, last_y_size=0;`
+gates a single conditional `g_app.ui->in_set_2d_size(...)` call
+(`:611-616`), is the sole instance of this pattern (the other three
+`in_set_2d_size` call sites, all in `view.cc`, are unconditional and
+touch no static), and is not part of `ViewerSession`/`ViewerController`'s
+member data, so `SessionFixture`'s `g_app.session = ViewerSession()`
+reset never reached it.
+
+**Fix**: added `LastFrameSize { size_t width=0, height=0; }` and
+`ViewerSession::lastFrameSize()` (`viewer_session.h`), matching
+`currentOverlay()`'s accessor style; `ViewerController::draw()` now
+binds `LastFrameSize &last_frame_size = session_.lastFrameSize();` and
+reads/writes through it instead of the two deleted statics. Pure
+storage-location move, same "move, don't split" mechanics as every
+prior small-static fix -- the gating logic itself is untouched.
+
+**Tests first, and the first draft's own assertion had to be
+corrected before it actually caught the bug.** The natural first
+instinct -- assert `in_set_2d_size` was called at least once after
+selecting a variable in a fresh `SessionFixture` -- turned out to
+always pass regardless of the bug: `in_variable_selected()` ->
+`set_scan_variable()` (`view.cc:338`) calls `ui.in_set_2d_size(...)`
+**unconditionally**, with no gate at all, before ever reaching
+`ViewerController::draw()`'s gated copy via the `stepView()` call that
+follows it. Counting occurrences instead of just checking presence
+found the real signal: a genuinely fresh session reports its size
+**twice** on first variable selection (once unconditionally from
+`set_scan_variable()`, once more from the internal `draw()` triggered by
+`stepView()`, since that draw's "has the UI already seen this size"
+check is legitimately false on a first draw) -- but only **once** under
+the bug, because every `TEST_CASE` earlier in `test_view_draw.cc` uses
+the same lat=2/lon=2 fixture shape, so the leaked static already matched
+by the time this test's turn came. New test
+(`tests/test_view_draw.cc`, "in_set_2d_size fires on a fresh session's
+first draw, even at a size an earlier test already reported") asserts
+exactly 2; confirmed it failed against the unmodified code first
+(`CHECK( 1 == 2 )`) before applying the fix, then passed after.
+
+**Empirical confirmation the actual order-dependence is resolved, not
+just the synthetic regression test**: before this phase, `--order-by=rand
+--rand-seed=1` gave 6664 total assertions against the default order's
+6663 (the long-documented, previously-undiagnosed Phase 7a flakiness).
+After the fix (which also adds one new test case with one new
+assertion): default order, `--rand-seed=1`, and seeds 2 through 99
+checked individually all give the exact same **6688** -- confirmed
+across 9 different seeds with zero variance, including a full
+ASan/UBSan/LSan run at `--rand-seed=1` specifically (0 failures, no
+sanitizer reports). This is the first time this suite's assertion count
+has been seed-invariant since the flakiness was first noted in Phase 7a.
+
+**Left alone, deliberately**: the other ownerless statics 11g's
+reassessment named (`cur_button_`, `lockout_view_changes`, `file_type`,
+`overlay.cc`'s closest-point memo, `var_metadata.cc`'s two statics,
+`file_netcdf.cc`'s `have_done_it`, the `udu.cc`/`utCalendar2_cal.cc`
+caches, `test_udunits_helper.h`'s init guard). None has an observed
+failure; fixing them without a concrete symptom would be speculative,
+against this plan's own discipline of fixing confirmed bugs, not
+hypothetical ones.
+
+245 tests / 6688 assertions (up from 244/6664 -- one new test case, one
+new `CHECK`, everything else unchanged as expected for a pure storage
+move). Full six-gate verification clean: `-Werror` build; `ctest`
+normal + shuffled (9 seeds, zero variance); `ncview_core_linkcheck` exit
+0; all 15 `ui_smoke.sh` goldens byte-identical; scratch
+ASan/UBSan/LSan build clean at `--rand-seed=1`; `grep -rn` confirming no
+remaining reference to the deleted `last_x_size`/`last_y_size` statics
+outside explanatory comments. **This completes Part IV as scoped** (11a
+through 11f implemented, 11g reassessed and declined, 11h closing the
+one concrete bug that reassessment found).
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
