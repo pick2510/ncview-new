@@ -20,6 +20,7 @@ using ncview_test::SessionFixture;
 
 // The global under test, defined in core/src/view.cc.
 extern std::unique_ptr<ViewState> &view;
+extern std::vector<std::string> g_recorded_calls;
 
 namespace {
 
@@ -145,4 +146,50 @@ TEST_CASE("View::setAxis: an unresolvable dimension name does not write out of b
 
     view->setAxis(Dimension::Y, bogus_name);
     CHECK(view->y_axis_id == -1);
+}
+
+TEST_CASE("view_change_cur_dim: an unresolvable dimension name does not read out of bounds (Phase 12e)") {
+    // Regression test: changeCurDim() computed dimid via dimNameToId()
+    // (which legitimately returns -1 for a dim not found on this
+    // variable) and only guarded against it by accident, via the
+    // `dimid == x_axis_id || dimid == y_axis_id` check -- which only
+    // catches the case if one of those axis ids also happens to be -1.
+    // Otherwise dim[dimid]/var_place[dimid] below were an out-of-bounds
+    // read (operator[](SIZE_MAX) on std::vector). This variable has real
+    // X/Y axes (not -1), so the accidental protection does not apply.
+    SessionFixture fx;
+    NcFixture nc;
+    select_dims_variable(nc, "dims_change_bad", 3);
+    REQUIRE(view != nullptr);
+    REQUIRE(view->x_axis_id != -1);
+    REQUIRE(view->y_axis_id != -1);
+
+    g_recorded_calls.clear();
+    char bogus_name[] = "no_such_dim";
+    g_app.controller.changeCurDim(bogus_name, Modifier::M1); // must not read out of bounds
+
+    bool reported_error = false;
+    for (const auto &call : g_recorded_calls)
+        if (call == "in_dialog") // in_error() forwards to in_dialog()
+            reported_error = true;
+    CHECK(reported_error);
+}
+
+TEST_CASE("view_set_cur_dim_index: an unresolvable dimension name does not read out of bounds (Phase 12e)") {
+    // Same bug, same fix, in setCurDimIndex() instead of changeCurDim().
+    SessionFixture fx;
+    NcFixture nc;
+    select_dims_variable(nc, "dims_setidx_bad", 3);
+    REQUIRE(view != nullptr);
+    REQUIRE(view->x_axis_id != -1);
+    REQUIRE(view->y_axis_id != -1);
+
+    g_recorded_calls.clear();
+    g_app.controller.setCurDimIndex("no_such_dim", 0); // must not read out of bounds
+
+    bool reported_error = false;
+    for (const auto &call : g_recorded_calls)
+        if (call == "in_dialog")
+            reported_error = true;
+    CHECK(reported_error);
 }

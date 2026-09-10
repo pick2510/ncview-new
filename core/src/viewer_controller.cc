@@ -655,6 +655,17 @@ ViewerController::changeCurDim( char *dim_name, Modifier modifier )
 
 	dimid  = view->variable->files.front()->file->dimNameToId(
 				const_cast<char *>(view->variable->name.c_str()), dim_name );
+	/* Phase 12e: dimid can legitimately be -1 (dim_name not found for
+	 * this variable) -- the x_axis_id/y_axis_id check below only catches
+	 * this by accident, when one of those axis ids also happens to be -1
+	 * (no scan axis assigned). Check dimid itself first: dim[-1]/
+	 * var_place[-1] below would be operator[](SIZE_MAX), an out-of-bounds
+	 * read on both std::vector<std::unique_ptr<NCDim>> and
+	 * std::vector<size_t>. */
+	if( dimid < 0 ) {
+		in_error( "The requested dimension was not found for this variable." );
+		return;
+		}
 	if( (dimid == view->x_axis_id) ||
 	    (dimid == view->y_axis_id) )
 		return;
@@ -713,6 +724,13 @@ ViewerController::setCurDimIndex( const char *dim_name, long place )
 	dimid  = view->variable->files.front()->file->dimNameToId(
 				const_cast<char *>(view->variable->name.c_str()),
 				const_cast<char *>(dim_name) );
+	/* Phase 12e: same guard as ViewerController::changeCurDim() above --
+	 * dimid can legitimately be -1, and size[dimid]/dim[dimid] below
+	 * would be an out-of-bounds read at operator[](SIZE_MAX) otherwise. */
+	if( dimid < 0 ) {
+		in_error( "The requested dimension was not found for this variable." );
+		return;
+		}
 	if( (dimid == view->x_axis_id) ||
 	    (dimid == view->y_axis_id) )
 		return;

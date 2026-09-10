@@ -1801,6 +1801,16 @@ View::showCurrentDimValues()
 		dimid      = var->files.front()->file->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					dim_name );
+		/* Phase 12e: dimid can legitimately be -1 if this dim, though
+		 * scannable in general, doesn't resolve for this particular
+		 * variable -- var_place[-1] would be var_place[SIZE_MAX], an
+		 * out-of-bounds read (std::vector<size_t>). This function runs
+		 * on every redraw of the dimension-info labels, so skip the one
+		 * dim silently rather than pop an in_error() dialog on every
+		 * frame -- matches ViewerSession::curDimIndex()'s existing
+		 * "benign no-op on an unresolved dim" precedent (viewer_session.cc). */
+		if( dimid < 0 )
+			continue;
 
 		place = view->var_place[dimid];
 
