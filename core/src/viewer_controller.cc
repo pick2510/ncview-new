@@ -796,7 +796,7 @@ ViewerController::reportPosition( int x, int y, unsigned int button_mask )
 		virt_cursor_pos[ view->y_axis_id ] = data_y;
 		}
 
-	type = g_dataset.dimValue( view->variable, view->x_axis_id, data_x, &new_dimval,
+	type = g_app.session.dataset().dimValue( view->variable, view->x_axis_id, data_x, &new_dimval,
 			temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_pos );
 	if( type == NC_DOUBLE ) {
 		char	dim_str_buf[80];
@@ -809,7 +809,7 @@ ViewerController::reportPosition( int x, int y, unsigned int button_mask )
 	else
 		xdim_str = std::string( temp_string, strnlen( temp_string, 79 ) );
 
-	type = g_dataset.dimValue( view->variable, view->y_axis_id, data_y, &new_dimval,
+	type = g_app.session.dataset().dimValue( view->variable, view->y_axis_id, data_y, &new_dimval,
 			temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_pos );
 	if( type == NC_DOUBLE ) {
 		char	dim_str_buf[80];

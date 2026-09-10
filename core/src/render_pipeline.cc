@@ -169,7 +169,7 @@ View::dataToPixels()
 		if( result == Message::OK ) {
 			orig_minmax_method = options.min_max_method;
 			options.min_max_method = MinMaxMethod::Exhaust;
-			g_dataset.initMinMax( v->variable, *g_app.ui );
+			g_app.session.dataset().initMinMax( v->variable, *g_app.ui );
 			options.min_max_method = orig_minmax_method;
 			if( (v->variable->user_max == 0) &&
 	    		    (v->variable->user_min == 0) ) {
@@ -217,7 +217,7 @@ View::dataToPixels()
 	PixelMapSettings pixel_map_settings = g_app.session.pixelMapSettings( g_app.session.renderSettings() );
 	FrameRenderer::render( scaled_data.data(), new_x_size, new_y_size,
 		fill_value, v->variable->user_min, v->variable->user_max,
-		pixel_map_settings, pixel_transform, v->pixels.data() );
+		pixel_map_settings, g_app.session.pixelTransform(), v->pixels.data() );
 
 	return( 0 );
 }

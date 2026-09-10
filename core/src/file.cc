@@ -70,9 +70,9 @@ fi_initialize( char *name )
 	 * replaced (Phase 6) -- trackFile() is idempotent by fileid, so
 	 * addVariables()'s own per-variable trackFile() calls just return the
 	 * same object. */
-	file = g_dataset.trackFile( id );
+	file = g_app.session.dataset().trackFile( id );
 	var_list = file->listVars();
-	g_dataset.addVariables( var_list, id, name );
+	g_app.session.dataset().addVariables( var_list, id, name );
 
 	if( options.debug )
 		printf( "Done initializing file %s\n", name );

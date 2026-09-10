@@ -242,7 +242,7 @@ build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 				dim_name     = const_cast<char *>(view->variable->dim[i]->name.c_str());
 				dim_longname = file0->dimLongname( dim_name );
 				units        = file0->dimUnits( dim_name );
-				type         = g_dataset.dimValue( view->variable, i, view->var_place[i],
+				type         = g_app.session.dataset().dimValue( view->variable, i, view->var_place[i],
 							&temp_double, tstr2, &has_bounds, &bound_min, &bound_max, view->var_place.data() );
 				if( type == NC_DOUBLE )
 					snprintf( tstr, 1499, "Current %s: %lg", dim_longname.c_str(), temp_double );

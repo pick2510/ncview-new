@@ -874,7 +874,7 @@ void MainWindow::populateVarList()
 	// buckets upstream's x_sort_vars_by_ndims() uses for "menu" var-selection
 	// style (1d, 2d, 3d, 4d, 5-or-more), alpha-sorted within each bucket.
 	std::vector<NCVar*> buckets[5];
-	for( auto &v : variables ) {
+	for( auto &v : g_app.session.dataset().variablesMutable() ) {
 		int d = v->effective_dimensionality;
 		int idx = ( d >= 1 && d <= 4 ) ? d - 1 : 4;
 		buckets[idx].push_back( v.get() );

@@ -92,15 +92,15 @@ ncview_main( int argc, char **argv, ViewerUi &ui )
 	/* this routine sets up the 'variables' structure */
 	initialize_file_interface   ( input_files );
 
-	if( n_vars_in_list( variables ) == 0 ) {
+	if( n_vars_in_list( g_app.session.dataset().variablesMutable() ) == 0 ) {
 		fprintf( stderr, "no displayable variables found!\n" );
 		exit( -1 );
 		}
 
-	/* If any vars are in groups, we build the interface differently. 
+	/* If any vars are in groups, we build the interface differently.
 	 * I pass this information through the global "options" struct.
 	 */
-	if( any_var_in_group( variables )) {
+	if( any_var_in_group( g_app.session.dataset().variablesMutable() )) {
 		options.enable_group_sel = true;
 		options.varsel_style = VarselStyle::Menu;
 		}
@@ -116,9 +116,9 @@ ncview_main( int argc, char **argv, ViewerUi &ui )
 	overlay_init();
 
 	/* If there is only one variable, make it the active one */
-	if( n_vars_in_list( variables ) == 1 ) {
+	if( n_vars_in_list( g_app.session.dataset().variablesMutable() ) == 1 ) {
 		/* set_scan_variable     ( variables       ); */
-		ui.in_indicate_active_var( const_cast<char *>(variables[0]->name.c_str()) );
+		ui.in_indicate_active_var( const_cast<char *>(g_app.session.dataset().variablesMutable()[0]->name.c_str()) );
 		}
 
 	/* If we didn't find a state file (".ncviewrc") when we started up, then
@@ -188,7 +188,7 @@ reset_session_defaults()
 	options.missval_g 	= 255;
 	options.missval_b 	= 255;
 
-	framestore = FrameCache();
+	g_app.session.frameCache() = FrameCache();
 
 }
 
@@ -216,14 +216,14 @@ initialize_file_interface( Stringlist *input_files )
 			fi_initialize( (char *)f.string.c_str() );
 	if( options.debug )
 		printf( "...calculating dim min & maxes...\n" );
-	g_dataset.calcDimMinmaxes();
+	g_app.session.dataset().calcDimMinmaxes();
 
 	/* Get the effective dimensionality of all the vars.
 	 * Can't do this before we have read in all of the
 	 * input file.
 	 */
 	nvars = 0;
-	for( auto &var_owner : variables ) {
+	for( auto &var_owner : g_app.session.dataset().variablesMutable() ) {
 		NCVar *var = var_owner.get();
 		nvars++;
 		var->effective_dimensionality = 0;
@@ -256,7 +256,7 @@ initialize_file_interface( Stringlist *input_files )
 	 * gather any scalar coordinate information (which
 	 * might possibly change in each file)
 	 */
-	g_dataset.cacheScalarCoordInfo();
+	g_app.session.dataset().cacheScalarCoordInfo();
 
 	if( nvars > options.listsel_max )
 		options.varsel_style = VarselStyle::Menu;
@@ -277,9 +277,9 @@ initialize_display_interface( ViewerUi &ui )
 	 * util.cc:data_to_pixels() unconditionally dereferences a NULL
 	 * pixel_transform for the first missing/fill-value pixel it sees.
 	 */
-	pixel_transform.resize( options.n_colors+options.n_extra_colors );
+	g_app.session.pixelTransform().resize( options.n_colors+options.n_extra_colors );
 	for( int i=0; i<options.n_colors+options.n_extra_colors; i++ )
-		pixel_transform[i] = (ncv_pixel)i;
+		g_app.session.pixelTransform()[i] = (ncv_pixel)i;
 
 	initialize_colormaps();
 

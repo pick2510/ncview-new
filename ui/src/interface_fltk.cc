@@ -78,12 +78,13 @@ void FltkViewerUi::in_initialize( void )
 	instance()->populateVarList();
 	instance()->window()->show();
 	if( const char *sel = getenv( "NCVIEW_TEST_AUTOSELECT" ) ) {
-		NCVar *v = variables.empty() ? nullptr : variables[0].get();
+		auto &vars = g_app.session.dataset().variablesMutable();
+		NCVar *v = vars.empty() ? nullptr : vars[0].get();
 		// A specific variable name may be given (besides "1", meaning "just
 		// pick the first one"); useful for driving a chosen 2-D field in
 		// headless/manual testing without a real mouse.
 		if( std::strcmp( sel, "1" ) != 0 )
-			for( auto &c : variables )
+			for( auto &c : vars )
 				if( c->name == sel ) { v = c.get(); break; }
 		if( v != nullptr )
 			in_variable_selected( v->name.c_str() );

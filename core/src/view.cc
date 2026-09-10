@@ -278,7 +278,7 @@ set_scan_variable( NCVar *var, ViewerSession &session, ViewerUi &ui )
 
 	/* Set the min and maxes of the data */
 	if( !view->variable->have_set_range )
-		g_dataset.initMinMax( var, ui );
+		g_app.session.dataset().initMinMax( var, ui );
 
 	/* If we are automatically putting on overlays, do so now */
 	xdim = view->variable->dim[view->x_axis_id].get();
@@ -367,7 +367,7 @@ in_variable_selected( const char *var_name )
 {
 	NCVar	*var;
 
-	if( (var = g_dataset.findVariable( var_name )) == NULL ) {
+	if( (var = g_app.session.dataset().findVariable( var_name )) == NULL ) {
 		fprintf( stderr, "ncview: in_variable_selected: internal error " );
 		fprintf( stderr, "no variable with name >%s< found on variable list\n",
 					var_name );
@@ -458,7 +458,7 @@ View::scanToPlace( size_t scan_place )
 	view_place = "frame " + std::to_string(scan_place+1) + "/" + std::to_string(size) + " ";
 
 	/* type is the data type of the dimension--can be float or character */
-	type = g_dataset.dimValue( view->variable, view->scan_axis_id, scan_place, &new_dimval,
+	type = g_app.session.dataset().dimValue( view->variable, view->scan_axis_id, scan_place, &new_dimval,
 			temp_string, &has_bounds, &bound_min, &bound_max, view->var_place.data() );
 	if( type == NC_DOUBLE ) {
 		if( dim->timelike && options.t_conv ) {
@@ -624,7 +624,7 @@ View::checkNewData( int unused )
 	ui.in_set_label( Label::Title, message );
 
 	/* See if we need to reallocate the framestore */
-	if( nt_new >= framestore.nt() ) {
+	if( nt_new >= g_app.session.frameCache().nt() ) {
 		n_scan_entries = view->variable->size[view->scan_axis_id];
 		n_extra_frames = floor( n_scan_entries * 0.2 ) + 1;
 		if( n_extra_frames < 25 )
@@ -633,7 +633,7 @@ View::checkNewData( int unused )
 		if( options.debug )
 			printf( "reallocating framestore to new nt=%zu\n", nt_new + n_extra_frames );
 
-		framestore.growTo( nt_new + n_extra_frames );
+		g_app.session.frameCache().growTo( nt_new + n_extra_frames );
 		}
 
 	view->variable->size[ timelike_index ] = nt_new;
@@ -663,7 +663,7 @@ View::checkNewData( int unused )
 				n_other *= view->variable->size[i];
 		std::vector<float> data_buf( n_other );
 		data = data_buf.data();
-		g_dataset.getMinMaxOnestep( view->variable, n_other, nt_new, data, &min, &max, 0 );
+		g_app.session.dataset().getMinMaxOnestep( view->variable, n_other, nt_new, data, &min, &max, 0 );
 		if( min != max ) {
 			view->variable->auto_set_no_range = 0;
 			if( (min < 0) && (max > 0)) {
@@ -917,7 +917,7 @@ View::fillViewData()
 		printf( "\\) %s\n", v->variable->files.front()->filename.c_str() );
 		}
 
-	g_dataset.getData( v->variable, v->var_place.data(), count.data(), v->data.data() );
+	g_app.session.dataset().getData( v->variable, v->var_place.data(), count.data(), v->data.data() );
 
 	v->data_status = ViewDataStatus::Valid;
 }
@@ -1027,7 +1027,7 @@ View::applyCurDimPlace( int dimid, NCDim *dim, size_t place )
 		view->scanToPlace( place );
 		}
 	else {
-		type  = g_dataset.dimValue( view->variable, dimid, place, &new_dimval, temp_string,
+		type  = g_app.session.dataset().dimValue( view->variable, dimid, place, &new_dimval, temp_string,
 			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 		if( type == NC_DOUBLE ) {
 			if( dim->timelike && options.t_conv ) {
@@ -1264,7 +1264,7 @@ View::setRange()
 	g_app.controller.draw( true, false ); /* 'true' because we just invalidated all saveframes */
 
 	if( allvars == true ) {
-		for( auto &cursor : variables ) {
+		for( auto &cursor : g_app.session.dataset().variablesMutable() ) {
 			cursor->user_min = new_min;
 			cursor->user_max = new_max;
 			cursor->have_set_range = true;
@@ -1388,7 +1388,7 @@ View::initSaveframes()
 	 * correctness) -- preserved here by catching std::bad_alloc from
 	 * FrameCache::reset() rather than letting it propagate. */
 	try {
-		framestore.reset( nt, nx, ny );
+		g_app.session.frameCache().reset( nt, nx, ny );
 		}
 	catch( const std::bad_alloc & ) {
 		snprintf( err_message, 131, "Can't allocate space for frame store.\nRequested size: %.1f MB",
@@ -1769,7 +1769,7 @@ View::showCurrentDimValues()
 
 		place = view->var_place[dimid];
 
-		type  = g_dataset.dimValue( view->variable, dimid, place, &new_dimval, temp_string,
+		type  = g_app.session.dataset().dimValue( view->variable, dimid, place, &new_dimval, temp_string,
 			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 		if( type == NC_DOUBLE )
 			snprintf( temp_string, 1023, "%lg", new_dimval );
@@ -2271,7 +2271,7 @@ View::plotXYSc( size_t *start, size_t *count )
 			virt_cursor_place[i] = view->var_place[i];
 		virt_cursor_place[dim_to_plot] = i_size;
 
-		type = g_dataset.dimValue( view->variable, dim_to_plot, i_size, &temp_double, 
+		type = g_app.session.dataset().dimValue( view->variable, dim_to_plot, i_size, &temp_double, 
 				temp_string, &has_bounds, &bound_min, &bound_max, virt_cursor_place );
 		if( type == NC_DOUBLE )
 			plot_XY_xvals[i_size] = temp_double;
@@ -2287,7 +2287,7 @@ View::plotXYSc( size_t *start, size_t *count )
 			plot_XY_xvals[i] = (double)i;
 
 	/* Get the y values (values to be plotted) */
-	g_dataset.getData( view->variable, start, count, tmp_yvals );
+	g_app.session.dataset().getData( view->variable, start, count, tmp_yvals );
 
 	/* Eliminate the missing values */
 	j = 0;
@@ -2395,7 +2395,7 @@ View::plotXYSc( size_t *start, size_t *count )
 		if( (i != dim_to_plot) && (view->variable->dim[i].get() != NULL)) {
 			if( have_done_one )
 				strncat( legend, ", ", sizeof(legend) - strlen(legend) - 1 );
-			type = g_dataset.dimValue( view->variable, i, *(start+i), &temp_double, temp_string,
+			type = g_app.session.dataset().dimValue( view->variable, i, *(start+i), &temp_double, temp_string,
 					&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 			if( type == NC_DOUBLE ) {
 				snprintf( temp2_string, 127, "%lg", temp_double );

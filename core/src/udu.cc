@@ -192,8 +192,8 @@ TimeGranularity udu_calc_tgran( int fileid, NCVar *v, int dimid )
 	/* Get a delta time to analyze */
 	for( ii=0L; ii<v->n_dims; ii++ )
 		cursor_place[ii] = (int)((v->size[ii])/2.0);
-	g_dataset.dimValue( v, dimid, 1L, &tval0_user, cval0, &has_bounds, &bound_min, &bound_max, cursor_place );
-	g_dataset.dimValue( v, dimid, 2L, &tval1_user, cval1, &has_bounds, &bound_min, &bound_max, cursor_place );
+	g_app.session.dataset().dimValue( v, dimid, 1L, &tval0_user, cval0, &has_bounds, &bound_min, &bound_max, cursor_place );
+	g_app.session.dataset().dimValue( v, dimid, 2L, &tval1_user, cval1, &has_bounds, &bound_min, &bound_max, cursor_place );
 
 	/* Convert time vals from user units to seconds */
 	tval0_sec = cv_convert_double( convert_units_to_sec, tval0_user );
