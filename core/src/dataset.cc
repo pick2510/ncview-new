@@ -290,6 +290,13 @@ nc_type Dataset::dimValue( NCVar *var, int dim_id, size_t virt_place, double *re
 			idx_map += complete_ndim_virt_place[i] * dmi->index_place_factor[i];
 			}
 		*return_val_double = dmi->data_cache[idx_map];
+		/* Phase 12f: this early return used to leave *return_has_bounds
+		 * (and the two bounds values) uninitialized -- a 2-D-mapped
+		 * dim has no bounds concept, so say so explicitly rather than
+		 * leaving the caller to read garbage off the stack. */
+		*return_has_bounds = 0;
+		*return_bounds_min = 0.0;
+		*return_bounds_max = 0.0;
 		return( NC_DOUBLE );
 		}
 
@@ -321,8 +328,18 @@ nc_type Dataset::dimValue( NCVar *var, int dim_id, size_t virt_place, double *re
 	 */
 	if( ret_val != NC_CHAR) {
 		dimValueConvert( return_val_double, file, var, d );
-		dimValueConvert( return_bounds_min, file, var, d );
-		dimValueConvert( return_bounds_max, file, var, d );
+		/* Phase 12f: only convert the bounds values when
+		 * netcdf_dim_value() actually reported bounds -- otherwise
+		 * *return_bounds_min / *return_bounds_max are the "no bounds"
+		 * default (0.0) and running them through unit conversion is
+		 * meaningless at best. Before this fix these two out-params
+		 * were, on the has-bounds-only write path, exactly the two
+		 * that could still be uninitialized stack memory (see
+		 * netcdf_dim_value()'s own Phase 12f fix). */
+		if( *return_has_bounds ) {
+			dimValueConvert( return_bounds_min, file, var, d );
+			dimValueConvert( return_bounds_max, file, var, d );
+			}
 		}
 #endif
 

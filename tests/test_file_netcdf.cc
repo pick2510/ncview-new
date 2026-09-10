@@ -248,6 +248,53 @@ TEST_CASE("file_netcdf: dim value reads back real coordinate data") {
     CHECK(has_bounds == 0);
 }
 
+TEST_CASE("netcdf_dim_value: an unsigned-typed (netCDF-4) coordinate variable reports no bounds, not garbage (Phase 12f)") {
+    // Every type netcdf_dim_value() actually handles by name (NC_BYTE/
+    // SHORT/LONG/FLOAT/DOUBLE/INT64/CHAR) was already covered by the test
+    // above. Any netCDF-4 numeric type added since 1993 -- NC_UINT here --
+    // falls through to the function's `default:` case, which before Phase
+    // 12f never wrote *return_has_bounds at all: a caller reading it was
+    // reading whatever garbage happened to be on its own stack. This test
+    // can only prove the value is now deterministically 0, not that it was
+    // previously garbage on this exact run -- ASan/UBSan don't catch reads
+    // of uninitialized *stack* memory (that needs MSan or Valgrind, neither
+    // configured in this project).
+    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_uint_dim_XXXXXX").string();
+    int fd = mkstemp(&tmpl[0]);
+    REQUIRE(fd >= 0);
+    close(fd);
+    std::string path = tmpl;
+
+    int ncid;
+    REQUIRE(nc_create(path.c_str(), NC_NETCDF4 | NC_CLOBBER, &ncid) == NC_NOERR);
+    int dim_lev;
+    REQUIRE(nc_def_dim(ncid, "lev", 3, &dim_lev) == NC_NOERR);
+    int var_lev;
+    REQUIRE(nc_def_var(ncid, "lev", NC_UINT, 1, &dim_lev, &var_lev) == NC_NOERR);
+    REQUIRE(nc_enddef(ncid) == NC_NOERR);
+    unsigned int lev_vals[3] = {100u, 200u, 300u};
+    REQUIRE(nc_put_var_uint(ncid, var_lev, lev_vals) == NC_NOERR);
+    REQUIRE(nc_close(ncid) == NC_NOERR);
+
+    int fileid = open_sample_file(path);
+
+    double val;
+    char cval[256];
+    int has_bounds;
+    double bmin, bmax;
+    nc_type type = netcdf_dim_value(fileid, (char *)"lev", 1, &val, cval, 0,
+                                     &has_bounds, &bmin, &bmax);
+    // The default branch falls back to the virtual place, not the real
+    // (unreadable-as-double-by-name) value.
+    CHECK(type == NC_DOUBLE);
+    CHECK(has_bounds == 0);
+    CHECK(bmin == 0.0);
+    CHECK(bmax == 0.0);
+
+    netcdf_fi_close(fileid);
+    std::remove(path.c_str());
+}
+
 TEST_CASE("file_netcdf: a name with no matching dimvar reports no values") {
     SampleFile f;
     // netcdf_has_dim_values()'s notion of "dimvar" is purely name-based (a

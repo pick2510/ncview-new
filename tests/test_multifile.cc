@@ -312,6 +312,21 @@ TEST_CASE("Dataset::dimValue: reconciles a timelike dim's value across files wit
     CHECK(type == NC_DOUBLE);
     CHECK(val == doctest::Approx(19.0));
 
+    // Phase 12f: this variable has no "bounds" attribute, so has_bounds
+    // should come back false and bound_min/bound_max should be the
+    // documented "no bounds" default (0.0), not whatever happened to be
+    // sitting on the stack. Before Phase 12f, Dataset::dimValue() ran
+    // dimValueConvert() on these two values unconditionally, regardless
+    // of has_bounds -- meaning this test exercised a read of
+    // uninitialized memory on every run without failing (ASan/UBSan
+    // can't catch a read of uninitialized *stack* memory; that needs
+    // MSan or Valgrind, neither configured in this project). This
+    // assertion can only prove the values are now deterministically
+    // zero, not that they were previously garbage on this exact run.
+    CHECK(has_bounds == 0);
+    CHECK(bound_min == 0.0);
+    CHECK(bound_max == 0.0);
+
     std::remove(path0.c_str());
     std::remove(path1.c_str());
 }

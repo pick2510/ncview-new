@@ -1251,6 +1251,15 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 		fprintf( stderr, "netcdf_dim_value: failed on nc_inq_var call!\n" );
 		exit(-1);
 		}
+
+	/* Phase 12f: initialize on every path below, including the
+	 * default (unhandled-datatype) and NC_CHAR cases, which never
+	 * used to write these -- callers that check *return_has_bounds
+	 * were reading uninitialized stack memory on those paths. */
+	*return_has_bounds = 0;
+	*return_bounds_min = 0.0;
+	*return_bounds_max = 0.0;
+
 	switch( type ) {
 		case NC_CHAR:
 			/* this one is really complicated because the netCDF standard
@@ -1273,6 +1282,17 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 				do	{
 					char_place[1] = i;
 					err = nc_get_var1_uchar( dimvar_gid, dimvar_id, char_place, (((unsigned char *)(ret_val_char))+i));
+					if( err != NC_NOERR ) {
+						/* Phase 12f: this call's return value used to
+						 * go unchecked -- on failure the buffer past
+						 * this point was left whatever it started as,
+						 * and the loop kept going as if the read had
+						 * succeeded. */
+						fprintf( stderr, "netcdf_dim_value: failed reading character %ld of dim %s!\n",
+							i, dim_name );
+						fprintf( stderr, "%s\n", nc_strerror( err ) );
+						exit(-1);
+						}
 					i++;
 					}
 				while
@@ -1281,20 +1301,32 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 				if( *(ret_val_char+i-1) != '\0')
 					*(ret_val_char+i-1) = '\0';
 				}
-			else	{
+			else if( n_dims == 1 ) {
 				/* 1-D NC_CHAR coordinate variable: one character
 				 * per coordinate position, no second dimension to
-				 * index over. The n_dims==2 path's index array
-				 * ({place, i}) is meaningless here -- nc_get_var1
-				 * only consults the first n_dims (1) of it, so
-				 * every "i" iteration re-read the same single
-				 * value at position "place", producing that one
-				 * character repeated rather than the intended
-				 * (single-character) string. */
+				 * index over. */
 				size_t place1[1];
 				place1[0] = place;
 				err = nc_get_var1_uchar( dimvar_gid, dimvar_id, place1, (unsigned char *)ret_val_char );
+				if( err != NC_NOERR ) {
+					fprintf( stderr, "netcdf_dim_value: failed reading dim %s at place %zu!\n",
+						dim_name, place );
+					fprintf( stderr, "%s\n", nc_strerror( err ) );
+					exit(-1);
+					}
 				ret_val_char[1] = '\0';
+				}
+			else	{
+				/* Phase 12f: neither of the two shapes this function
+				 * knows how to handle -- reading via either fixed-size
+				 * index array (place1[1] or char_place[2]) below a
+				 * higher-rank NC_CHAR dimvar would read past the end
+				 * of that array. Not something CF-convention files
+				 * produce, but guard it rather than corrupting the
+				 * stack. */
+				fprintf( stderr, "netcdf_dim_value: unsupported rank (%d) for character dimension variable %s!\n",
+					n_dims, dim_name );
+				exit(-1);
 				}
 			break;
 
@@ -1309,11 +1341,36 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 			 * centered between the boundaries.  Some files have the dim value NOT
 			 * centered between the boundaries, which isn't so useful.
 			 */
+			if( n_dims != 1 ) {
+				/* Phase 12f: a numeric dimvar is expected to be
+				 * 1-D. &place below is a single size_t used as the
+				 * index array for nc_get_var1_double() -- if the
+				 * dimvar were actually higher rank, the netCDF
+				 * library would read past the end of it. Not
+				 * something CF-convention files produce, but guard
+				 * it rather than corrupting the stack. */
+				fprintf( stderr, "netcdf_dim_value: unsupported rank (%d) for numeric dimension variable %s!\n",
+					n_dims, dim_name );
+				exit(-1);
+				}
+
 			dimvar_bounds_id = netcdf_dimvar_bounds_id( dimvar_gid, dim_name, &nvertices );
-			if( dimvar_bounds_id < 0 ) { 
+			if( dimvar_bounds_id < 0 ) {
 
 				*return_has_bounds = 0;
 				err = nc_get_var1_double( dimvar_gid, dimvar_id, &place, ret_val_double );
+				if( err != NC_NOERR ) {
+					/* Phase 12f: this call's return value used to go
+					 * unchecked -- on failure ret_val_double was left
+					 * whatever it started as, and the function
+					 * returned NC_DOUBLE as if the read had
+					 * succeeded, so the caller believed uninitialized
+					 * stack memory was a real coordinate value. */
+					fprintf( stderr, "netcdf_dim_value: failed reading dim %s at place %zu!\n",
+						dim_name, place );
+					fprintf( stderr, "%s\n", nc_strerror( err ) );
+					exit(-1);
+					}
 #ifdef ELIM_DENORMS
 				/* Eliminate denormalized numbers */
 				c = (unsigned char *)ret_val_double;
