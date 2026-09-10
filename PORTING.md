@@ -2536,6 +2536,137 @@ call shape.
 object graph the whole arc has been building toward, preserving the
 real startup-ordering constraints the Part IV survey found.
 
+## Part IV, Phase 11f: reshape `AppContext` into `NcviewApp`; drop the last production-code migration-bridge globals
+
+Three independent, separately-verified stages, plus one thing looked at
+hard and explicitly not done. Re-surveyed the "smaller named items" list
+from the plan's Part IV context fresh, rather than trusting it: it
+predates 11a-11e, and one item on it (`file.cc`'s `file_type` dead
+switch) turned out to be outside this phase's actual scope once looked
+at directly -- see "Considered and left alone" below.
+
+**Stage 1 -- `overlay.cc`'s `my_current_overlay` gets a real owner.**
+Exactly as flagged since round 3: a file-static int with a getter
+(`overlay_current()`) but no setter and no owner, mutated as a side
+effect of `do_overlay()`. Moved onto `ViewerSession::currentOverlay()`
+-- the same move Phase 5b made for `do_print.cc`'s `printopts` static.
+No construction-order issue here at all: `g_app.session` is a plain
+value member of the static-duration `g_app`, so there was never
+anything blocking this the way `ViewerUi` blocks 11c/11f's other half.
+
+**Stage 2 -- `g_dataset`/`variables`/`pixel_transform`/`framestore`
+removed as *production-code* aliases.** Grepped fresh rather than
+trusting the plan's stale counts (they predate Phase 6-10's own
+restructuring): found 26 real `g_dataset.` call sites across 8
+production files (`view.cc` 11, `do_print.cc` 1, `viewer_controller.cc`
+2, `ncview.cc` 2 plus its own definition, `overlay.cc` 2, `udu.cc` 2,
+`file.cc` 2, `render_pipeline.cc` 1), 9 real `variables` sites across 4
+files (`ncview.cc` 5, `view.cc` 1, `interface_fltk.cc` 2,
+`main_window.cc` 1 -- most of the raw `variables` grep hits in other
+files were the English word in comments/strings, not the global), 1
+real `pixel_transform` site outside its own definition
+(`render_pipeline.cc:220`; `frame_renderer.cc`'s `pixel_transform` is an
+unrelated parameter name, left alone), and 2 real `framestore` sites
+outside its definition (`view.cc:627,636,1391` -- three call sites,
+not one, since `checkNewData` uses it twice). `viewer_controller.cc` and
+`viewer_session.cc` already had their own *local* `FrameCache
+&framestore = ...` aliases bound to `session_.frameCache()`/
+`frame_cache_` respectively -- those were correctly left untouched,
+they were never the global.
+
+Every one of those sites now reads `g_app.session.dataset()`,
+`g_app.session.dataset().variablesMutable()`, `g_app.session.pixelTransform()`,
+or `g_app.session.frameCache()` directly. Unlike `ViewerUi`, none of
+these four had any construction-order obstacle -- `g_app.session` is a
+plain value member, fully constructed before `main()` runs, so there
+was nothing to defer.
+
+**The extern globals themselves are deliberately still there.**
+`protos.h`'s `extern Dataset &g_dataset;` and friends, and their
+definitions in `ncview.cc` (`Dataset &g_dataset = g_app.session.dataset();`
+etc.), are untouched. Re-grepped `tests/` specifically (per this phase's
+own scope boundary, not touched otherwise): ~84 `g_dataset` references
+and ~17 `variables` references remain there, all reading these globals
+directly rather than through `g_app.session`. Those tests construct
+their session via `installRecordingViewerUi()`'s static-init-order
+workaround (`tests/main.cc`), which Phase 11g is where per-test
+construction gets reassessed -- reworking the test harness's own access
+pattern here would be scope creep into a phase the user explicitly
+chose to defer and re-justify separately, not commit to now.
+
+**Stage 3 -- `AppContext` renamed to `NcviewApp`.** Matches the
+object-graph name the whole arc has used since the user's original
+proposal. Cosmetic beyond the name: same constructor, same members, same
+shape. Only ~5 places referenced the type name itself (as opposed to
+the `g_app` variable, which stays `g_app` -- renaming the variable too
+would touch ~1,400+ call sites for no substance change, since the
+object's identity and access pattern are what matter, not its spelling).
+
+**Considered hard, and confirmed not achievable this phase: making `ui`
+a true reference member of `NcviewApp` itself.** This is the piece of
+the original proposal ("`NcviewApp` constructed once in `main()`... a
+reference, not nullable pointer, to the `ViewerUi` implementation") that
+11c already found blocked at `ViewerController`'s level; 11f's job was
+to check whether reshaping the composition root itself removes that
+block. It doesn't, and the reason is architectural, not a missed trick:
+`g_app` has static storage duration and is fully constructed before
+`main()` runs, while which concrete `ViewerUi` backs it
+(`ncview_ui::FltkViewerUi` for the real app, `RecordingViewerUi` for
+tests) is deliberately chosen at `main()`'s/`tests/main.cc`'s own
+startup -- core/ does not, and must not, depend on either concrete type
+at compile time. A reference member has to be bound at its owner's
+construction; for `NcviewApp::ui` to become one, `g_app` itself would
+have to stop being a global and become a genuine local inside `main()`,
+with every one of the ~1,400+ existing `g_app.` call sites across
+core/ and ui/ rewritten to receive `NcviewApp&` (or a narrower piece of
+it) as an explicit parameter. That is Phase 11a/11b's reference-
+threading technique applied to the *entire* codebase instead of the
+~17 free functions and handful of methods those phases actually
+touched -- a real, much larger undertaking in its own right, not a
+corner this phase cut to hit a deadline. Documented in place on
+`app_context.h`'s `ui` member and `viewer_controller.h`'s constructor
+comment (both rewritten to explain *why*, not just restate that it's
+blocked) rather than left as a stale "Phase 11f will fix this" pointer
+now that 11f itself has looked and confirmed it can't.
+
+**Considered and left alone: `file.cc`'s `file_type` dead switch.**
+The plan's Part IV context named this as something to "re-evaluate...
+once its last 2 call sites are visited by 11a anyway" -- but 11a never
+touched `file.cc` (it threaded `view.cc`/`ncview.cc` functions). Re-read
+`file.cc` fresh: the switch is still exactly the 3 dispatch points
+`fi_initialize`/`fi_dim_calendar`/`fi_close` had after Phase 6, all
+checking a `static int file_type` that can only ever hold
+`FILE_TYPE_NETCDF`. It is real dead branching, but it is not a
+compatibility global in any sense this arc is about -- it has no
+relationship to `g_app`, `ViewerUi`, or any of the four globals Stage 2
+removed from production code, and collapsing it is a plain dead-code
+deletion unrelated to object ownership. Left alone rather than folded
+in for the sake of matching the plan's original item list; a legitimate
+candidate for its own small future cleanup, not part of this arc's
+substance.
+
+**Verified after every stage independently** (not just at the end,
+given this phase's risk profile): clean `-Werror` build; `ctest`
+(`ncview_core_tests` + `ncview_ui_smoke`) and again with
+`--order-by=rand`, 244 tests / 6664 assertions unchanged at every stage;
+`ncview_core_linkcheck` exit 0 at every stage; all 15 `ui_smoke.sh`
+goldens byte-identical at every stage; a scratch
+`NCVIEW_SANITIZE=address,undefined` build of `ncview_core_tests` clean
+at every stage (0 failures, no ASan/UBSan/LSan reports -- this mattered
+more than usual here, since global construction-order bugs are exactly
+what these sanitizers catch; unshuffled default order gives 6663
+assertions throughout, the same pre-existing `test_do_print.cc`
+order-sensitivity documented since Phase 7a, not a regression); a
+project-wide grep after Stage 3 confirming zero remaining references to
+`AppContext` outside explanatory comments.
+
+**Next: 11g** -- per-test `NcviewApp` construction, deliberately scoped
+as a reassessment point rather than committed work (see the plan's own
+Phase 11g section for why). Nothing in 11f changed that judgment; if
+anything, Stage 2's finding that ~84+17 of the four migration-bridge
+globals' remaining references are already concentrated in `tests/`
+sharpens the question 11g is meant to ask, rather than answering it.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
