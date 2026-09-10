@@ -123,12 +123,14 @@ public:
 	 * defaults ("Refine the architecture" plan, Phase 5b). */
 	PrintOptions& printSettings() { return print_settings_; }
 
-	/* Builds FrameRenderer's settings from Options's render-shaped field
-	 * group (transform, invert_colors, invert_physical, n_colors,
-	 * n_extra_colors, display_type). Options itself is passed in rather
-	 * than read from the global directly, so this stays testable without
-	 * depending on global state. */
-	PixelMapSettings pixelMapSettings( const Options &options ) const;
+	/* Builds FrameRenderer's settings from the render-shaped field group
+	 * (transform, invert_colors, invert_physical, n_colors,
+	 * n_extra_colors, display_type). Narrowed from `const Options&` to
+	 * `const RenderSettings&` in Phase 11e -- this was the one place in
+	 * the tree taking a whole Options&; all six fields it reads already
+	 * live directly on RenderSettings, so the narrower type documents
+	 * the real dependency instead of the global's full ~50-field shape. */
+	PixelMapSettings pixelMapSettings( const RenderSettings &render ) const;
 
 	/* "Refine the architecture" plan, Phase 2: view.cc entry points whose
 	 * only reason to stay a free function was a `view == NULL` guard

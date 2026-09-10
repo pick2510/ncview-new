@@ -32,11 +32,11 @@
 #include "ncview/protos.h"
 
 PixelMapSettings
-ViewerSession::pixelMapSettings( const Options &options ) const
+ViewerSession::pixelMapSettings( const RenderSettings &render ) const
 {
 	return PixelMapSettings{
-		options.transform, options.invert_colors != 0, options.invert_physical != 0,
-		options.n_colors, options.n_extra_colors, options.display_type
+		render.transform, render.invert_colors != 0, render.invert_physical != 0,
+		render.n_colors, render.n_extra_colors, render.display_type
 	};
 }
 
