@@ -38,7 +38,15 @@ struct AppContext {
 	ViewerController controller;
 	/* Non-owning: whoever constructs the real ViewerUi (main.cc for the
 	 * app, tests/stub_interface.cc for tests) owns its lifetime and
-	 * points this at it before anything reaches the interface.h seam. */
+	 * points this at it before anything reaches the interface.h seam.
+	 * Stays a nullable pointer set after the fact, not a reference bound
+	 * at construction -- Phase 11c looked at making it a real reference
+	 * and found it can't be, for the same reason `controller` can't hold
+	 * one either (see viewer_controller.h): `g_app` itself has static
+	 * storage duration and is fully constructed before any ViewerUi
+	 * implementation exists to bind to. Only Phase 11f's restructuring
+	 * (building the composition root once, in order, inside main())
+	 * removes that constraint. */
 	ViewerUi        *ui = nullptr;
 
 	AppContext() : controller( session ) {}

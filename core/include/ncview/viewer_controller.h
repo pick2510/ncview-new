@@ -38,6 +38,15 @@
 
 class ViewerController {
 public:
+	/* Deliberately does not also take a ViewerUi& -- Phase 11c looked at
+	 * adding one (matching the plan's original ask) and found it's not
+	 * achievable yet: this object is a member of the static-duration
+	 * global AppContext (app_context.h), constructed before main() runs,
+	 * before any ViewerUi implementation exists to bind a reference to.
+	 * Its ~27 seam calls reach g_app.ui-> explicitly instead, the same
+	 * pattern Phase 11b used for View for the identical reason. Only
+	 * Phase 11f's restructuring (building the composition root once,
+	 * in order, inside main()) removes this constraint. */
 	explicit ViewerController( ViewerSession &session ) : session_( session ) {}
 
 	Button whichButtonPressed() const { return cur_button_; }

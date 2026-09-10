@@ -611,7 +611,7 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 	    (last_y_size != scaled_y_size)) {
 		last_x_size = scaled_x_size;
 		last_y_size = scaled_y_size;
-		in_set_2d_size  ( scaled_x_size, scaled_y_size );
+		g_app.ui->in_set_2d_size( scaled_x_size, scaled_y_size );
 		}
 
 	if( options.debug )
