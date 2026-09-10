@@ -542,9 +542,16 @@ int netcdf_dim_name_to_id( int fileid, char *var_name, char *dim_name )
 
 	err = nc_inq_varid_grp( fileid, var_name, &netcdf_var_id, &gid );
 	if( err != NC_NOERR ) {
+		/* Phase 12e: was exit(-1) -- every caller of this function's
+		 * wrapper chain (NetCDFFile::dimNameToId()) now checks for -1
+		 * before indexing anything with the result (see view.cc's
+		 * View::setAxis()/showCurrentDimValues() and
+		 * viewer_controller.cc's changeCurDim()/setCurDimIndex()), so
+		 * returning -1 here instead of exiting is safe. */
 		fprintf( stderr, "Error in netcdf_dim_name_to_id: could not find var named \"%s\" in file!\n",
 			var_name );
-		exit(-1);
+		in_error( "The requested variable was not found in this file." );
+		return(-1);
 		}
 	if( debug == 1 ) {
 		printf( "netcdf_dim_name_to_id: nc_inq_varid_grp reported that var >%s< of gid=%d (%s)",
@@ -575,10 +582,13 @@ int netcdf_dim_name_to_id( int fileid, char *var_name, char *dim_name )
 	err    = nc_inq_var( gid, netcdf_var_id, var_name_ng, &var_type,
 				&n_dims, dim.data(), &n_atts );
 	if( err != NC_NOERR ) {
+		/* Phase 12e: was exit(-1) -- see the identical reasoning above,
+		 * at this function's other exit() site. */
 		fprintf( stderr, "ncview: netcdf_dim_name_to_id: error on ");
 		fprintf( stderr, "nc_inq_var call.  Variable %s, Dimension %s\n",
 					var_name, dim_name );
-		exit( -1 );
+		in_error( "Failed to query dimension information for this variable." );
+		return(-1);
 		}
 
 	for( i=0; i<n_dims; i++ )

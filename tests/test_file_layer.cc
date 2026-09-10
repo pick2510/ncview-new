@@ -260,6 +260,28 @@ TEST_CASE("NetCDFFile::dimNameToId matches netcdf_dim_name_to_id") {
     CHECK(f.file.dimNameToId((char *)"layer_dim_name_to_id", (char *)"nope") == -1);
 }
 
+TEST_CASE("netcdf_dim_name_to_id: a nonexistent variable name reports an error and returns -1, not exit()s (Phase 12e)") {
+    // Regression test: netcdf_dim_name_to_id() used to exit(-1) when
+    // nc_inq_varid_grp() couldn't find the named variable in the file --
+    // safe to convert only once every caller checks for -1 before
+    // indexing anything with the result (Phase 12e, steps 1-2). This
+    // exercises the specific exit() site that "var not found" used to
+    // trigger; the existing test above already covers the *other* -1
+    // path (a dim name not found on an otherwise-valid variable).
+    ncview_test::SessionFixture fx;
+    BareFile f("layer_dim_name_to_id_novar");
+    resetStubRecording();
+
+    int result = netcdf_dim_name_to_id(f.fileid, (char *)"no_such_variable", (char *)"lat");
+    CHECK(result == -1); // reaching this line at all is the main point
+
+    bool reported_error = false;
+    for (const auto &call : g_recorded_calls)
+        if (call == "in_dialog") // in_error() forwards to in_dialog()
+            reported_error = true;
+    CHECK(reported_error);
+}
+
 TEST_CASE("NetCDFFile::dimLongname matches netcdf_dim_longname") {
     BareFile f("layer_dim_longname");
     CHECK(f.file.dimLongname("lat") == netcdf_dim_longname(f.fileid, "lat"));

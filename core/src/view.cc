@@ -846,10 +846,18 @@ View::initialDetermineScanAxes( NCVar *var )
 			view->y_axis_id    = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
 					(char *)(*dimlist)[0].string.c_str() );
+			/* Phase 12e: these 5 checks used to exit(-1) -- an internal
+			 * inconsistency between scannableDims() and dimNameToId(),
+			 * not a user-facing error, but killing the whole process is
+			 * worse than reporting and leaving this View with no usable
+			 * axes (matches case 1's own established "-1 is a valid
+			 * 'no axis' state" precedent just above). */
 			if( view->y_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
 					(*dimlist)[0].string.c_str(), const_cast<char *>(var->name.c_str()) );
-				exit(-1);
+				in_error( "Internal error determining this variable's axes; it may not display correctly." );
+				view->scan_axis_id = view->y_axis_id = view->x_axis_id = -1;
+				return;
 				}
 			view->x_axis_id    = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
@@ -857,7 +865,9 @@ View::initialDetermineScanAxes( NCVar *var )
 			if( view->x_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
 					(*dimlist)[1].string.c_str(), const_cast<char *>(var->name.c_str()) );
-				exit(-1);
+				in_error( "Internal error determining this variable's axes; it may not display correctly." );
+				view->scan_axis_id = view->y_axis_id = view->x_axis_id = -1;
+				return;
 				}
 			break;
 
@@ -872,7 +882,9 @@ View::initialDetermineScanAxes( NCVar *var )
 			if( view->scan_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
 					(*dimlist)[0].string.c_str(), const_cast<char *>(var->name.c_str()) );
-				exit(-1);
+				in_error( "Internal error determining this variable's axes; it may not display correctly." );
+				view->scan_axis_id = view->y_axis_id = view->x_axis_id = -1;
+				return;
 				}
 
 			view->y_axis_id    = file0->dimNameToId(
@@ -881,7 +893,9 @@ View::initialDetermineScanAxes( NCVar *var )
 			if( view->y_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
 					(*dimlist)[n_dims-2].string.c_str(), const_cast<char *>(var->name.c_str()) );
-				exit(-1);
+				in_error( "Internal error determining this variable's axes; it may not display correctly." );
+				view->scan_axis_id = view->y_axis_id = view->x_axis_id = -1;
+				return;
 				}
 			view->x_axis_id    = file0->dimNameToId(
 					const_cast<char *>(var->name.c_str()),
@@ -889,7 +903,9 @@ View::initialDetermineScanAxes( NCVar *var )
 			if( view->x_axis_id == -1 ) {
 				fprintf( stderr, "initial_determine_scan_axes: internal error: dim >%s< was indicated by routine fi_scannable_dims to be a scannable dim for var >%s<, but routine fi_dim_name_to_id did not find that dim for the var\n",
 					(*dimlist)[n_dims-1].string.c_str(), const_cast<char *>(var->name.c_str()) );
-				exit(-1);
+				in_error( "Internal error determining this variable's axes; it may not display correctly." );
+				view->scan_axis_id = view->y_axis_id = view->x_axis_id = -1;
+				return;
 				}
 			break;
 		}
