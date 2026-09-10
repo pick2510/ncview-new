@@ -278,7 +278,7 @@ set_scan_variable( NCVar *var, ViewerSession &session, ViewerUi &ui )
 
 	/* Set the min and maxes of the data */
 	if( !view->variable->have_set_range )
-		g_dataset.initMinMax( var );
+		g_dataset.initMinMax( var, ui );
 
 	/* If we are automatically putting on overlays, do so now */
 	xdim = view->variable->dim[view->x_axis_id].get();

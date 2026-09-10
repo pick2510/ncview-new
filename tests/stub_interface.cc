@@ -208,7 +208,6 @@ public:
 	int in_set_2d_size(size_t, size_t) override { g_recorded_calls.push_back("in_set_2d_size"); return 0; }
 	void in_set_sensitive(Button, int) override { g_recorded_calls.push_back("in_set_sensitive"); }
 	Message in_dialog(const char*, int) override { g_recorded_calls.push_back("in_dialog"); return g_dialog_response; }
-	void in_var_set_sensitive(const char*, int) override { g_recorded_calls.push_back("in_var_set_sensitive"); }
 	void in_fill_dim_info(const NCDim*, int) override { g_recorded_calls.push_back("in_fill_dim_info"); }
 	void in_set_cur_dim_value(const char *name, const char *val) override { g_recorded_calls.push_back(std::string("in_set_cur_dim_value:") + (name ? name : "") + ":" + (val ? val : "")); }
 	void in_set_cursor_busy() override { g_recorded_calls.push_back("in_set_cursor_busy"); }
@@ -234,7 +233,6 @@ public:
 		}
 		return g_set_scan_dims_response;
 	}
-	void in_change_min(const char*) override { g_recorded_calls.push_back("in_change_min"); }
 	void in_flush() override { g_recorded_calls.push_back("in_flush"); }
 	int in_popup_XY_graph(size_t n, int dimindex, double *xvals, double *yvals, const char *x_axis_title, const char*, const char*, const char*, const Stringlist*) override {
 		g_recorded_calls.push_back("in_popup_XY_graph");

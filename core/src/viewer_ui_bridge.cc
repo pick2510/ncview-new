@@ -88,11 +88,6 @@ Message	in_dialog		( const char *message, int want_cancel_button )
 	return g_app.ui->in_dialog( message, want_cancel_button );
 }
 
-void 	in_var_set_sensitive	( const char *var_name, int sensitivity )
-{
-	g_app.ui->in_var_set_sensitive( var_name, sensitivity );
-}
-
 void 	in_fill_dim_info	( const NCDim *d, int please_flip )
 {
 	g_app.ui->in_fill_dim_info( d, please_flip );
@@ -116,11 +111,6 @@ void 	in_set_cursor_normal	( void )
 int 	in_set_scan_dims	( const Stringlist *dim_list, const char *x_axis, const char *y_axis, Stringlist **new_dim_list )
 {
 	return g_app.ui->in_set_scan_dims( dim_list, x_axis, y_axis, new_dim_list );
-}
-
-void	in_change_min		( const char *label )
-{
-	g_app.ui->in_change_min( label );
 }
 
 void 	in_flush		( void )

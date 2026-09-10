@@ -168,7 +168,7 @@ View::dataToPixels()
 		if( result == Message::OK ) {
 			orig_minmax_method = options.min_max_method;
 			options.min_max_method = MinMaxMethod::Exhaust;
-			g_dataset.initMinMax( v->variable );
+			g_dataset.initMinMax( v->variable, *g_app.ui );
 			options.min_max_method = orig_minmax_method;
 			if( (v->variable->user_max == 0) &&
 	    		    (v->variable->user_min == 0) ) {

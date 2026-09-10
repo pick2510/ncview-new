@@ -17,6 +17,7 @@
  * handful of view.cc-local helpers these still call.
  */
 #include "ncview/viewer_controller.h"
+#include "ncview/viewer_ui.h"
 
 #include "ncview/includes.h"
 #include "ncview/protos.h"
@@ -95,12 +96,12 @@ ViewerController::restart( Modifier modifier )
 {
 	cur_button_ = Button::Pause;
 
-	in_timer_clear();
+	g_app.ui->in_timer_clear();
 
 	view->scanToPlace( 0 );
 	draw    ( true, false );
 
-	in_timer_clear();
+	g_app.ui->in_timer_clear();
 }
 
 /*===========================================================================================*/
@@ -116,7 +117,7 @@ ViewerController::rewind( Modifier modifier )
 
 	delay_millisec = (long)(DELAY_DELTA * options.frame_delay) + DELAY_OFFSET;
 
-	in_timer_clear();
+	g_app.ui->in_timer_clear();
 
 	if( modifier == Modifier::M2 ) {
 		size = session_.currentNt();
@@ -126,12 +127,12 @@ ViewerController::rewind( Modifier modifier )
 		else
 			i_delta = -d_delta;
 		stepView( i_delta, FRAMES );
-		in_timer_set( [this](){ rewind(Modifier::M2); }, delay_millisec );
+		g_app.ui->in_timer_set( [this](){ rewind(Modifier::M2); }, delay_millisec );
 		}
 	else
 		{
 		stepView( -1, FRAMES );
-		in_timer_set( [this](){ rewind(Modifier::M1); }, delay_millisec );
+		g_app.ui->in_timer_set( [this](){ rewind(Modifier::M1); }, delay_millisec );
 		}
 }
 
@@ -148,7 +149,7 @@ ViewerController::backwards( Modifier modifier )
 {
 	size_t	size;
 
-	in_timer_clear();
+	g_app.ui->in_timer_clear();
 
 	if( modifier == Modifier::M2 ) {
 		size = session_.currentNt();
@@ -172,7 +173,7 @@ void
 ViewerController::pause( Modifier modifier )
 {
 	cur_button_ = Button::Pause;
-	in_timer_clear();
+	g_app.ui->in_timer_clear();
 }
 
 /*===========================================================================================*/
@@ -182,7 +183,7 @@ ViewerController::forward( Modifier modifier )
 	size_t	size;
 
 	cur_button_ = Button::Pause;
-	in_timer_clear();
+	g_app.ui->in_timer_clear();
 
 	if( modifier == Modifier::M2 ) {
 		size = session_.currentNt();
@@ -210,7 +211,7 @@ ViewerController::fastforward( Modifier modifier )
 
 	cur_button_ = Button::Fastforward;
 
-	in_timer_clear();
+	g_app.ui->in_timer_clear();
 
 	delay_millisec = (long)(DELAY_DELTA * options.frame_delay) + DELAY_OFFSET;
 
@@ -222,12 +223,12 @@ ViewerController::fastforward( Modifier modifier )
 		else
 			i_delta = d_delta;
 		if( stepView( i_delta, FRAMES ) == 0 )
-			in_timer_set( [this](){ fastforward(Modifier::M2); }, delay_millisec );
+			g_app.ui->in_timer_set( [this](){ fastforward(Modifier::M2); }, delay_millisec );
 		}
 	else
 		{
 		if( stepView( 1, FRAMES ) == 0 )
-			in_timer_set( [this](){ fastforward(Modifier::M1); }, delay_millisec );
+			g_app.ui->in_timer_set( [this](){ fastforward(Modifier::M1); }, delay_millisec );
 		}
 }
 
@@ -236,9 +237,9 @@ void
 ViewerController::colormapSelect( Modifier modifier )
 {
 	if( modifier == Modifier::M3 )
-		in_install_prev_colormap( true );
+		g_app.ui->in_install_prev_colormap( true );
 	else
-		in_install_next_colormap( true );
+		g_app.ui->in_install_next_colormap( true );
 	draw( true, false );
 	recomputeColorbar();
 }
@@ -247,7 +248,7 @@ ViewerController::colormapSelect( Modifier modifier )
 void
 ViewerController::colormapSelectByName( const char *name )
 {
-	in_install_colormap_by_name( name, true );
+	g_app.ui->in_install_colormap_by_name( name, true );
 	draw( true, false );
 	recomputeColorbar();
 }
@@ -367,7 +368,7 @@ ViewerController::info( Modifier modifier )
 void
 ViewerController::optionsDialog( Modifier modifier )
 {
-	set_options();
+	g_app.ui->set_options();
 }
 
 /*===========================================================================================*/
@@ -544,13 +545,13 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 		if( cached != nullptr ) {
 			if( options.debug )
 				printf( "drawing from framestore...\n" );
-			in_draw_2d_field( cached, scaled_x_size, scaled_y_size, frameno );
+			g_app.ui->in_draw_2d_field( cached, scaled_x_size, scaled_y_size, frameno );
 			lockout_view_changes = false;
 
 			if( view->scan_axis_id != -1 ) {
 				scan_size  = view->variable->size[view->scan_axis_id];
 				if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
-					in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
+					g_app.ui->in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
 					}
 				}
 			return(0);
@@ -599,7 +600,7 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 	if( options.debug )
 		printf( "Calling data_to_pixels...\n" );
 	if( view->dataToPixels() < 0 ) {
-		in_timer_clear();
+		g_app.ui->in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable, session_, *g_app.ui );
 		lockout_view_changes = false;
@@ -615,7 +616,7 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 
 	if( options.debug )
 		printf( "Calling draw_2d_field...\n" );
-	in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, frameno );
+	g_app.ui->in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, frameno );
 
 	if( framestore.valid() )
 		framestore.store( frameno, view->pixels.data(), framesize );
@@ -627,7 +628,7 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 	if( view->scan_axis_id != -1 ) {
 		scan_size  = view->variable->size[view->scan_axis_id];
 		if( (frameno == (scan_size-1)) && (which_button_pressed() == Button::Pause)) {
-			in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
+			g_app.ui->in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
 			}
 		}
 
@@ -823,7 +824,7 @@ ViewerController::reportPosition( int x, int y, unsigned int button_mask )
 
 	snprintf( current_value_label, 499, "Current: (i=%1zu, j=%1zu) %g (x=%s, y=%s)\n",
 				data_x, data_y, val, xdim_str.c_str(), ydim_str.c_str() );
-	in_set_label( Label::DataValue, current_value_label );
+	g_app.ui->in_set_label( Label::DataValue, current_value_label );
 }
 
 /**************************************************************************************/
@@ -845,7 +846,7 @@ ViewerController::setMinFromCurdata()
 		view->data_status = ViewDataStatus::Valid;
 		}
 
-	in_query_pointer_position( &x, &y );
+	g_app.ui->in_query_pointer_position( &x, &y );
 	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
 
 	x_size = view->variable->size[view->x_axis_id];
@@ -893,7 +894,7 @@ ViewerController::setMaxFromCurdata()
 		view->data_status = ViewDataStatus::Valid;
 		}
 
-	in_query_pointer_position( &x, &y );
+	g_app.ui->in_query_pointer_position( &x, &y );
 	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
 
 	x_size = view->variable->size[view->x_axis_id];
@@ -953,7 +954,7 @@ ViewerController::plotXY()
 	if( options.debug )
 		fprintf( stderr, "plot_XY: entering with axisid=%d\n", X_axis );
 
-	in_query_pointer_position( &x_window, &y_window );
+	g_app.ui->in_query_pointer_position( &x_window, &y_window );
 	if( (x_window < 0) || (y_window < 0) ) {
 		fprintf( stderr, "OUT OF WINDOW!!\n" );
 		return;
@@ -1036,11 +1037,11 @@ void ViewerController::recomputeColorbar( void )
 				view->variable->user_min, view->variable->user_max, static_cast<int>(options.transform) );
 		}
 
-	x_create_colorbar( view->variable->user_min, view->variable->user_max, options.transform );
+	g_app.ui->x_create_colorbar( view->variable->user_min, view->variable->user_max, options.transform );
 
 	if( options.debug )
 		fprintf( stderr, "view_recompute_colorbar: about to call x_draw_colorbar" );
-	x_draw_colorbar();
+	g_app.ui->x_draw_colorbar();
 
 	if( options.debug )
 		fprintf( stderr, "view_recompute_colorbar: exiting\n" );

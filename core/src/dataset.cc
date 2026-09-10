@@ -6,6 +6,7 @@
  * See ncview/dataset.h. OOP_redesign plan, Step 5.
  */
 #include "ncview/dataset.h"
+#include "ncview/viewer_ui.h"
 
 #include "ncview/includes.h"
 #include "ncview/protos.h"	/* netcdf_fi_close(), netcdf_fi_get_data(), netcdf_dim_value(),
@@ -712,7 +713,7 @@ void Dataset::getMinMaxOnestep( NCVar *var, size_t n_other, size_t tstep, float 
 		}
 }
 
-void Dataset::checkRanges( NCVar *var )
+void Dataset::checkRanges( NCVar *var, ViewerUi &ui )
 {
 	float	min, max;
 	Message	message;
@@ -721,13 +722,13 @@ void Dataset::checkRanges( NCVar *var )
 	if( netcdf_min_max_option_set( var, &min, &max ) ) {
 		if( var->global_min < min ) {
 			snprintf( temp_string, 1022, "Calculated minimum (%g) is less than\nvalid_range minimum (%g).  Reset\nminimum to valid_range minimum?", var->global_min, min );
-			message = in_dialog( temp_string, true );
+			message = ui.in_dialog( temp_string, true );
 			if( message == Message::OK )
 				var->global_min = min;
 			}
 		if( var->global_max > max ) {
 			snprintf( temp_string, 1022, "Calculated maximum (%g) is greater\nthan valid_range maximum (%g). Reset\nmaximum to valid_range maximum?", var->global_max, max );
-			message = in_dialog( temp_string, true );
+			message = ui.in_dialog( temp_string, true );
 			if( message == Message::OK )
 				var->global_max = max;
 			}
@@ -736,7 +737,7 @@ void Dataset::checkRanges( NCVar *var )
 	if( netcdf_min_option_set( var, &min ) ) {
 		if( var->global_min < min ) {
 			snprintf( temp_string, 1022, "Calculated minimum (%g) is less than\nvalid_min minimum (%g).  Reset\nminimum to valid_min value?", var->global_min, min );
-			message = in_dialog( temp_string, true );
+			message = ui.in_dialog( temp_string, true );
 			if( message == Message::OK )
 				var->global_min = min;
 			}
@@ -745,7 +746,7 @@ void Dataset::checkRanges( NCVar *var )
 	if( netcdf_max_option_set( var, &max ) ) {
 		if( var->global_max > max ) {
 			snprintf( temp_string, 1022, "Calculated maximum (%g) is greater than\nvalid_max maximum (%g).  Reset\nmaximum to valid_max value?", var->global_max, max );
-			message = in_dialog( temp_string, true );
+			message = ui.in_dialog( temp_string, true );
 			if( message == Message::OK )
 				var->global_max = max;
 			}
@@ -756,7 +757,7 @@ void Dataset::checkRanges( NCVar *var )
 	var->have_set_range = true;
 }
 
-void Dataset::initMinMax( NCVar *var )
+void Dataset::initMinMax( NCVar *var, ViewerUi &ui )
 {
 	long	n_other, i, step;
 	size_t	n_timesteps;
@@ -789,7 +790,7 @@ void Dataset::initMinMax( NCVar *var )
 	if( n_timesteps == 1 ) {
 		if( verbose )
 			printf( "\n" );
-		checkRanges( var );
+		checkRanges( var, ui );
 		return;
 		}
 
@@ -799,7 +800,7 @@ void Dataset::initMinMax( NCVar *var )
 	if( n_timesteps == 2 ) {
 		if( verbose )
 			printf( "\n" );
-		checkRanges( var );
+		checkRanges( var, ui );
 		return;
 		}
 
@@ -809,7 +810,7 @@ void Dataset::initMinMax( NCVar *var )
 	if( n_timesteps == 3 ) {
 		if( verbose )
 			printf( "\n" );
-		checkRanges( var );
+		checkRanges( var, ui );
 		return;
 		}
 
@@ -860,5 +861,5 @@ void Dataset::initMinMax( NCVar *var )
 		var->global_max = 0.0;
 		}
 
-	checkRanges( var );
+	checkRanges( var, ui );
 }

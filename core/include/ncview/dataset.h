@@ -50,6 +50,8 @@
 #include "ncview/defines.h"
 #include "ncview/stringlist.h"
 
+class ViewerUi;
+
 class NetCDFFile {
 public:
 	explicit NetCDFFile( int fileid ) : fileid_( fileid ) {}
@@ -177,8 +179,11 @@ public:
 	/* Formerly util.cc's init_min_max(): samples a variable's data to
 	 * establish its global min/max, then reconciles that against any
 	 * valid_range/valid_min/valid_max attribute (possibly prompting via
-	 * in_dialog()). */
-	void initMinMax( NCVar *var );
+	 * ui.in_dialog()). Phase 11b ("refine the architecture" plan, Part
+	 * IV): takes ViewerUi& explicitly now, threaded down into
+	 * checkRanges() below, instead of reaching the in_dialog() seam
+	 * free function (which read the global g_app.ui internally). */
+	void initMinMax( NCVar *var, ViewerUi &ui );
 
 	/* Formerly util.cc's get_min_max_onestep(): reads one timestep's data
 	 * and folds its extrema into min/max. Public: initMinMax() uses it
@@ -227,8 +232,9 @@ private:
 	/* initMinMax()'s only caller of this -- formerly util.cc's
 	 * check_ranges(), with no other external callers, so it moved along
 	 * with initMinMax() as an implementation detail rather than becoming
-	 * a public Dataset method. */
-	void checkRanges( NCVar *var );
+	 * a public Dataset method. Takes ViewerUi& (Phase 11b), passed down
+	 * from initMinMax(). */
+	void checkRanges( NCVar *var, ViewerUi &ui );
 
 	/* calcDimMinmaxes()'s only caller of this -- formerly util.cc's
 	 * copy_info_to_identical_dims(), which directly scanned the global

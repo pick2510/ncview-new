@@ -15,9 +15,8 @@
  * providing the free-function forwarders onto whichever ViewerUi is
  * currently installed. Bodies are unchanged from the free-function form
  * (a pure rename), including calls between them, which still resolve via
- * ordinary unqualified member lookup (e.g. in_var_set_sensitive() calling
- * x_set_var_sensitivity() below still works exactly as it did as a
- * free-function call, since both are now members of the same class).
+ * ordinary unqualified member lookup, since both are now members of the
+ * same class.
  */
 #include <algorithm>
 #include <cstdint>
@@ -232,11 +231,6 @@ void FltkViewerUi::in_set_label( Label label_id, const char *string )
 void FltkViewerUi::in_set_sensitive( Button button_id, int state )
 {
 	instance()->setSensitive( button_id, state );
-}
-
-void FltkViewerUi::in_var_set_sensitive( const char *var_name, int sensitivity )
-{
-	x_set_var_sensitivity( var_name, sensitivity );
 }
 
 void FltkViewerUi::in_indicate_active_var( const char *var_name )
@@ -551,11 +545,6 @@ void FltkViewerUi::in_set_edit_place( size_t index, int x, int y, int nx, int ny
 int FltkViewerUi::in_set_scan_dims( const Stringlist *dim_list, const char *x_axis_name, const char *y_axis_name, Stringlist **new_dim_list )
 {
 	return instance()->scanDimsDialog( dim_list, x_axis_name, y_axis_name, new_dim_list );
-}
-
-void FltkViewerUi::in_change_min( const char *label )
-{
-	(void)label;
 }
 
 int FltkViewerUi::in_popup_XY_graph( size_t n, int dimindex, double *xvals, double *yvals, const char *x_axis_title,

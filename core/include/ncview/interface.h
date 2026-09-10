@@ -70,13 +70,11 @@ char	*in_install_next_colormap( int do_widgets_flag );
 int	in_set_2d_size   	( size_t width, size_t height );
 void	in_set_sensitive	( Button button_id, int state );
 Message	in_dialog		( const char *message, int want_cancel_button );
-void 	in_var_set_sensitive	( const char *var_name, int sensitivity );
 void 	in_fill_dim_info	( const NCDim *d, int please_flip );
 void	in_set_cur_dim_value	( const char *name, const char *string );
 void 	in_set_cursor_busy	( void );
 void 	in_set_cursor_normal	( void );
 int 	in_set_scan_dims	( const Stringlist *dim_list, const char *x_axis, const char *y_axis, Stringlist **new_dim_list );
-void	in_change_min		( const char *label );
 void 	in_flush		( void );
 int	in_popup_XY_graph	( size_t n, int dimindex, double *xvals, double *yvals, const char *x_axis_title,
 				const char *y_axis_title, const char *title, const char *legend,
