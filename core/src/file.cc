@@ -25,8 +25,19 @@
  *	The file interface to ncview.
  *
  *	All the routines in this file must be provided for whatever
- *	format data file you want to have.  Ideally, all the information 
+ *	format data file you want to have.  Ideally, all the information
  *    	about the data file formats should be encapsulated here.
+ *
+ *	Phase 12c: this file used to dispatch every entry point on a
+ *	`static int file_type` set by determine_file_type() -- but netCDF has
+ *	been the only format ncview has ever opened, FILE_TYPE_NETCDF
+ *	(defines.h) was the only constant of its kind, and file_type was
+ *	assigned that value in exactly one place. The dispatch was real but
+ *	permanently dead code (every `else` branch exit(-1)'d on a value
+ *	that could never occur), simplified away rather than kept as
+ *	indirection for a second backend that has never existed and isn't
+ *	planned -- see the plan file's Part V "declined" items for the
+ *	reasoning against building a real multi-backend interface instead.
  *
  *****************************************************************************/
 
@@ -35,7 +46,6 @@
 #include "ncview/defines.h"
 #include "ncview/protos.h"
 
-static int   file_type;
 extern Options options;
 
 /************************************************************************************/
@@ -50,17 +60,9 @@ fi_initialize( char *name )
 	Stringlist *var_list;
 	NetCDFFile *file;
 
-	if( file_type == FILE_TYPE_NETCDF ) {
-		if( options.debug )
-			printf( "Initializing file %s\n", name );
-		id = netcdf_fi_initialize( name );
-		}
-	else
-		{
-		fprintf( stderr, "?unknown file_type passed to fi_initialize: %d\n",
-			file_type );
-		exit( -1 );
-		}
+	if( options.debug )
+		printf( "Initializing file %s\n", name );
+	id = netcdf_fi_initialize( name );
 
 	if( options.debug )
 		printf( "Getting list of variables for file %s\n", name );
@@ -95,12 +97,6 @@ fi_dim_calendar( int fileid, std::string_view dim_name )
 	if( ! options.calendar.empty() )
 		return options.calendar;
 
-	if( file_type != FILE_TYPE_NETCDF )
-		{
-		fprintf( stderr, "?unknown file_type passed to fi_dim_calendar: %d\n",
-			file_type );
-		exit( -1 );
-		}
 	return( netcdf_dim_calendar( fileid, dim_name ));
 }
 
@@ -110,14 +106,7 @@ fi_dim_calendar( int fileid, std::string_view dim_name )
 	void
 fi_close( int fileid )
 {
-	if( file_type == FILE_TYPE_NETCDF )
-		netcdf_fi_close( fileid );
-	else
-		{
-		fprintf( stderr, "?unknown file_type passed to fi_close: %d\n",
-			file_type );
-		exit( -1 );
-		}
+	netcdf_fi_close( fileid );
 }
 
 /*************************************************************************************
@@ -139,9 +128,7 @@ determine_file_type( Stringlist *input_files )
 
 	const char *first_file = (*input_files)[0].string.c_str();
 
-	if( netcdf_fi_confirm( (char *)first_file ) )
-		file_type = FILE_TYPE_NETCDF;
-	else
+	if( ! netcdf_fi_confirm( (char *)first_file ) )
 		{
 		ierr = stat( first_file, &buf );
 		if( ierr == 0 ) {
