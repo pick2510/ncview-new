@@ -44,8 +44,6 @@ const char *my_overlay_names[] = { "None",
 extern std::unique_ptr<ViewState> &view;
 extern Options  options;
 
-static int	my_current_overlay;
-
 static int 	gen_xform( float value, int n, float *dimvals );
 static std::vector<int> gen_overlay_internal( View *v, float *data, long n );
 static void 	do_overlay_inner( View *v, float *data, long nvals, int suppress_screen_changes );
@@ -113,7 +111,7 @@ do_overlay( int n, char *custom_filename, int suppress_screen_changes )
 			exit(-1);
 		}
 
-	my_current_overlay = n;
+	g_app.session.currentOverlay() = n;
 }
 
 /*=========================================================================================
@@ -140,7 +138,7 @@ do_overlay_inner( View *v, float *data, long nvals, int suppress_screen_changes 
 	void
 overlay_init()
 {
-	my_current_overlay       = OVERLAY_NONE;
+	g_app.session.currentOverlay() = OVERLAY_NONE;
 	options.overlay->overlay.clear();
 	options.overlay->doit    = false;
 }
@@ -423,7 +421,7 @@ overlay_names( void )
 	int
 overlay_current( void )
 {
-	return( my_current_overlay );
+	return( g_app.session.currentOverlay() );
 }
 
 /****************************************************************************************/

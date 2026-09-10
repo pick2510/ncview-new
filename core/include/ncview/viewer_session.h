@@ -123,6 +123,12 @@ public:
 	 * defaults ("Refine the architecture" plan, Phase 5b). */
 	PrintOptions& printSettings() { return print_settings_; }
 
+	/* Formerly overlay.cc's `static int my_current_overlay;` -- a getter
+	 * (overlay_current()) existed, but nothing owned the storage; moved
+	 * here (Phase 11f) the same way Phase 5b gave do_print.cc's static an
+	 * owner. Default matches overlay_init()'s own reset value. */
+	int& currentOverlay() { return current_overlay_; }
+
 	/* Builds FrameRenderer's settings from the render-shaped field group
 	 * (transform, invert_colors, invert_physical, n_colors,
 	 * n_extra_colors, display_type). Narrowed from `const Options&` to
@@ -153,4 +159,5 @@ private:
 	SessionDisplayPrefs session_display_prefs_;
 	StartupSettings startup_settings_;
 	PrintOptions print_settings_;
+	int current_overlay_ = OVERLAY_NONE;
 };
