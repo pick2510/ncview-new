@@ -3065,6 +3065,119 @@ largest, highest-value, and highest-risk item in Part V's roadmap, scoped
 fresh at the start of its own phase rather than committed to in full
 here).
 
+## Part V, Phase 12d: two zero-cascade `exit()` conversions in `file_netcdf.cc`
+
+**Scoping first, done in plan mode before any code changed.** A full
+per-site investigation of `file_netcdf.cc`'s 51 `exit()` calls (the
+52nd grep hit is a comment) replaced the round-of-review's estimate with
+a real categorization -- 19 recoverable/user-facing, 7 internal-invariant
+(no `assert()` convention exists anywhere in this codebase to convert
+them to; confirmed by grep), 25 in between -- and a per-site cascade
+trace: how many callers up the stack would need a new failure-return
+before reaching something that can already report to the user. Depth
+varies from zero (the two sites converted here) to a full
+startup-sequence rewrite (deliberately not attempted). Full scoping
+detail, including the cascade traces for the sites explicitly deferred,
+is in the plan file's "Phase 12d scoping" section -- not duplicated here.
+
+**Two real bugs found during scoping, not part of the original external
+review**: `netcdf_att_string()`/`netcdf_global_att_string()` `exit()` on
+any netCDF attribute datatype their `switch` doesn't list -- every type
+added since the original 1993 switch was written (`NC_UINT`, `NC_INT64`,
+`NC_STRING`, any user-defined/compound type). **A valid, ordinary
+netCDF-4 file with a modern-typed attribute crashed ncview the instant
+that attribute's value was displayed** (the "Info" button/`View::information()`,
+`view.cc`). Also found and left for whoever converts that call site next:
+`nc_inq_varid_grp()` (`file_netcdf.cc:806-807`) has dead code --
+`exit(-1); return(-1);`, the `return` unreachable -- evidence someone
+else already started converting this exact site and stopped; it's part
+of the deferred data-read/startup cascades, not touched this phase.
+
+### Fix 1: `netcdf_att_string`/`netcdf_global_att_string`'s unhandled-datatype crash
+
+Both functions' per-attribute `switch(datatype)` had a `default:` that
+`exit()`d. Changed to: format a note naming the attribute and its
+datatype number, call `in_error()` once per function invocation (not
+once per unhandled attribute -- a file with several modern-typed
+attributes would otherwise pop up a dialog per attribute), append the
+note into the returned text in place of the attribute's value, and
+`continue` the enclosing loop -- the same "degrade this one entry, keep
+processing the rest" shape the adjacent `NC_NAT` case already uses, not
+a wholesale abort. `netcdf_att_string()` calls `netcdf_global_att_string()`
+internally (appending global attributes after the per-variable ones), so
+both fixes are exercised together through the sole caller,
+`View::information()` (`view.cc:2473`, via `NetCDFFile::attString()`).
+
+New tests in `tests/test_file_metadata.cc`: a minimal fixture
+(`UnhandledTypeFile`) with one variable carrying both a normal `units`
+attribute and an `NC_UINT64` one, plus a global attribute of the same
+unhandled type. Two `TEST_CASE`s confirm the test binary survives (the
+main point -- the old code never returned at all), the handled attribute
+still displays, the unhandled one is named with a "skipped" note rather
+than silently dropped, and `in_error()`'s `in_dialog` call is recorded.
+
+### Fix 2: `View::checkNewData()`'s crash when the watched file disappears
+
+`checkNewData()` (the once-a-second poll that follows a file another
+process is actively appending records to) reopened the file by path via
+`netcdf_fi_initialize()`, which `exit()`s the whole process on
+`nc_open()` failure -- so a file deleted, replaced, or briefly unreadable
+while ncview was watching it for growth killed the entire application,
+not just this one poll. `netcdf_fi_initialize()` itself is also called
+from `file.cc`'s `fi_initialize()` (the startup file-open path,
+deliberately not touched this phase -- it runs before `ui.in_initialize()`,
+so `in_error()` can't usefully dialog there yet), so its own signature
+and `exit()` behavior were left alone; the fix is entirely at
+`checkNewData()`'s call site, using `NetCDFFile::open()` (Phase 6's
+existing `std::optional`-returning primitive, whose own doc comment
+already named this exact seam -- `netcdf_fi_initialize()`/`fi_initialize()`'s
+`exit(-1)` -- as what it was an alternative to) instead of the free
+function. Its destructor closes the fileid automatically, so the
+function's own manual `nc_close()` is gone too, not just relocated. On
+a failed reopen: report once via `in_error()` and stop watching this
+variable for growth, rather than re-arm the 1-second timer and retry --
+matching `View::initSaveframes()`'s existing "degrade gracefully, don't
+nag" precedent elsewhere in this file, since retrying forever against a
+permanently-gone file would mean a dialog every second.
+
+New test in `tests/test_view_check_new_data.cc`: builds a growable file,
+selects it, deletes the file from disk (the already-open tracked
+`NetCDFFile` stays valid on POSIX -- the inode survives until every fd
+referencing it closes -- but a fresh open *by path* now has nothing to
+open, which is exactly what `checkNewData()`'s own reopen does), then
+confirms `checkNewData()` returns safely, the variable's size is
+untouched, `in_error()` fired, and the timer was *not* re-armed.
+
+**Spot-checked, not just asserted**: reverted the `checkNewData()` fix
+and ran its new test directly -- the test binary terminated with no
+`[doctest]` summary at all, `fi_initialize: can't properly open file...`
+printed right before the process died, confirming the test genuinely
+exercises the crash rather than passing trivially. Restored the fix
+before continuing.
+
+One compile-time finding along the way: both new `default:` branches'
+error-note buffers needed to be `char note[512]`, not `256` --
+`-Wformat-truncation=` (part of this project's `-Werror` set) correctly
+flagged that a 256-byte buffer can't provably hold a fixed message plus
+an up-to-255-byte `MAX_NC_NAME` attribute name without possible
+truncation.
+
+247->250 tests, 6710->6763 assertions (3 new test cases, 53 new
+assertions -- this phase adds real coverage, unlike Phase 12c's pure
+cleanup). Full six-gate verification clean: `-Werror` build; `ctest`
+normal + shuffled across 3 seeds, zero variance holding; `ncview_core_linkcheck`
+exit 0; all 15 `ui_smoke.sh` goldens byte-identical; scratch
+ASan/UBSan/LSan build clean, no reports; `grep -rn` confirming no
+dangling reference to the removed `t_ncid` local or either converted
+`exit(-1)` branch. **Next: 12e+** -- the wider `netcdf_dim_value()`
+14-call-site audit, the "read a variable's data" cascade
+(`netcdf_fi_get_data`, 3 new failure returns landing on
+`set_scan_variable()`'s already-unused `int` return), the full
+file-open startup cascade, and `netcdf_dim_name_to_id()`'s 18-site
+audit are each still deferred, to be re-scoped against the tree at
+pickup time -- see the plan file's Phase 12d scoping section for the
+per-cascade detail already traced.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
