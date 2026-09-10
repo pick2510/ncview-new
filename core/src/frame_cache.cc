@@ -64,9 +64,28 @@ const ncv_pixel* FrameCache::lookup( size_t frameno ) const
 
 void FrameCache::store( size_t frameno, const ncv_pixel *pixels, size_t count )
 {
+	/* Phase 12a: match lookup()'s existing discipline -- validate frameno
+	 * against capacity and use the cache's own nx_*ny_ as the trusted
+	 * stride, rather than writing on the caller-supplied count/frameno
+	 * unconditionally. Reachable without any malformed file: toggling
+	 * "Save frames in memory" off leaves this cache's geometry stale
+	 * (init_saveframes() no-ops on every call while the option is off,
+	 * and at least one call site -- view.cc's blowup-change path --
+	 * skips calling init_saveframes() at all in that case, resizing
+	 * view->pixels without ever touching this cache), so a later draw()
+	 * can call store() with a frame that no longer matches nx_*ny_.
+	 * A geometry mismatch invalidates the whole cache, not just this
+	 * write: every other stored frame was sized for the same stale
+	 * geometry, so none of them can be trusted either once the display
+	 * has moved on to a different size. */
+	if( ! valid_ )
+		return;
+	if( (frameno >= frame_valid_.size()) || (count != nx_ * ny_) ) {
+		valid_ = false;
+		return;
+		}
 	size_t offset = frameno * count;
 	for( size_t i=0; i<count; i++ )
 		frame_[offset + i] = pixels[i];
-	if( frameno < frame_valid_.size() )
-		frame_valid_[frameno] = true;
+	frame_valid_[frameno] = true;
 }
