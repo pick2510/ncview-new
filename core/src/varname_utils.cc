@@ -123,13 +123,37 @@ int count_nslashes( const char *s )
  */
 int unpack_groupname( const char *varname, int ig, char *groupname )
 {
-	size_t	i;
+	size_t	i, len;
 	int	i0, i1, idx_slash[MAX_NC_NAME], nslash;
 	char	ts[MAX_NC_NAME];
 
+	/* varname's group-path prefix comes from nc_inq_grpname_full()
+	 * (netcdf_fi_list_vars_v4(), file_netcdf.cc), which has no length or
+	 * depth limit of its own -- unlike a single netCDF name, which IS
+	 * capped at MAX_NC_NAME by the library. Two fixed-size local buffers
+	 * below assume varname fits in MAX_NC_NAME: idx_slash[] (indexed by
+	 * slash count) and ts[] (a copy of varname, silently truncated by
+	 * snprintf if longer -- after which idx_slash[]'s indices, computed
+	 * against the ORIGINAL untruncated varname, point past ts's real
+	 * content). A netCDF-4 file with enough nested groups violates that
+	 * assumption and both were real, file-triggerable stack-buffer
+	 * overflows/overreads here, confirmed under ASan (Phase 10's fuzzing
+	 * pass). One length guard up front covers both: bail out the same
+	 * way this function already does a few lines down for an
+	 * otherwise-impossible 'ig' value, rather than silently truncating
+	 * and returning a wrong (or memory-unsafe) groupname.
+	 */
+	len = strlen( varname );
+	if( len >= (size_t)MAX_NC_NAME ) {
+		fprintf( stderr, "Error in unpack_groupname: varname is %zu characters "
+			"(>= MAX_NC_NAME=%d), can't process: >%.100s...<\n",
+			len, MAX_NC_NAME, varname );
+		exit(-1);
+		}
+
 	/* Get indices of the slashes */
 	nslash = 0;
-	for( i=0; i<strlen(varname); i++ ) {
+	for( i=0; i<len; i++ ) {
 		if( varname[i] == '/' ) {
 			idx_slash[nslash] = i;
 			nslash++;
@@ -188,12 +212,21 @@ int unpack_groupname( const char *varname, int ig, char *groupname )
  */
 void varname_no_groups( const char *varname, char *varname_sans_groups, char *groupname )
 {
-	size_t	i;
+	size_t	i, len;
 	int	idx_slash[MAX_NC_NAME], nslash;
 
-	/* Get indices of the slashes */
+	/* Same overflow guard as unpack_groupname() just above, and for the
+	 * same reason -- see its comment. */
+	len = strlen( varname );
+	if( len >= (size_t)MAX_NC_NAME ) {
+		fprintf( stderr, "Error in varname_no_groups: varname is %zu characters "
+			"(>= MAX_NC_NAME=%d), can't process: >%.100s...<\n",
+			len, MAX_NC_NAME, varname );
+		exit(-1);
+		}
+
 	nslash = 0;
-	for( i=0; i<strlen(varname); i++ ) {
+	for( i=0; i<len; i++ ) {
 		if( varname[i] == '/' ) {
 			idx_slash[nslash] = i;
 			nslash++;
