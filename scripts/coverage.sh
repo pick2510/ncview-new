@@ -30,7 +30,12 @@ if ! command -v gcovr >/dev/null 2>&1; then
 fi
 
 echo "== Configuring (${BUILD_DIR}) =="
-cmake -S . -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Debug -DNCVIEW_COVERAGE=ON
+# -DFLTK_BACKEND_WAYLAND=OFF -DFLTK_BUILD_GL=OFF: this project always forces
+# FLTK_BACKEND=x11 at runtime (see README) and never uses OpenGL, matching
+# every other CI job's configure line -- harmless locally, and avoids
+# pulling in Wayland/GL dev packages a coverage-only CI runner won't have.
+cmake -S . -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE=Debug -DNCVIEW_COVERAGE=ON \
+	-DFLTK_BACKEND_WAYLAND=OFF -DFLTK_BUILD_GL=OFF
 
 echo "== Building ncview_core_tests =="
 cmake --build "${BUILD_DIR}" -j"$(nproc)" --target ncview_core_tests

@@ -257,6 +257,42 @@ jobs:
       - name: Test (shuffled order)
         run: ./build/tests/ncview_core_tests --order-by=rand
 
+  # Refine-the-architecture plan, Phase 10a: gcov/gcovr coverage
+  # measurement over core/src, published as a downloadable report. No
+  # package/upload-to-release steps, same reasoning as `sanitize` above --
+  # this job exists to make coverage visible and catch regressions in the
+  # published report, not to ship an artifact.
+  #
+  # Gate is "publish the report", not "fail below a threshold": a real
+  # changed-lines-covered gate needs a diff-aware tool/action (e.g.
+  # comparing against origin/master's own report) which is its own design
+  # task -- see PORTING.md's Phase 10 entry. Landing the measurement now
+  # rather than forcing a fragile line-count gate through in the same
+  # phase.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libnetcdf-dev libexpat1-dev \
+            libx11-dev libxext-dev libxft-dev libxinerama-dev \
+            libxcursor-dev libxrender-dev libxfixes-dev \
+            flex bison texinfo patchelf gcovr
+
+      - name: Coverage
+        run: ./scripts/coverage.sh build-coverage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: build-coverage/coverage-report/
+
   # A single portable binary for HPC clusters, whose sysadmin-controlled
   # module systems routinely can't offer a matching netCDF/HDF5, or any
   # netCDF/HDF5 at all -- see README.md's "Static linking" section and
