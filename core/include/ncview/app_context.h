@@ -17,6 +17,12 @@
  * collapse three differently-named globals down to one, so there is a
  * single, clearly-named composition root instead of several pretending to
  * be independently-owned pieces of state. See PORTING.md.
+ *
+ * Renamed AppContext -> NcviewApp in Phase 11f, matching the object-graph
+ * shape originally proposed for this arc (main() -> NcviewApp -> session/
+ * controller/ui). The rename is real; one part of the original proposal
+ * is not achievable as stated, and is documented on `ui` below rather
+ * than silently dropped.
  */
 #pragma once
 
@@ -24,33 +30,54 @@
 #include "ncview/viewer_session.h"
 #include "ncview/viewer_ui.h"
 
-struct AppContext {
+struct NcviewApp {
 	/* "Refine the architecture" plan, Phase 2 gave ViewerController a
 	 * real `ViewerSession &`, which means it can no longer be default
-	 * constructed -- AppContext needs an explicit constructor to bind it
+	 * constructed -- NcviewApp needs an explicit constructor to bind it
 	 * to `session` below (declaration order controls member-init order,
-	 * so session must stay declared first). This makes AppContext no
+	 * so session must stay declared first). This makes NcviewApp no
 	 * longer an aggregate; nothing brace-initializes it (grepped for
-	 * `AppContext{`/`AppContext {` across the tree -- the only two uses
-	 * are `AppContext g_app;`, ncview.cc, and the `extern` declarations
-	 * of it), so that costs nothing. */
+	 * `AppContext{`/`NcviewApp{`/`NcviewApp {` across the tree -- the
+	 * only two uses were `AppContext g_app;`, ncview.cc, and the
+	 * `extern` declarations of it), so that costs nothing. */
 	ViewerSession    session;
 	ViewerController controller;
 	/* Non-owning: whoever constructs the real ViewerUi (main.cc for the
 	 * app, tests/stub_interface.cc for tests) owns its lifetime and
 	 * points this at it before anything reaches the interface.h seam.
-	 * Stays a nullable pointer set after the fact, not a reference bound
-	 * at construction -- Phase 11c looked at making it a real reference
-	 * and found it can't be, for the same reason `controller` can't hold
-	 * one either (see viewer_controller.h): `g_app` itself has static
-	 * storage duration and is fully constructed before any ViewerUi
-	 * implementation exists to bind to. Only Phase 11f's restructuring
-	 * (building the composition root once, in order, inside main())
-	 * removes that constraint. */
+	 *
+	 * Stays a nullable pointer, not a reference bound at construction.
+	 * Phase 11c looked at giving ViewerController one directly and found
+	 * it can't be done while `g_app` is a static-duration global: the
+	 * whole object, `controller` included, is fully constructed before
+	 * main() runs, before any concrete ViewerUi exists to bind to.
+	 * Phase 11f re-examined this at the top level -- could NcviewApp
+	 * itself move into main() instead, so its own `ui` member becomes a
+	 * real reference set once at construction? -- and found the same
+	 * wall one level up, for a reason that isn't about member layout at
+	 * all: core/ deliberately does not depend on which concrete ViewerUi
+	 * gets used (ncview_ui::FltkViewerUi for the real app,
+	 * RecordingViewerUi for tests -- see ui/ vs tests/stub_interface.cc).
+	 * That choice is made at main()'s (or tests/main.cc's) own startup,
+	 * not at core's compile time. A reference member must be bound at
+	 * its owner's construction; for `g_app` to hold one, `g_app` itself
+	 * would have to stop being a global entirely and become a genuine
+	 * local in main(), with every one of the ~1,400+ existing `g_app.`
+	 * call sites across core/ and ui/ rewritten to receive `NcviewApp&`
+	 * as an explicit parameter instead of reaching a global -- in effect
+	 * redoing Phase 11a/11b's reference-threading work for the entire
+	 * codebase, not just the ~17 free functions and handful of methods
+	 * those phases actually touched. That is a real, much larger
+	 * project of its own, not a corner this phase cut; see PORTING.md's
+	 * Phase 11f entry. What Phase 11f *did* do: every production call
+	 * site that reached `g_dataset`/`variables`/`pixel_transform`/
+	 * `framestore` as separate migration-bridge globals now goes through
+	 * `session` directly, so this pointer is the one remaining
+	 * indirection in the production access path, not one of several. */
 	ViewerUi        *ui = nullptr;
 
-	AppContext() : controller( session ) {}
+	NcviewApp() : controller( session ) {}
 };
 
 /* Defined once, in ncview.cc. */
-extern AppContext g_app;
+extern NcviewApp g_app;

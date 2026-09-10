@@ -28,8 +28,9 @@
  * session can know: "no variable is selected yet". Moving these onto the
  * class that owns the active `View` lets the guard live where the fact
  * it's protecting actually lives, instead of being duplicated at every
- * UI call site. AppContext (ncview/app_context.h) now constructs this
- * with a reference to its own `session` member.
+ * UI call site. NcviewApp (ncview/app_context.h; AppContext before Phase
+ * 11f's rename) now constructs this with a reference to its own
+ * `session` member.
  */
 #pragma once
 
@@ -40,13 +41,15 @@ class ViewerController {
 public:
 	/* Deliberately does not also take a ViewerUi& -- Phase 11c looked at
 	 * adding one (matching the plan's original ask) and found it's not
-	 * achievable yet: this object is a member of the static-duration
-	 * global AppContext (app_context.h), constructed before main() runs,
-	 * before any ViewerUi implementation exists to bind a reference to.
-	 * Its ~27 seam calls reach g_app.ui-> explicitly instead, the same
-	 * pattern Phase 11b used for View for the identical reason. Only
-	 * Phase 11f's restructuring (building the composition root once,
-	 * in order, inside main()) removes this constraint. */
+	 * achievable: this object is a member of the static-duration global
+	 * NcviewApp (app_context.h), constructed before main() runs, before
+	 * any concrete ViewerUi implementation exists to bind a reference to.
+	 * Phase 11f re-examined this at NcviewApp's own level (could the
+	 * whole composition root move into main(), making this achievable?)
+	 * and confirmed it's a real architectural wall, not a missed trick --
+	 * see app_context.h's `ui` member for the full reasoning. Its ~27
+	 * seam calls reach g_app.ui-> explicitly instead, the same pattern
+	 * Phase 11b used for View for the identical reason. */
 	explicit ViewerController( ViewerSession &session ) : session_( session ) {}
 
 	Button whichButtonPressed() const { return cur_button_; }

@@ -40,7 +40,7 @@
 #define DEFAULT_COLOR_BY_NDIMS	true
 #define DEFAULT_AUTO_OVERLAY	true
 
-AppContext g_app;
+NcviewApp g_app;
 Options	  options( g_app.session );
 Dataset   &g_dataset = g_app.session.dataset();
 std::vector<std::unique_ptr<NCVar>> &variables = g_dataset.variablesMutable();

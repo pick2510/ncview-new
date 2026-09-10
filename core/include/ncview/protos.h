@@ -59,7 +59,7 @@ extern Options options;
  * their original names keep compiling and behaving identically. All are
  * defined together in ncview.cc, except `view`, which is defined in
  * view.cc (its sole owner before this step). */
-extern AppContext g_app;
+extern NcviewApp g_app;
 extern Dataset &g_dataset;
 extern std::vector<std::unique_ptr<NCVar>> &variables;
 extern std::unique_ptr<ViewState> &view;
