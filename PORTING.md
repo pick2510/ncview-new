@@ -2417,10 +2417,84 @@ writeup, surfacing through a different code path (direct invocation vs.
 `ctest`'s) than the `--rand-seed=99` case already on record. Still not
 chased -- out of scope for this phase, same call Phase 7a made.)
 
-**Next: 11d** -- fix the three FLTK callback stragglers
-(`dimStepCallback`/`dimSliderCallback`/`colormapChoiceCallback`) that
-decode their payload correctly but then reach `g_app.controller`/the
-`MainWindow` singleton globally inside the body.
+## Part IV, Phase 11d: make the three FLTK callback trampolines carry what they need instead of reaching for it by name
+
+Re-read all three callbacks directly (line numbers had shifted slightly
+since 11c). Confirmed exactly the plan's framing: `dimStepCallback`/
+`dimSliderCallback` (`ui/src/main_window.cc`, then lines 1166/1172) each
+correctly decoded a `void*` payload for the dimension name, then reached
+`g_app.controller.changeCurDim(...)`/`.setCurDimIndex(...)` by name
+inside the body instead of carrying the controller in that payload too.
+`colormapChoiceCallback` (then line 947) read its selected index off the
+`Fl_Menu_Item`'s own `user_data()` correctly, then called
+`instance()` -- the `MainWindow` singleton accessor -- to reach
+`colormaps_`, instead of carrying the window in that same payload.
+
+**Target shape, taken directly from `PlotWindow`'s 9 callbacks and
+`MainWindow::buttonCallback`**: the callback's only job is to unpack its
+`void*` and act on what it finds -- no name lookup of any kind inside the
+callback body. `PlotWindow`'s callbacks pass the `PlotWindow*` itself as
+data (`plot_window.cc:304` etc.); `buttonCallback` unpacks a `Button` id
+and calls the fixed-signature `in_button_pressed()` entry point, which is
+core's own stable API for this, not a global reach.
+
+**What changed.** `DimRow`'s two `std::pair<std::string,Modifier>`
+payloads (for `prev_btn`/`next_btn`) became a named
+`DimStepCbData{ name, modifier, ViewerController *controller }`; its
+`std::string` payload (for `value_slider`) became
+`DimSliderCbData{ name, ViewerController *controller }`
+(`main_window.h`). Both are populated once, at row construction
+(`rebuildDimRow()`), with `&g_app.controller` -- the one place in this
+change that still names `g_app`, and deliberately so: `MainWindow` has no
+`ViewerController` reference member of its own to hand out instead (it
+doesn't hold one anywhere yet -- see below), and giving it one is exactly
+what Phase 11f's `NcviewApp` restructuring does. The callbacks
+themselves (`dimStepCallback`/`dimSliderCallback`) now read
+`p->controller->changeCurDim(...)`/`p->controller->setCurDimIndex(...)`
+off the payload, with no name lookup at all.
+
+For the colormap combobox, added `ColormapCbData{ index, MainWindow
+*window }`, one per `colormaps_` entry, built once in `createColormap()`
+alongside `colormaps_`/`colormap_previews_` (same "built once, reused
+across every `rebuildColormapChoice()` call" lifetime those two already
+have, including the same accepted no-explicit-free tradeoff their own
+comment already documents) and passed as each menu item's `user_data()`
+in place of the old bare index. `colormapChoiceCallback` now reads both
+the index and the window straight off that payload and no longer calls
+`instance()` at all.
+
+**The `instance()` decision, made explicitly rather than assumed**: left
+`interface_fltk.cc`'s other 27 `instance()` calls untouched. They live
+inside `FltkViewerUi`'s own implementation, which is itself one specific
+`ViewerUi` backend delegating to the one `MainWindow` it wraps -- an
+implementation detail of that backend, not a "compatibility global" in
+`g_app`'s sense: there is exactly one `MainWindow` for the app's whole
+life regardless of anything this arc does, and `FltkViewerUi` reaching
+its own wrapped singleton is architecturally the same as any object
+calling a method on a member it owns. Phase 11d's own scope, per the
+plan, is the three *static FLTK-callback trampolines* -- code that isn't
+a method of anything and has to get its context from an FLTK-supplied
+`void*` -- not this internal delegation. No compelling reason surfaced to
+extend scope beyond what the plan named.
+
+**Verified**: clean `-Werror` build; `ctest` (`ncview_core_tests` +
+`ncview_ui_smoke`) and again with `--order-by=rand`, 244 tests / 6664
+assertions both times, unchanged; `ncview_core_linkcheck` exit 0; all 15
+`ui_smoke.sh` goldens byte-identical, including `button_colormap` and
+`var_1d`, which exercise exactly the widgets these three callbacks
+drive; a scratch `NCVIEW_SANITIZE=address,undefined` build of
+`ncview_core_tests` clean (0 failures, no ASan/UBSan/LSan reports; the
+UI layer itself isn't part of this sanitized target, same as every prior
+phase -- correctness there is `ui_smoke.sh`'s job); a project-wide grep
+confirming no remaining reference to the old `std::pair<std::string,
+Modifier>` payload shape or to a raw `item->user_data()` index cast for
+the colormap combobox specifically (the unrelated variable-choice
+combobox's own unchanged `user_data()` use, a `const char*`, is untouched
+and correctly still there).
+
+**Next: 11e** -- narrow `ViewerSession::pixelMapSettings(const
+Options&)`, the one place a whole `Options&` is taken, to `const
+RenderSettings&`; leave the ~500 scalar `options.` reads alone.
 
 ## Post-v0.2.0 defect audits
 
