@@ -78,8 +78,8 @@ static NCDim *plot_XY_dim[MAX_PLOT_XY];
  * viewer_controller.cc, though its definition stays here. beep() moved
  * out entirely: its only caller, stepView(), moved to
  * viewer_controller.cc too. */
-static void 		set_buttons( int to_state );
-static void 		draw_file_info( NCVar *var );
+static void 		set_buttons( int to_state, ViewerUi &ui );
+static void 		draw_file_info( NCVar *var, ViewerSession &session, ViewerUi &ui );
 static float 		view_calc_minval_float( float *arr, size_t n );
 static float 		view_calc_maxval_float( float *arr, size_t n );
 static void 		strip_trailing_zeros( char *s );
@@ -94,7 +94,7 @@ static time_t new_frame_nframes[NFRAMES_RECORD];	/* NUMBER of new frames found a
  * buttons.
  */
 	int
-set_scan_variable( NCVar *var )
+set_scan_variable( NCVar *var, ViewerSession &session, ViewerUi &ui )
 {
 	View	*new_view, *old_view;
 	size_t	x_size, y_size, scaled_x_size, scaled_y_size;
@@ -102,6 +102,7 @@ set_scan_variable( NCVar *var )
 	int	changed_size, overlay2use;
 	float	range_x, range_y;
 	NCDim	*xdim, *ydim, *xdim_old, *xdim_new, *ydim_old, *ydim_new;
+	std::unique_ptr<ViewState> &view = session.activeView();
 
 	if( options.debug ) {
 		fprintf( stderr, "\n\n******************************************\nentering set_scan_variable with var=%s\n", var->name.c_str() );
@@ -110,17 +111,17 @@ set_scan_variable( NCVar *var )
 			fprintf( stderr, "dim=%ld size=%zu\n", i, var->size[i] );
 		}
 
-	in_set_cursor_busy();
+	ui.in_set_cursor_busy();
 
-	set_buttons( BUTTONS_ALL_ON );
-	unlock_plot();
+	set_buttons( BUTTONS_ALL_ON, ui );
+	ui.unlock_plot();
 
 	if( (view == NULL) || (view->x_axis_id == -1) || (view->y_axis_id == -1)) {
 		/* A brand new variable to display!  Exciting! */
 		if( options.debug )
 			fprintf( stderr, "set_scan_variable: initializing view struct for new variable\n" );
 		view.reset( View::create( var ) );
-		set_blowup_type( options.blowup_type );
+		set_blowup_type( options.blowup_type, ui );
 
 		/* Figure out what axes to use for X, Y, and Time,
 		 * and set the current place based on those axes
@@ -142,8 +143,8 @@ set_scan_variable( NCVar *var )
 			if( options.debug )
 				fprintf( stderr, "set_scan_variable (A): about to call plot_XY_sc\n" );
 			view->plotXYSc( start.data(), count.data() );
-			in_popdown_2d_window();
-			in_set_cursor_normal();
+			ui.in_popdown_2d_window();
+			ui.in_set_cursor_normal();
 			return(0);
 			}
 
@@ -204,8 +205,8 @@ set_scan_variable( NCVar *var )
 			if( options.debug )
 				fprintf( stderr, "set_scan_variable (B): about to call plot_XY_sc\n" );
 			view->plotXYSc( start.data(), count.data() );
-			in_popdown_2d_window();
-			in_set_cursor_normal();
+			ui.in_popdown_2d_window();
+			ui.in_set_cursor_normal();
 			return(0);
 			}
 		new_view->setScanPlace( var, old_view );
@@ -282,7 +283,7 @@ set_scan_variable( NCVar *var )
 	/* If we are automatically putting on overlays, do so now */
 	xdim = view->variable->dim[view->x_axis_id].get();
 	ydim = view->variable->dim[view->y_axis_id].get();
-	if( options.auto_overlay && in_report_auto_overlay() && xdim->is_lon && ydim->is_lat ) {
+	if( options.auto_overlay && ui.in_report_auto_overlay() && xdim->is_lon && ydim->is_lat ) {
 		/* Only put overlay on automatically if range is big enough that
 		 * the coastlines can be recognized. 
 		 */
@@ -303,9 +304,9 @@ set_scan_variable( NCVar *var )
 		fprintf( stderr, "...converting data to pixels\n" );
 	lockout_view_changes = true;
 	if( view->dataToPixels() < 0 ) {
-		in_timer_clear();
+		ui.in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
-			invalidate_variable( view->variable );
+			invalidate_variable( view->variable, session, ui );
 		return( -1 );
 		}
 	lockout_view_changes = false;
@@ -313,7 +314,7 @@ set_scan_variable( NCVar *var )
 	/* put variable and file information on the screen */
 	if( options.debug )
 		fprintf( stderr, "...putting var & file info on screen\n" );
-	draw_file_info( var );
+	draw_file_info( var, session, ui );
 
 	/* put the dimension information on the screen */
 	if( options.debug )
@@ -334,18 +335,18 @@ set_scan_variable( NCVar *var )
 	x_size = view->variable->size[view->x_axis_id];
 	y_size = view->variable->size[view->y_axis_id];
 	view_get_scaled_size( options.blowup, x_size, y_size, &scaled_x_size, &scaled_y_size );
-	changed_size = in_set_2d_size( scaled_x_size, scaled_y_size );
+	changed_size = ui.in_set_2d_size( scaled_x_size, scaled_y_size );
 	/* If we increased in size then we don't need to redraw,
 	 * because an expansion generates an expose event, which
 	 * is registered to call change_view.
 	 */
-	if( changed_size < 1 ) 
+	if( changed_size < 1 )
 	 	g_app.controller.stepView(0,FRAMES);
 
 	/* Pop up the window if we are going to use it. */
-	in_popup_2d_window();
+	ui.in_popup_2d_window();
 
-	in_set_cursor_normal();
+	ui.in_set_cursor_normal();
 
 	if( options.debug )
 		fprintf( stderr, "...recomputing colorbar\n" );
@@ -373,7 +374,11 @@ in_variable_selected( const char *var_name )
 		exit( -1 );
 		}
 
-	set_scan_variable( var );
+	/* Fixed seam entry point (called by ui/ code by this exact
+	 * free-function name), so it's the boundary that still reaches
+	 * g_app.session/g_app.ui explicitly -- set_scan_variable() itself,
+	 * one call away, no longer does (Phase 11a). */
+	set_scan_variable( var, g_app.session, *g_app.ui );
 }
 
 /**************************************************************************************/
@@ -406,7 +411,7 @@ View::setScanButtons()
 		label = "Scan axis is displayed";
 		}
 
-	set_buttons( set_state );
+	set_buttons( set_state, *g_app.ui );
 	in_set_label( Label::ScanPlace, label );
 
 	local_view->constructScalarCoordStr( scalar_coord_str, 1020 );
@@ -1169,11 +1174,11 @@ View::setAxis( Dimension dimension, char *new_dim_name )
 
 		case Dimension::Scan:
 			if( strlen( new_dim_name ) == 0 ) {
-				set_buttons( BUTTONS_TIMEAXIS_OFF );
+				set_buttons( BUTTONS_TIMEAXIS_OFF, *g_app.ui );
 				local_view->scan_axis_id = -1;
 				return;
 				}
-			set_buttons( BUTTONS_ALL_ON );
+			set_buttons( BUTTONS_ALL_ON, *g_app.ui );
 			new_id = file0->dimNameToId(
 						const_cast<char *>(v->name.c_str()), new_dim_name );
 			old_id = local_view->scan_axis_id;
@@ -1216,7 +1221,7 @@ View::allocStorage()
 	 */
 
 	if( view->data_status == ViewDataStatus::Edited )
-		view_data_edit_warn();
+		view_data_edit_warn( g_app.session, *g_app.ui );
 	view->data_status = ViewDataStatus::Invalid;
 
 	x_size       = view->variable->size[view->x_axis_id];
@@ -1416,56 +1421,56 @@ View::create( NCVar *var )
 
 /**************************************************************************************/
 	static void
-set_buttons( int to_state )
+set_buttons( int to_state, ViewerUi &ui )
 {
 	switch (to_state ) {
 
 	    case BUTTONS_ALL_ON:
-		in_set_sensitive( Button::Restart, 	  true );
-		in_set_sensitive( Button::Rewind, 	  true );
-		in_set_sensitive( Button::Backwards, 	  true );
-		in_set_sensitive( Button::Pause, 	  true );
-		in_set_sensitive( Button::Forward, 	  true );
-		in_set_sensitive( Button::Fastforward, 	  true );
-		in_set_sensitive( Button::ColormapSelect, true );
-		in_set_sensitive( Button::InvertPhysical, true );
-		in_set_sensitive( Button::InvertColormap, true );
-		in_set_sensitive( Button::Blowup, 	  true );
-		in_set_sensitive( Button::Transform, 	  true );
-		in_set_sensitive( Button::Print, 	  true );
-		in_set_sensitive( Button::Dimset, 	  true );
-		in_set_sensitive( Button::Range, 	  true );
-		in_set_sensitive( Button::BlowupType,	  true );
-		in_set_sensitive( Button::Edit,	  	  true );
-		in_set_sensitive( Button::Info,	  	  true );
+		ui.in_set_sensitive( Button::Restart, 	  true );
+		ui.in_set_sensitive( Button::Rewind, 	  true );
+		ui.in_set_sensitive( Button::Backwards, 	  true );
+		ui.in_set_sensitive( Button::Pause, 	  true );
+		ui.in_set_sensitive( Button::Forward, 	  true );
+		ui.in_set_sensitive( Button::Fastforward, 	  true );
+		ui.in_set_sensitive( Button::ColormapSelect, true );
+		ui.in_set_sensitive( Button::InvertPhysical, true );
+		ui.in_set_sensitive( Button::InvertColormap, true );
+		ui.in_set_sensitive( Button::Blowup, 	  true );
+		ui.in_set_sensitive( Button::Transform, 	  true );
+		ui.in_set_sensitive( Button::Print, 	  true );
+		ui.in_set_sensitive( Button::Dimset, 	  true );
+		ui.in_set_sensitive( Button::Range, 	  true );
+		ui.in_set_sensitive( Button::BlowupType,	  true );
+		ui.in_set_sensitive( Button::Edit,	  	  true );
+		ui.in_set_sensitive( Button::Info,	  	  true );
 		break;
 
 	    case BUTTONS_TIMEAXIS_OFF:
-		in_set_sensitive( Button::Restart, 	  false );
-		in_set_sensitive( Button::Rewind, 	  false );
-		in_set_sensitive( Button::Backwards, 	  false );
-		in_set_sensitive( Button::Forward, 	  false );
-		in_set_sensitive( Button::Fastforward, 	  false );
+		ui.in_set_sensitive( Button::Restart, 	  false );
+		ui.in_set_sensitive( Button::Rewind, 	  false );
+		ui.in_set_sensitive( Button::Backwards, 	  false );
+		ui.in_set_sensitive( Button::Forward, 	  false );
+		ui.in_set_sensitive( Button::Fastforward, 	  false );
 		break;
 		
 	    case BUTTONS_ALL_OFF:
-		in_set_sensitive( Button::Restart, 	  false );
-		in_set_sensitive( Button::Rewind, 	  false );
-		in_set_sensitive( Button::Backwards, 	  false );
-		in_set_sensitive( Button::Pause, 	  false );
-		in_set_sensitive( Button::Forward, 	  false );
-		in_set_sensitive( Button::Fastforward, 	  false );
-		in_set_sensitive( Button::ColormapSelect, false );
-		in_set_sensitive( Button::InvertPhysical, false );
-		in_set_sensitive( Button::InvertColormap, false );
-		in_set_sensitive( Button::Transform, 	  false );
-		in_set_sensitive( Button::Blowup, 	  false );
-		in_set_sensitive( Button::Print, 	  false );
-		in_set_sensitive( Button::Dimset, 	  false );
-		in_set_sensitive( Button::Range, 	  false );
-		in_set_sensitive( Button::BlowupType,	  false );
-		in_set_sensitive( Button::Edit,	  	  false );
-		in_set_sensitive( Button::Info,	  	  false );
+		ui.in_set_sensitive( Button::Restart, 	  false );
+		ui.in_set_sensitive( Button::Rewind, 	  false );
+		ui.in_set_sensitive( Button::Backwards, 	  false );
+		ui.in_set_sensitive( Button::Pause, 	  false );
+		ui.in_set_sensitive( Button::Forward, 	  false );
+		ui.in_set_sensitive( Button::Fastforward, 	  false );
+		ui.in_set_sensitive( Button::ColormapSelect, false );
+		ui.in_set_sensitive( Button::InvertPhysical, false );
+		ui.in_set_sensitive( Button::InvertColormap, false );
+		ui.in_set_sensitive( Button::Transform, 	  false );
+		ui.in_set_sensitive( Button::Blowup, 	  false );
+		ui.in_set_sensitive( Button::Print, 	  false );
+		ui.in_set_sensitive( Button::Dimset, 	  false );
+		ui.in_set_sensitive( Button::Range, 	  false );
+		ui.in_set_sensitive( Button::BlowupType,	  false );
+		ui.in_set_sensitive( Button::Edit,	  	  false );
+		ui.in_set_sensitive( Button::Info,	  	  false );
 		break;
 
 	default:
@@ -1638,16 +1643,17 @@ View::calculateBlowup( NCVar *var, int val_to_set_to )
 
 /**************************************************************************************/
 	static void
-draw_file_info( NCVar *var )
+draw_file_info( NCVar *var, ViewerSession &session, ViewerUi &ui )
 {
 	std::string title, units, var_long_name;
 	char	range_label[256], temp_label[600];
+	std::unique_ptr<ViewState> &view = session.activeView();
 
 	title = var->files.front()->file->title();
 	if( title.empty() )
-		in_set_label( Label::Title, PROGRAM_ID );
+		ui.in_set_label( Label::Title, PROGRAM_ID );
 	else
-		in_set_label( Label::Title, title.c_str() );
+		ui.in_set_label( Label::Title, title.c_str() );
 
 	units = var->files.front()->file->varUnits( var->name );
 	if( units.empty() ) {
@@ -1678,26 +1684,26 @@ draw_file_info( NCVar *var )
 					limit_string(units).c_str() );
 		}
 	snprintf( temp_label, 599, "displayed range: %s", range_label );
-	in_set_label( Label::DataExtrema, temp_label );
+	ui.in_set_label( Label::DataExtrema, temp_label );
 
 	var_long_name = view->variable->files.front()->file->longVarName(
 					view->variable->name );
 	if( var_long_name.empty() ) {
 		snprintf( temp_label, 255, "variable=%s", limit_string(view->variable->name).c_str() );
-		in_set_label( Label::ScanvarName, temp_label );
+		ui.in_set_label( Label::ScanvarName, temp_label );
 		if( options.want_extra_info ) {
 			snprintf( temp_label, 599, "%s (%s)", limit_string(view->variable->name).c_str(),
 								range_label );
-			in_set_label( Label::CcInfo1, temp_label );
+			ui.in_set_label( Label::CcInfo1, temp_label );
 			}
 		}
 	else
 		{
 		snprintf( temp_label, 599, "displaying %s", limit_string(var_long_name).c_str() );
-		in_set_label( Label::ScanvarName, temp_label );
+		ui.in_set_label( Label::ScanvarName, temp_label );
 		if( options.want_extra_info ) {
 			snprintf( temp_label, 599, "%s (%s)",  limit_string(var_long_name).c_str(), range_label );
-			in_set_label( Label::CcInfo1, temp_label );
+			ui.in_set_label( Label::CcInfo1, temp_label );
 			}
 		}
 }
@@ -2053,7 +2059,7 @@ View::changeDat( size_t index, float new_val )
 	if( view->dataToPixels() < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
-			invalidate_variable( view->variable );
+			invalidate_variable( view->variable, g_app.session, *g_app.ui );
 		return;
 		}
 	lockout_view_changes = false;
@@ -2112,11 +2118,12 @@ View::dataEditDump()
 
 /**************************************************************************************/
 	void
-view_data_edit_warn()
+view_data_edit_warn( ViewerSession &session, ViewerUi &ui )
 {
 	Message	message;
+	std::unique_ptr<ViewState> &view = session.activeView();
 
-	message = in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", true );
+	message = ui.in_dialog( "Warning!  Data edits will be lost unless you save them now.\nSave them now?", true );
 	if( message == Message::Cancel )
 		return;
 
@@ -2460,10 +2467,12 @@ View::information()
 
 /**************************************************************************************/
 	void
-invalidate_variable( NCVar *var )
+invalidate_variable( NCVar *var, ViewerSession &session, ViewerUi &ui )
 {
-	x_set_var_sensitivity( const_cast<char *>(view->variable->name.c_str()), false );
-	set_buttons( BUTTONS_ALL_OFF );
+	std::unique_ptr<ViewState> &view = session.activeView();
+
+	ui.x_set_var_sensitivity( const_cast<char *>(view->variable->name.c_str()), false );
+	set_buttons( BUTTONS_ALL_OFF, ui );
 	view.reset();	/* deletes the View this used to just orphan */
 	options.blowup = 1;
 }
@@ -2545,7 +2554,7 @@ View::hasMissingData() const
  * Change the current data transformation
  */
 	void
-view_change_transform( int delta )
+view_change_transform( int delta, ViewerUi &ui )
 {
 	int	transform_int = static_cast<int>(options.transform) + delta;
 	if( transform_int > N_TRANSFORMS )
@@ -2555,10 +2564,10 @@ view_change_transform( int delta )
 	options.transform = static_cast<Transform>(transform_int);
 
 	switch( options.transform ) {
-		case Transform::None   : in_set_label( Label::Transform, "Linear" ); break;
-		case Transform::Low    : in_set_label( Label::Transform, "Low"    ); break;
-		case Transform::Hi     : in_set_label( Label::Transform, "Hi"     ); break;
-		case Transform::Center : in_set_label( Label::Transform, "Center" ); break;
+		case Transform::None   : ui.in_set_label( Label::Transform, "Linear" ); break;
+		case Transform::Low    : ui.in_set_label( Label::Transform, "Low"    ); break;
+		case Transform::Hi     : ui.in_set_label( Label::Transform, "Hi"     ); break;
+		case Transform::Center : ui.in_set_label( Label::Transform, "Center" ); break;
 		default:
 			fprintf( stderr, "ncview: change_transform: unknown transform %d\n",
 				transform_int );

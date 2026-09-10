@@ -17,6 +17,9 @@
  */
 #pragma once
 
+#include "ncview/viewer_session.h"
+#include "ncview/viewer_ui.h"
+
 struct NCVar;
 
 /* Definition (still `int`, not `static`) stays in view.cc, alongside
@@ -25,8 +28,15 @@ struct NCVar;
 extern int lockout_view_changes;
 
 /* Definition stays in view.cc (set_scan_variable() and View::changeDat
- * are its other two callers); ViewerController::draw() is the third. */
-void invalidate_variable( NCVar *var );
+ * are its other two callers); ViewerController::draw() is the third.
+ * Phase 11a threaded ViewerSession&/ViewerUi& through this instead of
+ * reading the global `view` alias and calling x_set_var_sensitivity()/
+ * set_buttons() through the free-function seam -- every caller still
+ * reaches g_app.session/g_app.ui explicitly for now, since none of
+ * View/ViewerController hold their own reference yet (that's 11b/11c);
+ * the point here is that invalidate_variable() itself no longer touches
+ * a global internally. */
+void invalidate_variable( NCVar *var, ViewerSession &session, ViewerUi &ui );
 
 /* Definition stays in view.cc (View::setDataeditPlace() is its other
  * caller); ViewerController::reportPosition()/setMinFromCurdata()/
@@ -34,5 +44,7 @@ void invalidate_variable( NCVar *var );
 void mouse_xy_to_data_xy( int mouse_x, int mouse_y, int blowup, size_t *data_x, size_t *data_y );
 
 /* Definition stays in view.cc (View::setAxis() is its other caller);
- * ViewerController::changeCurDim()/setCurDimIndex() are the rest. */
-void view_data_edit_warn();
+ * ViewerController::changeCurDim()/setCurDimIndex() are the rest. Phase
+ * 11a threaded ViewerSession&/ViewerUi& through this the same way as
+ * invalidate_variable() above, for the same reason. */
+void view_data_edit_warn( ViewerSession &session, ViewerUi &ui );

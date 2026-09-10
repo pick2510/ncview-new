@@ -70,8 +70,13 @@ extern std::vector<ncv_pixel> &pixel_transform;
  * in ncview.c
  */
 /* Upstream's main(); renamed so ncview_ui's app/main.cc can be the real
- * process entry point (and so this library never defines `main` itself). */
-int	ncview_main		    ( int argc, char **argv );
+ * process entry point (and so this library never defines `main` itself).
+ * Phase 11a ("refine the architecture" plan, Part IV) added the ViewerUi&
+ * parameter: app/main.cc already constructs the real FltkViewerUi before
+ * calling this, so passing it explicitly (in addition to still setting
+ * g_app.ui, which other not-yet-threaded code still reads) removes this
+ * function's own internal reach into that global. */
+int	ncview_main		    ( int argc, char **argv, ViewerUi &ui );
 void	initialize_misc		    ( void );
 /* The options-fields-and-framestore-defaulting part of initialize_misc(), split
  * out so it can be re-run without repeating udu_utinit(NULL) -- see its
@@ -79,10 +84,15 @@ void	initialize_misc		    ( void );
 void	reset_session_defaults	    ( void );
 Stringlist *parse_options           ( int argc,  char *argv[] );
 void 	initialize_file_interface   ( Stringlist *input_files );
-void	initialize_display_interface( void );
+/* Phase 11a threaded ViewerUi& through this and process_user_input()
+ * below (2 and 1 internal seam calls respectively, both single-caller
+ * chains from ncview_main()); initialize_colormaps()/init_cmap_from_file()
+ * stay untouched -- the latter has fixed-signature test call sites
+ * (tests/test_colormaps.cc) this phase didn't want to disturb. */
+void	initialize_display_interface( ViewerUi &ui );
 void	initialize_colormaps	    ( void );
 void	init_cmap_from_file	    ( const char *dir_name, const char *file_name, int n_suffix );
-void	process_user_input          ( void );
+void	process_user_input          ( ViewerUi &ui );
 void	quit_app		    ( void );
 void	create_default_colormap     ( void );
 int	check			    ( int value, int min, int max );
@@ -166,7 +176,11 @@ std::string limit_string   ( std::string_view s );
 std::vector<int> gen_overlay       ( View *v, char *overlay_fname );
 void 	fmt_time	   ( char *temp_string, size_t temp_string_len, double new_dimval, NCDim *dim, int include_granularity );
 int	n_vars_in_list	   ( const std::vector<std::unique_ptr<NCVar>> &v );
-void 	set_blowup_type	   ( BlowupType new_type );
+/* Phase 11a threaded ViewerUi& through this instead of reaching g_app.ui
+ * internally via in_set_label()'s free-function seam; its two
+ * ViewerController::blowupType() call sites don't hold a ViewerUi of
+ * their own yet (that's 11c), so they pass g_app.ui explicitly for now. */
+void 	set_blowup_type	   ( BlowupType new_type, ViewerUi &ui );
 int 	strncmp_nocase     ( const char *s1, const char *s2, size_t n );
 void 	virt_to_actual_place( NCVar *var, size_t *virt_pl, size_t *act_pl, FDBlist **file );
 int     is_scannable        ( NCVar *v, int i );
@@ -205,7 +219,12 @@ Button	which_button_pressed( void );
  * genuine-anywhere possibility for a `View` method's `this`. See
  * PORTING.md's Phase 2 entry.
  */
-int 	set_scan_variable    ( NCVar *var );
+/* Phase 11a threaded ViewerSession&/ViewerUi& through this instead of
+ * reading the global `view` alias and the in_x()/x_x() free-function seam
+ * internally; its sole caller, in_variable_selected() (the fixed
+ * UI-triggered seam entry point just above), passes g_app.session/
+ * g_app.ui explicitly. */
+int 	set_scan_variable    ( NCVar *var, ViewerSession &session, ViewerUi &ui );
 /* Formerly also declared here: view_forward()/view_backward() (never
  * defined anywhere, never called -- dead upstream declarations, removed
  * in the same Phase 1 cleanup) and redraw_ccontour() (a one-line wrapper
@@ -213,7 +232,11 @@ int 	set_scan_variable    ( NCVar *var );
  * definition in view.cc). */
 void 	view_report_position_vals( float xval, float yval, int plot_index );
 void	view_get_scaled_size ( int blowup, size_t old_nx, size_t old_ny, size_t *new_nx, size_t *new_ny );
-void 	view_change_transform( int delta );
+/* Phase 11a threaded ViewerUi& through this instead of reaching g_app.ui
+ * via in_set_label()'s seam internally; its two
+ * ViewerController::transform() call sites pass g_app.ui explicitly,
+ * matching set_blowup_type()'s treatment above. */
+void 	view_change_transform( int delta, ViewerUi &ui );
 
 /******************************************************************************
  * in overlay.c
@@ -258,7 +281,10 @@ void 	do_print	( void );
  */
 int 	write_state_to_file( Stringlist *state_to_save );
 int 	read_state_from_file( Stringlist **state );
-Stringlist *get_persistent_state();
+/* Phase 11a threaded ViewerUi& through this instead of reaching g_app.ui
+ * to call get_persistent_X_state() (itself a seam function) internally.
+ * Sole caller is ncview_main(), which now holds a ViewerUi& of its own. */
+Stringlist *get_persistent_state( ViewerUi &ui );
 
 /******************************************************************************
  * Toolkit-agnostic logic factored out of upstream's src/interface/interface.c

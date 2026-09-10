@@ -52,7 +52,7 @@ static int any_var_in_group( const std::vector<std::unique_ptr<NCVar>> &vars );
 
 /***********************************************************************************************/
 	int
-ncview_main( int argc, char **argv )
+ncview_main( int argc, char **argv, ViewerUi &ui )
 {
 	Stringlist *input_files, *state_to_save;
 	int	   err, found_state_file;
@@ -60,16 +60,16 @@ ncview_main( int argc, char **argv )
 	/* Initialize misc constants */
 	initialize_misc();
 
-	/* Read in our state file from a previous run of ncview 
+	/* Read in our state file from a previous run of ncview
 	 */
 	read_in_state = NULL;	/* Note: a global var. Set to null to flag following routine to make a new stringlist */
 	err = read_state_from_file( &read_in_state );
-	if( err == 0 ) 	
+	if( err == 0 )
 		found_state_file = true;
 	else
 		found_state_file = false;
 
-	in_parse_args               ( &argc, argv );
+	ui.in_parse_args             ( &argc, argv );
 	input_files = parse_options ( argc,  argv );	/* This parses ALL the non-X11 command line options, not just the input files */
 
 	/* No files given on the command line -- ask the user via a native
@@ -78,7 +78,7 @@ ncview_main( int argc, char **argv )
 	 * "Open with") usable instead of a dead end.
 	 */
 	if( stringlist_len( input_files ) == 0 )
-		input_files = in_choose_input_files();
+		input_files = ui.in_choose_input_files();
 
 	if( stringlist_len( input_files ) == 0 ) {
 		fprintf( stderr, "ncview: no input files given; exiting.\n" );
@@ -109,7 +109,7 @@ ncview_main( int argc, char **argv )
 
 	/* This initializes the colormaps, and then the X widows system */
 	if( options.debug ) printf( "Initializing display interface...\n" );
-	initialize_display_interface(); 
+	initialize_display_interface( ui );
 	if( options.debug ) printf( "Initializing printing subsystem...\n" );
 	print_init();
 	if( options.debug ) printf( "Initializing overlays...\n" );
@@ -118,21 +118,21 @@ ncview_main( int argc, char **argv )
 	/* If there is only one variable, make it the active one */
 	if( n_vars_in_list( variables ) == 1 ) {
 		/* set_scan_variable     ( variables       ); */
-		in_indicate_active_var( const_cast<char *>(variables[0]->name.c_str()) );
+		ui.in_indicate_active_var( const_cast<char *>(variables[0]->name.c_str()) );
 		}
 
 	/* If we didn't find a state file (".ncviewrc") when we started up, then
 	 * write a new one out now that we are all initialized
 	 */
 	if( found_state_file == false ) {
-		state_to_save = get_persistent_state();
+		state_to_save = get_persistent_state( ui );
 		if( (err = write_state_to_file( state_to_save )) != 0 ) {
 			fprintf( stderr, "Error %d while trying to save options file \"$HOME/.ncviewrc\".\n", err );
 			}
 		stringlist_delete_entire_list( state_to_save );
 		}
 
-	process_user_input();
+	process_user_input( ui );
 
 	return(0);
 }
@@ -267,7 +267,7 @@ initialize_file_interface( Stringlist *input_files )
 
 /***********************************************************************************************/
 	void
-initialize_display_interface()
+initialize_display_interface( ViewerUi &ui )
 {
 	/* Upstream allocated and filled this identity/remap table in
 	 * interface/colormap_funcs.c's x_create_colormap() -- the X11
@@ -286,19 +286,19 @@ initialize_display_interface()
 	/* Make the colormaps in the program congruent in order
 	 * and "enabled-ness" with the read-in state
 	 */
-	x_check_legal_colormap_loaded();
+	ui.x_check_legal_colormap_loaded();
 
 	if( options.debug ) printf( "...initializing X interface\n" );
-	in_initialize();
+	ui.in_initialize();
 	if( options.debug ) printf( "...done with initializing X interface\n" );
 }
 
 /***********************************************************************************************/
 	void
-process_user_input()
+process_user_input( ViewerUi &ui )
 {
 	/* This call never returns, as it loops, handling user interface events */
-	in_process_user_input();
+	ui.in_process_user_input();
 }
 
 /***********************************************************************************************/

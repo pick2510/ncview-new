@@ -339,9 +339,9 @@ ViewerController::transform( Modifier modifier )
 {
 	view->initSaveframes();
 	if( modifier == Modifier::M3 )
-		view_change_transform( -1 );
+		view_change_transform( -1, *g_app.ui );
 	else
-		view_change_transform( 1 );
+		view_change_transform( 1, *g_app.ui );
 }
 
 /*===========================================================================================*/
@@ -350,9 +350,9 @@ ViewerController::blowupType( Modifier modifier )
 {
 	view->initSaveframes();
 	if( options.blowup_type == BlowupType::Replicate )
-		set_blowup_type( BlowupType::Bilinear );
+		set_blowup_type( BlowupType::Bilinear, *g_app.ui );
 	else
-		set_blowup_type( BlowupType::Replicate );
+		set_blowup_type( BlowupType::Replicate, *g_app.ui );
 	draw( true, false );
 }
 
@@ -601,7 +601,7 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 	if( view->dataToPixels() < 0 ) {
 		in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
-			invalidate_variable( view->variable );
+			invalidate_variable( view->variable, session_, *g_app.ui );
 		lockout_view_changes = false;
 		return( -1 );
 		}
@@ -650,7 +650,7 @@ ViewerController::changeCurDim( char *dim_name, Modifier modifier )
 		}
 
 	if( view->data_status == ViewDataStatus::Edited )
-		view_data_edit_warn();
+		view_data_edit_warn( session_, *g_app.ui );
 
 	dimid  = view->variable->files.front()->file->dimNameToId(
 				const_cast<char *>(view->variable->name.c_str()), dim_name );
@@ -707,7 +707,7 @@ ViewerController::setCurDimIndex( const char *dim_name, long place )
 		}
 
 	if( view->data_status == ViewDataStatus::Edited )
-		view_data_edit_warn();
+		view_data_edit_warn( session_, *g_app.ui );
 
 	dimid  = view->variable->files.front()->file->dimNameToId(
 				const_cast<char *>(view->variable->name.c_str()),
@@ -1055,12 +1055,12 @@ void ViewerController::recomputeColorbar( void )
  * since ViewerController::blowupType() is its primary caller.
  */
 	void
-set_blowup_type( BlowupType new_type )
+set_blowup_type( BlowupType new_type, ViewerUi &ui )
 {
 	if( new_type == BlowupType::Replicate )
-		in_set_label( Label::BlowupType, "Repl"   );
+		ui.in_set_label( Label::BlowupType, "Repl"   );
 	else
-		in_set_label( Label::BlowupType, "Bi-lin" );
+		ui.in_set_label( Label::BlowupType, "Bi-lin" );
 
 	options.blowup_type = new_type;
 }

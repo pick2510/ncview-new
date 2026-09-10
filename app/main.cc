@@ -20,5 +20,5 @@ int main( int argc, char **argv )
 	ncview_ui::FltkViewerUi fltk_viewer_ui;
 	g_app.ui = &fltk_viewer_ui;
 
-	return ncview_main( argc, argv );
+	return ncview_main( argc, argv, fltk_viewer_ui );
 }
