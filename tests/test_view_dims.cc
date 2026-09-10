@@ -117,3 +117,32 @@ TEST_CASE("view_get_cur_dim_index: unknown dimension name returns 0") {
 
     CHECK(g_app.session.curDimIndex("no_such_dim") == 0);
 }
+
+TEST_CASE("View::setAxis: an unresolvable dimension name does not write out of bounds (Phase 12e)") {
+    // Regression test for a real, previously-undiscovered memory-safety
+    // bug: setAxis()'s Dimension::X/Y branches used to do
+    // `var_place[new_id] = 0L` with no check that new_id (from
+    // dimNameToId(), whose own doc comment documents -1 as a legitimate
+    // "not found" return) wasn't -1. var_place is std::vector<size_t>,
+    // so operator[](-1) is operator[](SIZE_MAX) -- an out-of-bounds heap
+    // write, confirmed under ASan against the unmodified code before
+    // this fix landed.
+    SessionFixture fx;
+    NcFixture nc;
+    select_dims_variable(nc, "dims_bad_axis", 3);
+    REQUIRE(view != nullptr);
+
+    // "no_such_dim" is not one of this variable's dims, so
+    // dimNameToId() returns -1 for it -- exactly the condition that used
+    // to reach the unchecked var_place[new_id] write.
+    char bogus_name[] = "no_such_dim";
+    view->setAxis(Dimension::X, bogus_name);
+    // Reaching this line at all (without an ASan abort) is the main
+    // point. The axis must be left unset (its prior valid id kept, or a
+    // clearly-invalid -1), never silently "succeed" with a corrupted
+    // var_place vector.
+    CHECK(view->x_axis_id == -1);
+
+    view->setAxis(Dimension::Y, bogus_name);
+    CHECK(view->y_axis_id == -1);
+}

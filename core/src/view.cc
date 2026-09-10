@@ -1178,23 +1178,38 @@ View::setAxis( Dimension dimension, char *new_dim_name )
 		case Dimension::X:
 			new_id = file0->dimNameToId(
 						const_cast<char *>(v->name.c_str()), new_dim_name );
-			if( options.debug ) 
-				fprintf( stderr, "setting dim X to %s\n", 
+			if( options.debug )
+				fprintf( stderr, "setting dim X to %s\n",
 						new_dim_name );
 			old_id = local_view->x_axis_id;
 			local_view->x_axis_id = new_id;
-			local_view->var_place[new_id] = 0L;
+			/* Phase 12e: new_id can legitimately be -1 (dimNameToId()'s
+			 * own doc comment: "-1 if the dimension is not found in the
+			 * requested variable"). var_place is std::vector<size_t>, so
+			 * var_place[-1] is var_place[SIZE_MAX] -- an out-of-bounds
+			 * heap write, confirmed under ASan before this guard existed.
+			 * The axis id above is still recorded as -1 (the established
+			 * "no such axis" sentinel used throughout this file), just
+			 * without touching var_place for an id that doesn't exist. */
+			if( new_id != -1 )
+				local_view->var_place[new_id] = 0L;
+			else
+				in_error( "The requested X axis dimension was not found for this variable." );
 			break;
 
 		case Dimension::Y:
 			new_id = file0->dimNameToId(
 						const_cast<char *>(v->name.c_str()), new_dim_name );
-			if( options.debug ) 
-				fprintf( stderr, "setting dim Y to %s\n", 
+			if( options.debug )
+				fprintf( stderr, "setting dim Y to %s\n",
 						new_dim_name );
 			old_id = local_view->y_axis_id;
 			local_view->y_axis_id = new_id;
-			local_view->var_place[new_id] = 0L;
+			/* Phase 12e: same guard as Dimension::X above. */
+			if( new_id != -1 )
+				local_view->var_place[new_id] = 0L;
+			else
+				in_error( "The requested Y axis dimension was not found for this variable." );
 			break;
 
 		case Dimension::Scan:
