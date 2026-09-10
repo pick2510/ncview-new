@@ -2496,6 +2496,46 @@ and correctly still there).
 Options&)`, the one place a whole `Options&` is taken, to `const
 RenderSettings&`; leave the ~500 scalar `options.` reads alone.
 
+## Part IV, Phase 11e: narrow the one whole-`Options&` parameter
+
+Grepped project-wide for `Options *&*` (as opposed to the unrelated
+`PrintOptions&`, which appears at several `in_print`/`do_print.cc` sites
+and is a different type) before touching anything: confirmed
+`ViewerSession::pixelMapSettings(const Options&)`
+(`viewer_session.h:131`, one call site, `render_pipeline.cc:217`) really
+is the only place in the whole tree taking a whole `Options&`, exactly
+as the plan claimed.
+
+Read the function body: all six fields it touches -- `transform`,
+`invert_colors`, `invert_physical`, `n_colors`, `n_extra_colors`,
+`display_type` -- are already bound, per `Options`'s own constructor
+(`viewer_session.cc:44-71`), to `RenderSettings` and nothing else. A
+single-type narrowing was therefore a clean fit, not a forced one.
+Narrowed the signature to `const RenderSettings&`; the one call site
+now reads `g_app.session.pixelMapSettings( g_app.session.renderSettings() )`
+instead of passing the whole global `options` object down.
+
+Left every other `options.<field>` read/write in the tree exactly as it
+was -- the plan is explicit that rewriting the ~500 scalar call sites for
+zero structural benefit is out of scope, and nothing here changes that
+judgment.
+
+**Verified**: clean `-Werror` build; `ctest` (`ncview_core_tests` +
+`ncview_ui_smoke`) and again with `--order-by=rand`, 244 tests / 6664
+assertions both times, unchanged; `ncview_core_linkcheck` exit 0; all 15
+`ui_smoke.sh` goldens byte-identical; a scratch
+`NCVIEW_SANITIZE=address,undefined` build of `ncview_core_tests` clean
+(0 failures, no ASan/UBSan/LSan reports; unshuffled default order gives
+6663 assertions, the same pre-existing `test_do_print.cc`
+order-sensitivity documented since Phase 7a, not a regression); a
+project-wide grep confirming no remaining reference to the old
+`pixelMapSettings( const Options & )`/`pixelMapSettings( options )`
+call shape.
+
+**Next: 11f** -- reshape `AppContext` into the explicit `NcviewApp`
+object graph the whole arc has been building toward, preserving the
+real startup-ordering constraints the Part IV survey found.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
