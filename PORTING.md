@@ -1875,6 +1875,156 @@ any moved/renamed symbol. 240->242 tests, 6614->6647 assertions.
 **Phase 9 is now complete.** Only Phase 10 (coverage/fuzz CI tooling)
 remains in the entire plan.
 
+## Phase 10: coverage measurement and fuzzing -- the final phase
+
+Three of this phase's original four items (sanitizer job, `ui_smoke.sh`
+in CI, shuffled-order runs) were already done, confirmed by the round-3
+reassessment before this phase started. What was actually left: coverage
+measurement (10a) and fuzzing (10b).
+
+**10a.** Added `NCVIEW_COVERAGE`, an opt-in CMake option using the same
+`ncview_sanitize_flags`-style INTERFACE-library pattern as
+`NCVIEW_SANITIZE`: `--coverage` applied to `ncview_core` and
+`ncview_core_tests` only, off by default, zero effect on the normal
+build (verified: a clean rebuild with the option untouched is identical
+to before this phase). GCC/gcov over Clang/llvm-cov, since every CI job
+that could plausibly run this (`linux`, `sanitize`) already builds with
+GCC (`ubuntu-latest`'s default `cc`/`c++`). `scripts/coverage.sh` drives
+the full configure-build-run-report cycle via `gcovr`, into a separate
+`build-coverage/` tree so an ordinary developer build is never
+accidentally coverage-instrumented.
+
+Running it for the first time immediately found a real bug in the test
+harness, not in the code under test: it reported flat **0% coverage**
+despite the suite passing. `tests/fast_exit.h`'s
+`std::_Exit()`/`TerminateProcess()` (added earlier to dodge a Windows CI
+teardown hang) skips *all* exit-time teardown, including the `atexit()`
+handler libgcov normally uses to flush `.gcda` files -- so instrumented
+runs simply never wrote their coverage data, silently. Fixed by calling
+`__gcov_dump()` explicitly before the fast-exit path, gated behind a
+`NCVIEW_COVERAGE_BUILD` define that only exists when the option is on.
+After the fix, coverage reports real numbers:
+
+```
+lines: 55.9% (4205 out of 7520)      functions: 81.1% (313 out of 386)
+branches: 39.2% (2649 out of 6766)
+```
+
+Per-module baseline (from `build-coverage/coverage-report/summary.txt`,
+core/src only, vendored `calcalcs.cc`/`utCalendar2_cal.cc` included for
+completeness though this plan deliberately leaves them unrestructured):
+
+| Module | Lines | Cover | Note |
+| --- | ---: | ---: | --- |
+| `frame_renderer.cc` | 50 | 98% | |
+| `varname_utils.cc` | 78 | 93% | |
+| `do_print.cc` | 119 | 91% | |
+| `viewer_session.cc` | 77 | 94% | |
+| `colormap_library.cc` | 127 | 86% | |
+| `render_pipeline.cc` | 331 | 85% | |
+| `frame_cache.cc` | 47 | 83% | |
+| `dataset.cc` | 446 | 76% | |
+| `cli_options.cc` | 145 | 75% | |
+| `var_metadata.cc` | 262 | 72% | |
+| `viewer_controller.cc` | 504 | 71% | |
+| `viewer_ui_bridge.cc` | 137 | 67% | seam forwarders, correct as-is |
+| `udu.cc` | 135 | 65% | |
+| `utCalendar2_cal.cc` | 287 | 59% | vendored, left alone |
+| `view.cc` | 1342 | 57% | still the largest file; see round-4 note below |
+| `stringlist.cc` | 339 | 53% | |
+| `handle_rc_file.cc` | 69 | 53% | error ladder still thinly covered (flagged round 3) |
+| `calcalcs.cc` | 742 | 51% | vendored, left alone |
+| `file_netcdf.cc` | 966 | 50% | largest remaining file; the netCDF-4 group-handling cluster (`file_netcdf.cc:112-265,722-815`) accounts for most of the miss |
+| `file.cc` | 44 | 47% | small by line count; the `file_type`-dead-branch `else`s are the miss |
+| `ncview.cc` | 149 | 35% | mostly `main()`'s orchestration sequence, not logic |
+| `overlay.cc` | 311 | 38% | `gen_overlay_internal_mapped`/`overlay_find_closest_pt*` (curvilinear-grid paths, no fixture support -- flagged since Phase 4a) |
+| `legal_text.cc` | 707 | 0% | **expected, not a gap** -- verbatim GPL text `print_copying()` prints; no logic to cover |
+
+Wired into a new `coverage` CI job (`.github/workflows/build.yml`)
+running `scripts/coverage.sh` and uploading the report as a build
+artifact via the same `actions/upload-artifact` pattern every other job
+already uses. **Gate deferred, deliberately**: the plan called for a
+changed-lines-covered gate rather than a global threshold, and that
+needs a diff-aware tool (comparing a PR's coverage against
+`origin/master`'s own report) -- a real design task on its own, not
+something to force through as a side effect of landing the measurement
+itself. This phase publishes the report; the gate is future work,
+recorded here rather than implied done.
+
+**10b.** Re-verified the fuzzing target list from the original sketch
+against the current tree first, since several functions had moved files
+since it was written (`count_nslashes`/`unpack_groupname`/
+`varname_no_groups` -> `varname_utils.cc` per Phase 4b; `parse_options`
+-> `cli_options.cc` per Phase 8) -- all still exist under those names.
+
+Reading `unpack_groupname`/`varname_no_groups` before writing property
+tests (per this plan's "read the actual body first" rule) found two
+real, **file-triggerable stack-buffer overflows**, not just latent
+edge cases -- confirmed under ASan with a throwaway repro before fixing
+anything, same discipline Phase 3b used for `do_print()`'s crash. Both
+functions assume their `varname` argument fits in `MAX_NC_NAME` (256):
+true for a single netCDF name (the library itself caps it), but **not**
+true for the group-path *prefix* these functions actually receive --
+built in `file_netcdf.cc` from `nc_inq_grpname_full()`, which has no
+length or depth limit, since netCDF-4/HDF5 group nesting isn't bounded.
+A file with enough nested groups (trivial to construct with any HDF5/
+netCDF4 tooling, no special exploit skill needed) is a real, in-scope
+input: ncview's entire purpose is opening untrusted user-supplied files.
+Specifically: `unpack_groupname`'s `idx_slash[MAX_NC_NAME]` stack array
+overflows past 255 slashes; independently, at a shorter total length,
+its `ts[MAX_NC_NAME]` copy of `varname` is silently truncated by
+`snprintf` while `idx_slash[]`'s indices -- computed against the
+*original*, untruncated string -- still point past that truncated
+content, a second, distinct overread.
+
+Given this is the plan's final phase (no later phase to hand a
+memory-safety bug to, unlike Phase 5a's two findings, which had Phase 6
+waiting), fixed both in place rather than only pinning-and-flagging:
+one length guard per function, at the top, `exit()`ing with an error if
+the input doesn't fit -- matching this code's own established
+convention for otherwise-impossible inputs a few lines below (the
+existing "`ig > nslash+1`" check already did the same). A dynamic,
+unbounded-length reimplementation would be a larger, riskier change
+this phase shouldn't make unreviewed; rejecting the pathological case
+outright is the conservative, consistent fix. Pinned correct behavior
+at depths just under the new boundary with a new test
+(`tests/test_util.cc`); the `exit()` path itself is deliberately not
+exercised, same reasoning as `test_file_layer.cc` not calling
+`determine_file_type()`'s `exit()` branch. Also added `count_nslashes`
+coverage, which had none before this.
+
+No further libFuzzer targets added: the plan's own guidance was to add
+them only if the cheap property-test pass found something worth deeper
+exploration, or once 10a was paying off. It found two real bugs by
+reading the code directly, which is the outcome libFuzzer would have
+been reaching for -- a real libFuzzer harness (Clang-only build,
+corpus storage, CI time budget) remains a legitimate follow-up but
+isn't forced through here.
+
+**Verified**: clean `-Werror` normal build (the `NCVIEW_COVERAGE`
+option has zero effect when off); `ctest` normal + `--order-by=rand`
+(seeds 17, 71 -- the pre-existing, already-documented `test_do_print.cc`
+order-dependence shows up as expected, nothing new); `ncview_core_linkcheck`
+exit 0; all 15 `ui_smoke.sh` goldens byte-identical; a separate
+`-DNCVIEW_COVERAGE=ON` build confirmed to build, run, and produce a
+real report; a scratch ASan/UBSan/LSan build clean, including the two
+newly-fixed functions specifically confirmed no longer overflowing.
+242->244 tests, 6647->6664 assertions.
+
+**This is the last phase in the entire plan.** Every phase from 0a
+through 10 is now done. What remains, listed precisely rather than
+implied complete: the changed-lines coverage gate (10a, deferred by
+design -- needs a diff-aware tool); a real libFuzzer harness (10b,
+deferred by design -- needs its own Clang/corpus/CI-budget setup);
+`handle_rc_file.cc`'s untested error ladder and two `exit(-1)` calls in
+library code (flagged, not actioned, back in round 3); curvilinear
+(2-D-mapped-coordinate) overlay support, uncovered since Phase 4a for
+lack of fixture support; and the deeper `ncview.cc` `StartupSettings`
+redesign Phase 8 explicitly declined in favor of a smaller file split,
+after measuring its 242-call-site blast radius. None of these block
+anything -- they're the honest list of what a next round of this plan,
+or a differently-scoped one, would pick up.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
