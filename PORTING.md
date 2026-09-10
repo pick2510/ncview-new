@@ -2980,6 +2980,91 @@ mechanical cleanups (`file.cc`'s dead `file_type` switch,
 duplicated link line and wrong comment, `MainWindow`'s two leaked
 comparison statics).
 
+## Part V, Phase 12c: four small, independent, mechanical cleanups
+
+Each re-verified fresh before touching it (the code had shifted slightly
+since Part V's original review), each its own commit.
+
+**1. Deleted `file.cc`'s dead `file_type` switch.** Re-confirmed:
+`FILE_TYPE_NETCDF` (`defines.h`) is still the only constant of its kind
+in the tree, `file_type` is still assigned that value in exactly one
+place (`determine_file_type()`), and nothing outside `file.cc` reads the
+variable itself (other files' mentions are all prose in comments).
+Simplified all three dispatch points (`fi_initialize`, `fi_dim_calendar`,
+`fi_close`) to their single netCDF-only path, deleted the `static int
+file_type` variable and its `else`/`exit(-1)` branches, and removed the
+now-pointless assignment from `determine_file_type()` (which keeps its
+real job -- confirming the input file is a netCDF file it can open,
+`exit(-1)` if not -- untouched). `tests/test_file_layer.cc`'s coverage of
+this file doesn't assert on the variable itself, only on downstream
+behavior (that `fi_*()` calls succeed rather than `exit(-1)`), so it
+needed no changes and still passes unmodified.
+
+**2. Fixed `file_netcdf.cc`'s `exit(0)`-on-error bug.**
+`nc_root_id_from_group_id()`'s unreachable-in-practice-but-real error
+path printed a genuine netCDF error to stderr and then called `exit(0)`
+-- exiting with SUCCESS status despite the failure, so a script or CI
+wrapper checking the exit code could never detect it. Every other error
+exit in this file uses `-1`; matched here for consistency. One-line fix.
+
+**3. Cleaned up `app/CMakeLists.txt`'s stale duplicated link line and
+wrong comment.** Re-confirmed the refutation from Part V's review: `nm`
+on the freshly built archives shows zero symbols `libncview_core.a`
+needs that `libncview_ui.a` provides (and 37 the other way), and
+`core/CMakeLists.txt`'s only `target_link_libraries` calls are its own
+build-flag interfaces plus `netCDF`/`udunits2` -- never `ncview_ui`,
+never FLTK. The dependency is one-directional (`ncview_ui` depends on
+`ncview_core`), so the comment claiming a "genuine circular static-lib
+dependency" needing both archives listed twice was wrong (true before
+`viewer_ui_bridge.cc` existed, not since). Removed the duplicated
+`ncview_ui ncview_core ncview_ui ncview_core` down to a single ordering
+and rewrote the comment to explain the real, one-directional
+relationship instead. `ncview_core_linkcheck` (which proves this by
+construction -- it links every object file in `ncview_core` against
+nothing but a headless stub) still passes, as does a full app build.
+
+**4. Moved `MainWindow`'s two leaked comparison statics onto real
+instance members.** `MainWindow::set2DSize()`'s function-local `static
+size_t last_w, last_h` and `setOptionsDialog()`'s function-local `static
+std::string custom_overlay_filename` are the same "comparison state that
+never resets between operations" anti-pattern Phase 11h fixed on the
+core side (`ViewerController::draw()`'s `last_x_size`/`last_y_size`,
+moved onto `ViewerSession::lastFrameSize()`) -- just unfixed here on the
+UI side. Since `MainWindow` is already a process-lifetime singleton, this
+needed no broader ownership redesign: moved both into real private
+members (`last_2d_width_`/`last_2d_height_`, `custom_overlay_filename_`).
+The one wrinkle: `setOptionsDialog()`'s "Browse..." button callback used
+to reach the (then-static) filename directly, with no capture needed;
+reading/writing an instance member from a plain-function-pointer FLTK
+callback needs `this` threaded through explicitly, so it now takes a
+small `OverlayBrowseData{ MainWindow *self; Fl_Box *label_box; }` payload
+(a stack local living for the dialog's own blocking `Fl::wait()` loop,
+same lifetime pattern already used for this function's `ModalResult`)
+instead of just the label box pointer. No behavior change -- same
+comparison/persistence semantics, just owned by the singleton instead of
+hidden inside a method body. Not independently testable the way Phase
+11h's fix was: `ui_smoke.sh` is screenshot-based, one golden per process
+invocation, with no per-session reset concept for `MainWindow` at all, so
+there's no existing harness this closes a coverage gap in -- the value
+here is closing the same anti-pattern class before it causes a real
+symptom the way its core-side twin did, not new test coverage.
+
+None of the four changed behavior on the one supported path (item 2 is
+the exception by design: an error now correctly reports as an error).
+247 tests / 6710 assertions, unchanged from Phase 12b's end state across
+all four commits. Full six-gate verification clean: `-Werror` build;
+`ctest` normal + shuffled across 3 seeds, zero variance; `ncview_core_linkcheck`
+exit 0 (checked with extra attention given item 3); all 15 `ui_smoke.sh`
+goldens byte-identical, including `dialog_options` (exercises the moved
+`custom_overlay_filename_`); scratch ASan/UBSan/LSan build clean, no
+reports; `grep -rn` confirming zero remaining references to `file_type`
+(outside explanatory comments), the old duplicated link line, or either
+old static. **Next: Phase 12d+** -- `exit()` -> returned errors, one
+subsystem at a time, starting with `file_netcdf.cc`'s ~51 sites (the
+largest, highest-value, and highest-risk item in Part V's roadmap, scoped
+fresh at the start of its own phase rather than committed to in full
+here).
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
