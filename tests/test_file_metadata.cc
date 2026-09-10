@@ -27,6 +27,7 @@
 #include "ncview/includes.h"
 #include "ncview/defines.h"
 #include "ncview/protos.h"
+#include "support/session_fixture.h"
 
 namespace {
 
@@ -252,4 +253,95 @@ TEST_CASE("a char-typed text variable and its storage dim: pinning actual (not a
     REQUIRE(dims != nullptr);
     REQUIRE(stringlist_len(dims) == 1);
     CHECK((*dims)[0].string == "namelen");
+}
+
+// ===================== An attribute of a modern netCDF-4 datatype =====================
+
+namespace {
+// A separate, minimal fixture: netcdf_att_string()/netcdf_global_att_string()
+// only need one variable with one modern-typed attribute, not the whole
+// group layout above.
+struct UnhandledTypeFile {
+    std::string path;
+    int fileid;
+    UnhandledTypeFile() : path(make_unhandled_type_test_file()) {
+        run_determine_file_type(path);
+        fileid = netcdf_fi_initialize(const_cast<char *>(path.c_str()));
+    }
+    ~UnhandledTypeFile() {
+        netcdf_fi_close(fileid);
+        std::remove(path.c_str());
+    }
+    static std::string make_unhandled_type_test_file() {
+        auto tmpl = (std::filesystem::temp_directory_path() / "ncview_uint64_att_XXXXXX").string();
+        int fd = mkstemp(&tmpl[0]);
+        REQUIRE(fd >= 0);
+        close(fd);
+        std::string p = tmpl;
+
+        int ncid, dim_x, var;
+        REQUIRE(nc_create(p.c_str(), NC_CLOBBER | NC_NETCDF4, &ncid) == NC_NOERR);
+        REQUIRE(nc_def_dim(ncid, "x", 3, &dim_x) == NC_NOERR);
+        REQUIRE(nc_def_var(ncid, "v", NC_FLOAT, 1, &dim_x, &var) == NC_NOERR);
+        // A normal, handled-type attribute alongside the modern one, so the
+        // test can confirm the rest of the display still works -- the fix
+        // is "skip the one bad attribute", not "give up on all of them".
+        REQUIRE(nc_put_att_text(ncid, var, "units", 1, "K") == NC_NOERR);
+        unsigned long long modern_val = 42;
+        REQUIRE(nc_put_att_ulonglong(ncid, var, "modern_attr", NC_UINT64, 1, &modern_val) == NC_NOERR);
+        // A global attribute of the same unhandled type, so
+        // netcdf_global_att_string()'s identical fix gets exercised too.
+        REQUIRE(nc_put_att_ulonglong(ncid, NC_GLOBAL, "modern_global_attr", NC_UINT64, 1, &modern_val) == NC_NOERR);
+        REQUIRE(nc_enddef(ncid) == NC_NOERR);
+
+        std::vector<float> xvals = {0, 1, 2};
+        REQUIRE(nc_put_var_float(ncid, var, xvals.data()) == NC_NOERR);
+        REQUIRE(nc_close(ncid) == NC_NOERR);
+        return p;
+    }
+};
+} // namespace
+
+TEST_CASE("netcdf_att_string: a variable attribute of an unhandled netCDF-4 datatype (NC_UINT64) is skipped, not exit()ed (Phase 12d)") {
+    // Regression test: the switch inside netcdf_att_string() only lists
+    // the netCDF types that existed in 1993 (BYTE/CHAR/SHORT/LONG/FLOAT/
+    // DOUBLE/NAT); any newer type -- NC_UINT64 here -- used to exit() the
+    // whole process the instant this variable's info was displayed, on a
+    // perfectly valid netCDF-4 file.
+    UnhandledTypeFile f;
+    resetStubRecording();
+
+    std::string result = netcdf_att_string(f.fileid, "v");
+
+    // Reaching this line at all is the main point -- the old code exit()d
+    // before returning anything.
+    CHECK(result.find("units") != std::string::npos); // the handled attribute still shows
+    CHECK(result.find("modern_attr") != std::string::npos); // named, even though its value is skipped
+    CHECK(result.find("skipped") != std::string::npos);
+
+    bool reported_error = false;
+    for (const auto &call : g_recorded_calls)
+        if (call == "in_dialog") // in_error() forwards to in_dialog()
+            reported_error = true;
+    CHECK(reported_error);
+}
+
+TEST_CASE("netcdf_global_att_string: a global attribute of an unhandled netCDF-4 datatype (NC_UINT64) is skipped, not exit()ed (Phase 12d)") {
+    UnhandledTypeFile f;
+    resetStubRecording();
+
+    // netcdf_att_string() calls netcdf_global_att_string() internally
+    // (appending global attributes after the per-variable ones), so this
+    // exercises both fixes in the same call -- confirmed by checking for
+    // the global attribute's own name in the result.
+    std::string result = netcdf_att_string(f.fileid, "v");
+
+    CHECK(result.find("modern_global_attr") != std::string::npos);
+    CHECK(result.find("Global attributes") != std::string::npos);
+
+    bool reported_error = false;
+    for (const auto &call : g_recorded_calls)
+        if (call == "in_dialog")
+            reported_error = true;
+    CHECK(reported_error);
 }

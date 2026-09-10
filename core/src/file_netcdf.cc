@@ -1929,6 +1929,11 @@ std::string netcdf_att_string( int fileid, std::string_view var_name )
 		exit(-1);
 		}
 
+	/* Phase 12d: reported once per call, not once per unhandled attribute,
+	 * so a file with several modern-typed attributes doesn't pop up a
+	 * dialog per attribute. */
+	bool warned_unhandled_type = false;
+
 	for( iatt=0; iatt<n_atts; iatt++ ) {
 
 		err = nc_inq_attname( fileid, varid, iatt, att_name );
@@ -1951,8 +1956,30 @@ std::string netcdf_att_string( int fileid, std::string_view var_name )
 			case NC_DOUBLE: size_to_use = sizeof(double); break;
 			case NC_NAT:    fprintf( stderr, "Error, can't handle attribute of type NC_NAT, ignoring\n" ); size_to_use = sizeof(double); break;
 			default:
+				{
+				/* Phase 12d: was exit(-1) here -- every netCDF-4 type added
+				 * since this switch was written in 1993 (NC_UINT, NC_INT64,
+				 * NC_STRING, any user-defined/compound type) fell into this
+				 * branch, so a perfectly valid netCDF-4 file with a
+				 * modern-typed attribute crashed ncview the instant its
+				 * value was displayed. Skip just this one attribute (note
+				 * it in the returned text) and keep processing the rest,
+				 * the same "degrade, don't abort" shape NC_NAT already
+				 * uses one case above -- an unhandled type on one
+				 * attribute shouldn't blank the whole variable-info
+				 * display. */
+				char note[512];
+				snprintf( note, sizeof(note),
+					"(attribute \"%s\": unhandled netCDF datatype %d, skipped)\n",
+					att_name, (int)datatype );
 				fprintf( stderr, "Error, unhandled netcdf data type: %d\n", datatype );
-				exit(-1);
+				if( ! warned_unhandled_type ) {
+					in_error( "This file has one or more attributes of a netCDF datatype ncview doesn't display (see the terminal for details); they'll be skipped." );
+					warned_unhandled_type = true;
+					}
+				safe_strcat( ret_string.data(), retval_len, note );
+				continue;
+				}
 			}
 
 		std::vector<char> data( size_to_use*len );
@@ -2005,6 +2032,10 @@ static std::string netcdf_global_att_string( int fileid )
 	snprintf( ret_string.data(), retval_len-1, "\nGlobal attributes:\n--------------------------\n" );
 	ret_string[retval_len-1] = '\0';
 
+	/* Phase 12d: reported once per call, not once per unhandled attribute
+	 * -- see netcdf_att_string()'s identical guard above for the reason. */
+	bool warned_unhandled_type = false;
+
 	for( iatt=0; iatt<n_atts; iatt++ ) {
 
 		ncattname( fileid, NC_GLOBAL, iatt, att_name );
@@ -2019,8 +2050,24 @@ static std::string netcdf_global_att_string( int fileid )
 			case NC_DOUBLE: size_to_use = sizeof(double); break;
 			case NC_NAT:    fprintf(stderr,"Error, cannot handle attributes of type NC_NAT; ignoring\n" ); break;
 			default:
+				{
+				/* Phase 12d: was exit(-1) -- see netcdf_att_string()'s
+				 * identical fix above for the full reasoning (a valid
+				 * netCDF-4 file with a modern-typed global attribute
+				 * crashed ncview on display). Skip just this attribute,
+				 * note it, keep going. */
+				char note[512];
+				snprintf( note, sizeof(note),
+					"(global attribute \"%s\": unhandled netCDF datatype %d, skipped)\n",
+					att_name, (int)datatype );
 				fprintf( stderr, "Error, unhandled netcdf data type: %d\n", datatype );
-				exit(-1);
+				if( ! warned_unhandled_type ) {
+					in_error( "This file has one or more global attributes of a netCDF datatype ncview doesn't display (see the terminal for details); they'll be skipped." );
+					warned_unhandled_type = true;
+					}
+				safe_strcat( ret_string.data(), retval_len, note );
+				continue;
+				}
 			}
 
 		std::vector<char> data( size_to_use*len );
