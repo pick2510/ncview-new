@@ -2182,9 +2182,13 @@ int nc_root_id_from_group_id( int gid )
 	if( err == NC_ENOGRP ) 
 		return( cursor );	/* at the root of the chain */
 
+	/* Phase 12c: was exit(0) -- a real netCDF error reported to stderr
+	 * but exiting with SUCCESS status, so a caller checking the exit
+	 * code (a script, CI) couldn't tell this ever failed. Every other
+	 * error exit in this file uses -1; matched here for consistency. */
 	fprintf( stderr, "%s line %d : nc_root_id_from_group_id failed with error %d : %s\n",
-		__FILE__, __LINE__, 
+		__FILE__, __LINE__,
 		err, nc_strerror(err) );
-	exit(0);
+	exit(-1);
 }
 
