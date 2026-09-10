@@ -2025,6 +2025,125 @@ after measuring its 242-call-site blast radius. None of these block
 anything -- they're the honest list of what a next round of this plan,
 or a differently-scoped one, would pick up.
 
+## Part IV, Phase 11a: thread ViewerUi&/ViewerSession& through the free functions that reach globals
+
+The plan's own scope (Phases 0-10) was complete and pushed. The user then
+proposed a further arc -- Part IV -- eliminating every remaining
+compatibility global (`g_app`, `g_dataset`, `view`, `framestore`,
+`pixel_transform`, `options`) in favor of an explicit `NcviewApp` object
+graph. Two surveys found this more tractable than it looked: the
+`in_*`/`x_*` seam is 161 real call sites but funnels through ~17 free
+functions, three of which cover more than half of them; `options` is
+already a reference-bound facade with exactly one real whole-struct
+dependency. Phase 11a is the first of that arc: thread `ViewerUi&`/
+`ViewerSession&` through the highest-value functions, replacing their
+internal reads of the `view` global and the `in_x()`/`x_x()` free-function
+seam with explicit parameters.
+
+**Re-verified the survey's call-count estimates directly before touching
+anything**, per this plan's core discipline -- every number below is
+measured from the actual current code, not assumed from the earlier
+survey:
+
+- `set_buttons` (`view.cc`, `static`): **39** `in_set_sensitive` calls,
+  exactly matching the survey. 5 call sites, all in `view.cc` (1 inside
+  `set_scan_variable`, 4 inside `View::` methods).
+- `set_scan_variable`: 1 external caller, `in_variable_selected` -- the
+  fixed UI-triggered seam entry point, which now passes `g_app.session`/
+  `*g_app.ui` explicitly as the boundary.
+- `draw_file_info` (`view.cc`, `static`): 1 caller, inside
+  `set_scan_variable` itself.
+- `set_blowup_type`, `view_change_transform`: 2 external callers each,
+  both `ViewerController::` methods (`blowupType()`/`transform()`), which
+  pass `*g_app.ui` since `ViewerController` doesn't hold its own
+  `ViewerUi&` yet (that's 11c).
+- `invalidate_variable`, `view_data_edit_warn`: 3 external callers each,
+  a mix of `View::`/`ViewerController::` methods. `ViewerController`'s
+  call sites pass its own private `session_` member directly (more
+  precise than reaching `g_app.session`, since the reference is already
+  in hand); `View::`'s call sites pass `g_app.session`/`*g_app.ui`
+  explicitly, since `View` holds no session backreference.
+- `ncview_main`, `initialize_display_interface`, `process_user_input`,
+  `get_persistent_state`: all single-external-caller chains rooted at
+  `app/main.cc`, which already constructs the real `FltkViewerUi` before
+  calling `ncview_main` -- now passed to it directly (`g_app.ui` is still
+  also set, since other not-yet-threaded code still reads it).
+
+**Two corrections to the survey's framing, found by reading the actual
+call sites rather than trusting the ranked list:**
+
+1. The survey's per-function numbers counted *internal* seam calls made
+   by each function, not how many places *call* that function -- a
+   different axis, and the one that actually determines blast radius.
+   Reading real callers found `do_print`/`build_print_info` (~4 internal
+   seam calls, matching the survey) has **~15 external callers**,
+   including 13 direct test call sites and a UI-layer lambda
+   (`interface_fltk.cc:111`) that all invoke it with a fixed zero-arg
+   signature as "the public `do_print()` entry point" (per
+   `test_do_print.cc`'s own header comment). `do_overlay` is the same
+   shape: 1 internal seam call, but ~14 external callers including 10
+   direct calls in `test_overlay.cc` and two UI files. Both are deferred
+   -- changing either signature would mean rewriting ~15 test/UI call
+   sites for a function whose own internal seam surface is tiny, a bad
+   trade this phase declined to make.
+2. `init_cmap_from_file` has 4 fixed-signature test call sites
+   (`test_colormaps.cc`), so it's deferred alongside `do_print`/
+   `do_overlay` for the same reason; its sibling `init_cmap_from_data`
+   (zero test call sites, only called from within
+   `colormap_library.cc`'s own init loop) would have been safe to touch,
+   but was left alongside it rather than splitting one initialization
+   pathway across two different states this pass. `view_report_position_vals`
+   was also deferred: its only non-test caller is `ui/src/plot_window.cc`
+   -- UI code that has no narrower way to reach a `ViewerUi&` than the
+   same global read the function has today, so threading a parameter
+   through would relocate the global rather than remove it, for the
+   cost of touching a `ui/` file and a test.
+3. `create_default_colormap`, flagged by the original survey as a
+   single-seam-call function, turned out to have **zero callers anywhere
+   in the tree** (declared in `protos.h`, defined once, invoked nowhere)
+   -- genuinely dead code. Left alone (11a is about threading references,
+   not dead-code deletion) and flagged here for a future cleanup pass
+   rather than silently fixed.
+
+**A literal-`*/`-inside-a-comment build break, caught immediately by the
+first build attempt**: a doc comment describing the `in_*`/`x_*` seam
+contained the substring `*/`, which C++ parses as the comment's own
+close -- everything after it became live (broken) code. Fixed by
+spelling it `in_x()`/`x_x()` instead. Left as a one-line note here since
+it's a trap anyone writing a similar comment in this codebase could hit
+again.
+
+Both `View` and `Dataset` were confirmed to need **no class changes**:
+`View::create()` (`view.cc`, the sole `View` factory) needs no UI
+reference of its own (verified by reading its full body -- pure data
+init, zero seam calls), so `View` doesn't need a `ViewerUi&` member for
+any of this phase's work.
+
+**Deferred, precisely**: `do_print`/`build_print_info`, `do_overlay`,
+`init_cmap_from_file`/`init_cmap_from_data`, `view_report_position_vals`
+-- all for the test/UI-call-site blast-radius reasons above, not because
+they're structurally harder to thread. `create_default_colormap` -- dead
+code, not this phase's concern. The `view` global itself, `g_dataset`,
+`options`, and the other seam functions not in this ranked list all
+remain exactly as scoped for Phases 11b-11f in the plan file.
+
+**Verified**: clean `-Werror` normal build; `ctest` normal + `--order-by=rand`
+(seeds 7, 123); `ncview_core_linkcheck` exit 0 -- this phase's most
+relevant gate, since it exists exactly to catch a reference threaded to
+the wrong object, and it passed clean on the first try after the comment
+fix above; all 15 `ui_smoke.sh` goldens byte-identical, run against the
+real `FltkViewerUi`-backed binary now threading through every touched
+function; a scratch ASan/UBSan/LSan build clean. 244 tests / 6663
+assertions -- unchanged from before this phase, as expected for a pure
+reference-threading move with no behavior change.
+
+**Next: 11b** -- convert the ~80 seam calls already inside `View::`/
+`ViewerController::`/`Dataset::` methods from the free-function names to
+a held `ViewerUi&` member, and delete the 4 confirmed-zero-caller seam
+entries (`pix_to_rgb`, `in_var_set_sensitive`, `in_flush`,
+`in_change_min`) after checking whether either `ViewerUi` implementation
+still needs to satisfy them as part of the interface contract.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
