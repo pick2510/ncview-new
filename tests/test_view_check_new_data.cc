@@ -235,3 +235,42 @@ TEST_CASE("checkNewData: repeated growth calls accumulate frame-rate history, ca
 
     std::remove(path.c_str());
 }
+
+TEST_CASE("checkNewData: a file that vanishes between polls reports an error instead of exit()ing (Phase 12d)") {
+    // Regression test: checkNewData() used to reopen the file via
+    // netcdf_fi_initialize(), which exit()s the whole process if the
+    // reopen fails -- so a file deleted or replaced while ncview was
+    // watching it for growth killed the entire application, not just
+    // this one poll. Fixed to use NetCDFFile::open()'s testable
+    // std::optional failure instead (Phase 6's open() primitive) and
+    // report via in_error() + stop watching, rather than crash.
+    SessionFixture fx;
+    std::string path = make_growable_file("check_vanished", 3);
+    NCVar *var = select_growable_variable(path, "check_vanished");
+    REQUIRE(view != nullptr);
+    REQUIRE(var->size[0] == 3);
+
+    // Remove the file out from under the already-open View -- the
+    // tracked NetCDFFile* (opened when the variable was selected) stays
+    // a valid, already-open fileid on POSIX (the inode survives until
+    // every fd referencing it closes), but checkNewData()'s own reopen
+    // by *path* now has nothing to open.
+    REQUIRE(std::remove(path.c_str()) == 0);
+
+    g_recorded_calls.clear();
+    view->checkNewData(0); // must not exit() the test binary
+
+    // The variable's size is untouched -- checkNewData() bailed out
+    // before touching anything that depends on the failed reopen.
+    CHECK(var->size[0] == 3);
+
+    bool reported_error = false;
+    for (const auto &call : g_recorded_calls)
+        if (call == "in_dialog") // in_error() forwards to in_dialog() -- see stub_interface.cc
+            reported_error = true;
+    CHECK(reported_error);
+
+    // Degrades gracefully rather than nagging every second: does NOT
+    // re-arm the growth-poll timer the way the "no growth" path does.
+    CHECK_FALSE(timerIsArmed());
+}

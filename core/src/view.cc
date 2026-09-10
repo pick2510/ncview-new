@@ -528,7 +528,7 @@ View::checkNewData( int unused )
 	ViewerUi	&ui = *g_app.ui;
 	size_t 	file_var_size[MAX_NC_DIMS], *t, n_other;
 	size_t	i;
-	int	has_grown, t_ncid, timelike_index;
+	int	has_grown, timelike_index;
 	size_t	dt, nt_new, n_scan_entries, n_extra_frames;
 	char	message[1024], rate_units[50];
 	time_t	tt;
@@ -551,15 +551,34 @@ View::checkNewData( int unused )
 	 * the tracked NetCDFFile* in Phase 7b: this opens a second, throwaway
 	 * fileid for the same path to see the on-disk file's CURRENT size --
 	 * the tracked object's fileid is the stale, already-open handle whose
-	 * growth is exactly what's being checked for. Scoped and closed
-	 * entirely within this function via a raw nc_close(), not fi_close()/
-	 * NetCDFFile::close(), since it was never tracked in the first place. */
-	t_ncid = netcdf_fi_initialize( const_cast<char *>(view->variable->files.back()->filename.c_str()) );
-	t = netcdf_fi_var_size( t_ncid, const_cast<char *>(view->variable->name.c_str()) );
+	 * growth is exactly what's being checked for.
+	 *
+	 * Phase 12d: was netcdf_fi_initialize() + a raw nc_close() -- but
+	 * netcdf_fi_initialize() exit()s the whole process if the reopen
+	 * fails, which is exactly the wrong behavior for a once-a-second
+	 * background poll: a file that's been deleted, replaced, or is
+	 * briefly unreadable (another process mid-rewrite) shouldn't kill a
+	 * live ncview session. NetCDFFile::open() (Phase 6) is the same
+	 * nc_open() call with a testable std::optional failure instead, and
+	 * its destructor closes the fileid automatically, so the raw
+	 * nc_close() below is gone too, not just relocated. On failure,
+	 * report once and stop watching this variable for growth -- not
+	 * re-arm and retry every second, which would mean a dialog storm if
+	 * the file stays gone (matches View::initSaveframes()'s "degrade
+	 * gracefully, don't nag" precedent elsewhere in this file). */
+	int t_nc_errcode = NC_NOERR;
+	auto t_file = NetCDFFile::open( view->variable->files.back()->filename, &t_nc_errcode );
+	if( ! t_file.has_value() ) {
+		snprintf( message, sizeof(message),
+			"Can't re-open \"%s\" to check for new data (%s); no longer watching this variable for growth.",
+			view->variable->files.back()->filename.c_str(), nc_strerror( t_nc_errcode ) );
+		in_error( message );
+		return;
+		}
+	t = t_file->varSize( const_cast<char *>(view->variable->name.c_str()) );
 	for( i=0; i<static_cast<size_t>(view->variable->n_dims); i++ )
 		file_var_size[i] = t[i];
 	free( t );
-	nc_close( t_ncid );
 
 	has_grown = 0;
 	if( file_var_size[ timelike_index ] > view->variable->files.back().get()->var_size[ timelike_index ] ) {
