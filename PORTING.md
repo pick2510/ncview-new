@@ -3178,6 +3178,111 @@ audit are each still deferred, to be re-scoped against the tree at
 pickup time -- see the plan file's Phase 12d scoping section for the
 per-cascade detail already traced.
 
+## Part V, Phase 12e: two real out-of-bounds bugs found auditing `netcdf_dim_name_to_id()`'s callers, then its `exit()` conversion
+
+**Scoped in plan mode first, and the scoping changed the framing.**
+Picked up `netcdf_dim_name_to_id()`'s 18-site call audit (deferred from
+Phase 12d). Its `-1` "not found" sentinel is safe and unambiguous (its
+own doc comment states the contract), but the scoping investigation
+found `-1` already reaches unchecked call sites *in production today*,
+independent of any `exit()` conversion -- `safe_ncdimid()`'s own
+existing, legitimate "not found" misses already return `-1` in normal
+operation. This wasn't primarily an `exit()`-conversion phase; it was
+two real, previously-undiscovered memory-safety bugs, plus a conversion
+that only became safe once they were fixed.
+
+### Step 1: out-of-bounds heap **write** in `View::setAxis()`
+
+`setAxis()`'s `Dimension::X`/`Y` branches did
+`local_view->var_place[new_id] = 0L` with no check that `new_id` wasn't
+`-1`. `var_place` is `std::vector<size_t>` (`defines.h`), so
+`operator[](-1)` is `operator[](SIZE_MAX)` -- a real, exploitable,
+already-latent heap write. **Confirmed empirically, not just by code
+reading**: a new regression test (`tests/test_view_dims.cc`), run under
+a scratch ASan build against the unmodified code, produced a genuine
+`heap-buffer-overflow` report pointing straight at `view.cc:1186`.
+Fixed by checking `new_id != -1` before the write; on `-1`, report via
+`in_error()` and leave the axis id at `-1` (the file's own established
+"no such axis" sentinel, matching the 1-D-variable/`case 1` path's
+existing precedent a few lines below). Rebuilt under the same ASan
+build after the fix: clean, no report.
+
+### Step 2: three out-of-bounds heap **reads**, same root cause
+
+- `View::showCurrentDimValues()` (`view.cc`): `var_place[dimid]` inside
+  a loop over the file's scannable dims -- reachable if a dim is
+  scannable in general but isn't actually one of this particular
+  variable's dims. Runs on every redraw of the dimension-info labels, so
+  fixed to skip the dim silently (`continue`) rather than pop an
+  `in_error()` dialog every frame, matching `ViewerSession::curDimIndex()`'s
+  existing "benign no-op on an unresolved dim" precedent
+  (`viewer_session.cc`). This site's own targeted ASan repro was not
+  attempted -- reaching it needs `scannableDims()` and `dimNameToId()`
+  to disagree, the same internal-inconsistency shape Step 4's five sites
+  guard against, and constructing that disagreement needs a more
+  elaborate multi-group fixture than this phase's scope justified. Noted
+  here rather than left silent; the fix mirrors the two sites below,
+  which *were* empirically confirmed.
+- `ViewerController::changeCurDim()` and `::setCurDimIndex()`
+  (`viewer_controller.cc`): `dim[dimid]`/`size[dimid]`/`var_place[dimid]`.
+  Both had a `dimid == x_axis_id || dimid == y_axis_id` check
+  immediately after computing `dimid`, but that only catches `-1` by
+  accident -- when one of the axis ids also happens to be `-1` (no scan
+  axis assigned). With real axis ids assigned (the common case), an
+  unresolvable `dimid` fell through untouched. Fixed with an explicit
+  `dimid < 0` check first, reporting via `in_error()` and returning,
+  matching both functions' own existing "no variable selected"
+  early-return shape. **Confirmed empirically**: new regression tests in
+  `tests/test_view_dims.cc`, run under the same scratch ASan build
+  against the unmodified code, produced genuine heap-buffer-overflow
+  aborts for both functions. Rebuilt after the fix: clean.
+
+### Steps 3-4: converting `netcdf_dim_name_to_id()`'s `exit()`s, now that every caller is safe
+
+Converted both `exit()` sites (`file_netcdf.cc`: var not found; an
+`nc_inq_var` that should succeed given the prior call did) to
+`in_error()` + `return(-1)`. Then converted the 5 sites in
+`View::initialDetermineScanAxes()` that were *redundantly* exiting
+themselves on the same `-1` (an internal consistency check between
+`scannableDims()` and `dimNameToId()`, not a user-facing error) --
+each now reports via `in_error()` and resets all three axis ids to `-1`
+(the view's own established "no usable axis" state) rather than
+leaving some axes set from before the failure and others not.
+
+New test in `tests/test_file_layer.cc` exercises the "variable not
+found" `exit()` site specifically (the file's existing `dimNameToId`
+test only covered the *other* `-1` path, a dim not found on an
+otherwise-valid variable) -- confirms the process survives and
+`in_error()` fires.
+
+### Step 5: investigated, no code change needed
+
+Checked whether `View::setScanDims()`'s `new_x_id`/`new_y_id` (used
+only for a transpose-order comparison, then discarded -- the actual
+axis change goes through `setAxis()` by *name*) needs its own `-1`
+guard. It doesn't: the existing `new_x_id == new_y_id` check already
+catches the both-missing case, and any single-missing case falls
+through to `setAxis()` by name, which steps 1-2 already made safe
+against an unresolvable name. The one residual effect -- a single
+missing axis can spuriously trigger the "transposing the data is not
+allowed" dialog before `setAxis()` reports the real problem -- is a
+pre-existing UX wart, not a safety issue, and left alone as out of
+scope for this phase.
+
+250->254 tests, 6763->6863 assertions (4 new test cases). Full
+six-gate verification clean: `-Werror` build; `ctest` normal + shuffled
+across 3 seeds, zero variance holding; `ncview_core_linkcheck` exit 0;
+all 15 `ui_smoke.sh` goldens byte-identical; a full scratch
+ASan/UBSan/LSan build (not just a per-fix scratch check) clean, no
+reports; `grep -rn` confirming all 7 targeted `exit()` sites are gone
+(only explanatory comments referencing them remain). **Next: 12f+** --
+the `netcdf_dim_value()` 14-call-site audit (its own separate defect:
+`Dataset::dimValue()`'s `if (type != NC_CHAR)` would misinterpret a
+failure sentinel as a successful `NC_CHAR` read and format from an
+uninitialized 1024-byte buffer into a UI label), the "read a variable's
+data" cascade, and the full file-open startup cascade remain deferred,
+to be re-scoped against the tree at pickup time.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
