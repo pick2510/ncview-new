@@ -476,9 +476,9 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 {
 	std::unique_ptr<ViewState> &view = session_.activeView();
 	FrameCache &framestore = session_.frameCache();
+	LastFrameSize &last_frame_size = session_.lastFrameSize();
 	size_t		i;
 	size_t		x_size, y_size, scan_size, scaled_x_size, scaled_y_size, framesize, frameno;
-	static size_t	last_x_size=0, last_y_size=0;
 	int		must_recalc_range;
 	float		min, max, dat;
 
@@ -607,10 +607,10 @@ ViewerController::draw( int allow_framestore_usage, int force_range_to_frame )
 		return( -1 );
 		}
 
-	if( (last_x_size != scaled_x_size) ||
-	    (last_y_size != scaled_y_size)) {
-		last_x_size = scaled_x_size;
-		last_y_size = scaled_y_size;
+	if( (last_frame_size.width != scaled_x_size) ||
+	    (last_frame_size.height != scaled_y_size)) {
+		last_frame_size.width = scaled_x_size;
+		last_frame_size.height = scaled_y_size;
 		g_app.ui->in_set_2d_size( scaled_x_size, scaled_y_size );
 		}
 

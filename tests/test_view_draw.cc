@@ -135,3 +135,41 @@ TEST_CASE("view_draw: a constant-valued variable still draws without crashing") 
     // global_max) is identical -- view_draw's own degenerate-range path.
     g_app.controller.draw(true, false);
 }
+
+TEST_CASE("view_draw: in_set_2d_size fires on a fresh session's first draw, even at a size an earlier test already reported") {
+    // Regression test (Phase 11h): ViewerController::draw() used to gate
+    // its in_set_2d_size call behind a pair of function-local `static
+    // size_t last_x_size, last_y_size` -- process-global state
+    // SessionFixture never reset. in_variable_selected() -> a fresh
+    // variable selection reports its size TWICE on a truly fresh
+    // session: once unconditionally from set_scan_variable() itself
+    // (view.cc's own `ui.in_set_2d_size(...)` call, no gate), and once
+    // more from the internal draw() that set_scan_variable() triggers
+    // via stepView() -- draw()'s own copy is gated on "has the UI last
+    // seen this exact size", which is true (size unchanged) only because
+    // the *previous frame it drew* was already this size, and false (so
+    // it correctly re-reports) on any session's genuine first draw.
+    //
+    // Every TEST_CASE above this one in this file selects a variable via
+    // select_draw_variable(), which always builds the same lat=2/lon=2
+    // shape -- so by the time this test runs, the leaked static already
+    // holds that exact scaled size from an earlier, unrelated test's
+    // draw(). Under the bug, this test's own draw()-via-stepView() call
+    // -- a fresh SessionFixture's genuine first draw -- incorrectly finds
+    // "size unchanged" against that leftover state and skips its report,
+    // leaving only the one unconditional call from set_scan_variable and
+    // undercounting by exactly one. This is also the actual,
+    // previously-undiagnosed mechanism behind the long-documented
+    // 6663-vs-6664 order-dependent assertion count in test_do_print.cc
+    // (known since Phase 7a): whichever test happens to draw immediately
+    // before it determines whether this exact branch fires.
+    SessionFixture fx;
+    NcFixture nc;
+    select_draw_variable(nc, "draw_2d_size_fresh_session", 3);
+
+    int set_2d_size_count = 0;
+    for (const auto &s : g_recorded_calls)
+        if (s == "in_set_2d_size")
+            set_2d_size_count++;
+    CHECK(set_2d_size_count == 2);
+}

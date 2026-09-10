@@ -32,6 +32,14 @@
 #include "ncview/frame_cache.h"
 #include "ncview/frame_renderer.h"
 
+/* The scaled frame size last reported to the UI via in_set_2d_size(),
+ * tracked so ViewerController::draw() only re-reports it on a real
+ * change (see ViewerSession::lastFrameSize(), Phase 11h). */
+struct LastFrameSize {
+	size_t width = 0;
+	size_t height = 0;
+};
+
 /* Feeds FrameRenderer::PixelMapSettings (via ViewerSession::pixelMapSettings()
  * below) plus the couple of extra render-shaped fields PixelMapSettings
  * doesn't need directly (blowup, min_max_method). */
@@ -129,6 +137,19 @@ public:
 	 * owner. Default matches overlay_init()'s own reset value. */
 	int& currentOverlay() { return current_overlay_; }
 
+	/* Formerly ViewerController::draw()'s own function-local `static
+	 * size_t last_x_size, last_y_size` (Phase 11h) -- process-global
+	 * state SessionFixture never reset, so a test's very first draw()
+	 * could silently skip its in_set_2d_size report if an earlier,
+	 * unrelated test's draw() happened to leave the same scaled size
+	 * behind. Moving it here means SessionFixture's existing
+	 * `g_app.session = ViewerSession()` reset now resets this too, so
+	 * every fresh session correctly reports its size on its own first
+	 * draw regardless of what ran before it. This was also the real,
+	 * previously-undiagnosed cause of test_do_print.cc's long-documented
+	 * order-dependent assertion count (known since Phase 7a). */
+	LastFrameSize& lastFrameSize() { return last_frame_size_; }
+
 	/* Builds FrameRenderer's settings from the render-shaped field group
 	 * (transform, invert_colors, invert_physical, n_colors,
 	 * n_extra_colors, display_type). Narrowed from `const Options&` to
@@ -160,4 +181,5 @@ private:
 	StartupSettings startup_settings_;
 	PrintOptions print_settings_;
 	int current_overlay_ = OVERLAY_NONE;
+	LastFrameSize last_frame_size_;
 };
