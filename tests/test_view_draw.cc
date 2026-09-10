@@ -5,13 +5,16 @@
 // recompute, and autoscale. Written against the unmodified free function
 // first, per this plan's characterization rule.
 //
-// Not covered here: the lockout_view_changes re-entrancy guard. Exercising
-// it for real means getting a nested draw() call from inside a UI
-// callback draw() itself triggers (e.g. a modal dialog popped from
-// data_to_pixels()'s "min and max both 0" path) -- RecordingViewerUi's
-// stubs don't currently re-enter core that way, and building that
-// wiring is its own piece of work, not a Phase 2 side quest. Left for a
-// future pass (noted in PORTING.md's Phase 2 entry).
+// Phase 12a added a regression test (below) for the specific bug this
+// comment used to describe as an open gap: set_scan_variable()/
+// View::changeDat() could leave lockout_view_changes stuck true forever
+// on dataToPixels()'s Cancel-the-dialog failure path, silently no-op'ing
+// every later draw(). That's now fixed with an RAII guard
+// (view_internal.h's LockoutViewChangesGuard) and covered directly.
+// Still not covered: genuine *re-entrancy* -- a nested draw() call
+// actually firing from inside a UI callback that a modal dialog
+// triggers mid-draw. RecordingViewerUi's stubs don't re-enter core that
+// way, and building that wiring is its own piece of work.
 #include <doctest/doctest.h>
 
 #include "ncview/includes.h"
@@ -172,4 +175,52 @@ TEST_CASE("view_draw: in_set_2d_size fires on a fresh session's first draw, even
         if (s == "in_set_2d_size")
             set_2d_size_count++;
     CHECK(set_2d_size_count == 2);
+}
+
+TEST_CASE("View::changeDat: lockout_view_changes is released even when dataToPixels() is cancelled") {
+    // Regression test (Phase 12a). set_scan_variable()/View::changeDat()
+    // used to set lockout_view_changes = true immediately before calling
+    // dataToPixels(), then reset it to false on the very next line --
+    // except dataToPixels() (render_pipeline.cc) returns -1 on a real,
+    // reachable failure (the user pressing Cancel on the "min and max
+    // both 0" dialog), and both functions `return` on that failure path
+    // before ever reaching the reset. Left stuck, ViewerController::
+    // draw() checks the flag first thing and no-ops -- returning 0,
+    // success -- without drawing, and can never clear a flag it didn't
+    // set itself: every later draw silently does nothing until the next
+    // *successful* set_scan_variable()/changeDat() call.
+    SessionFixture fx;
+    NcFixture nc;
+    select_draw_variable(nc, "lockout_recovery", 3);
+    REQUIRE(view != nullptr);
+    // Ramp-generated data means global_min != global_max, so the
+    // failure path below does NOT also call invalidate_variable()
+    // (which would null the view out from under this test -- it's only
+    // called when global_min == global_max).
+    REQUIRE(view->variable->global_min != view->variable->global_max);
+
+    // Force dataToPixels()'s "min and max both 0" branch, then script a
+    // Cancel response so it takes the return(-1) path instead of
+    // recomputing the range.
+    view->variable->user_min = 0;
+    view->variable->user_max = 0;
+    g_dialog_response = Message::Cancel;
+
+    view->changeDat(0, view->data[0]); // value unchanged -- only exercises the lockout path
+
+    g_dialog_response = Message::OK; // restore the fixture's own default
+    // Give the view a normal, non-degenerate range again so the recovery
+    // draw() below can succeed on its own merits -- isolating "was the
+    // lockout flag released" from "is the range still degenerate".
+    view->variable->user_min = view->variable->global_min;
+    view->variable->user_max = view->variable->global_max;
+
+    g_recorded_calls.clear();
+    CHECK(g_app.controller.draw(true, false) == 0);
+
+    bool drew = false;
+    for (const auto &s : g_recorded_calls)
+        if (s == "in_draw_2d_field")
+            drew = true;
+    CHECK(drew); // fails under the bug: draw() silently no-ops instead
 }

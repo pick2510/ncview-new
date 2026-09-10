@@ -302,14 +302,15 @@ set_scan_variable( NCVar *var, ViewerSession &session, ViewerUi &ui )
 	/* Convert the data to pixels; return on error condition */
 	if( options.debug )
 		fprintf( stderr, "...converting data to pixels\n" );
-	lockout_view_changes = true;
+	{
+	LockoutViewChangesGuard lockout_guard;
 	if( view->dataToPixels() < 0 ) {
 		ui.in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable, session, ui );
 		return( -1 );
 		}
-	lockout_view_changes = false;
+	}
 
 	/* put variable and file information on the screen */
 	if( options.debug )
@@ -2062,14 +2063,15 @@ View::changeDat( size_t index, float new_val )
 
 	view->data[x + (x_size)*y] = new_val;
 	view->initSaveframes();
-	lockout_view_changes = true;
+	{
+	LockoutViewChangesGuard lockout_guard;
 	if( view->dataToPixels() < 0 ) {
 		g_app.ui->in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable, g_app.session, *g_app.ui );
 		return;
 		}
-	lockout_view_changes = false;
+	}
 	g_app.ui->in_set_2d_size  ( scaled_x_size, scaled_y_size );
 	g_app.ui->in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, 0 );
 }

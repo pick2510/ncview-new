@@ -27,6 +27,26 @@ struct NCVar;
  * against re-entrancy from a modal dialog popped up mid-draw. */
 extern int lockout_view_changes;
 
+/* Phase 12a: set_scan_variable()/View::changeDat() used to set
+ * lockout_view_changes = true by hand immediately before calling
+ * dataToPixels(), then reset it to false on the line right after --
+ * except dataToPixels() has two real, reachable failure returns (one of
+ * them the user pressing Cancel on the "min and max both 0" dialog),
+ * and both functions `return` on that failure path before reaching the
+ * reset. Left set, ViewerController::draw() (which checks the flag and
+ * no-ops if set) can never clear a flag it didn't set itself, so every
+ * later draw silently no-ops until the next *successful*
+ * set_scan_variable()/changeDat() call. This RAII guard makes the reset
+ * unconditional: construct it as the first statement of the scope that
+ * used to say `lockout_view_changes = true;`, and every exit from that
+ * scope -- success or early return -- clears it. */
+struct LockoutViewChangesGuard {
+	LockoutViewChangesGuard()  { lockout_view_changes = true; }
+	~LockoutViewChangesGuard() { lockout_view_changes = false; }
+	LockoutViewChangesGuard( const LockoutViewChangesGuard & ) = delete;
+	LockoutViewChangesGuard &operator=( const LockoutViewChangesGuard & ) = delete;
+};
+
 /* Definition stays in view.cc (set_scan_variable() and View::changeDat
  * are its other two callers); ViewerController::draw() is the third.
  * Phase 11a threaded ViewerSession&/ViewerUi& through this instead of
