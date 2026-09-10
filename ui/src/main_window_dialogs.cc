@@ -41,6 +41,7 @@ namespace ncview_ui {
 
 namespace {
 struct ModalResult { bool ok = false; };
+struct OverlayBrowseData { MainWindow *self; Fl_Box *label_box; };
 
 void modalOkCallback( Fl_Widget *w, void *data )
 {
@@ -93,26 +94,29 @@ void MainWindow::setOptionsDialog()
 
 	// Upstream's equivalent (set_options.c's static overlay_filename) is
 	// also a value that survives across dialog invocations, not reset
-	// each time the dialog opens.
-	static std::string custom_overlay_filename;
+	// each time the dialog opens -- Phase 12c moved it onto this
+	// singleton's own instance data (custom_overlay_filename_) instead of
+	// a function-local static, same as set2DSize()'s last_2d_width_/
+	// last_2d_height_.
 	Fl_Box filename_box( 10, y, 230, 25 );
 	filename_box.box( FL_DOWN_BOX );
 	filename_box.align( FL_ALIGN_LEFT | FL_ALIGN_INSIDE | FL_ALIGN_CLIP );
-	filename_box.copy_label( custom_overlay_filename.empty() ?
-		"(no custom overlay file selected)" : custom_overlay_filename.c_str() );
+	filename_box.copy_label( custom_overlay_filename_.empty() ?
+		"(no custom overlay file selected)" : custom_overlay_filename_.c_str() );
 	Fl_Button browse_btn( 250, y, 80, 25, "Browse..." );
+	OverlayBrowseData browse_data{ this, &filename_box };
 	browse_btn.callback( []( Fl_Widget *, void *data ) {
-		auto *label_box = static_cast<Fl_Box *>( data );
+		auto *bd = static_cast<OverlayBrowseData *>( data );
 		Fl_Native_File_Chooser fc;
 		fc.title( "Select custom overlay file" );
 		char base_dir[1024];
 		determine_overlay_base_dir( base_dir, sizeof(base_dir) );
 		fc.directory( base_dir );
 		if( fc.show() == 0 && fc.filename() != nullptr ) {
-			custom_overlay_filename = fc.filename();
-			label_box->copy_label( custom_overlay_filename.c_str() );
+			bd->self->custom_overlay_filename_ = fc.filename();
+			bd->label_box->copy_label( bd->self->custom_overlay_filename_.c_str() );
 		}
-	}, &filename_box );
+	}, &browse_data );
 	y += 35;
 
 	ModalResult result;
@@ -140,8 +144,8 @@ void MainWindow::setOptionsDialog()
 		// take effect even if "Custom" was already selected.
 		if( new_overlay != current_overlay || new_overlay == custom_idx )
 			do_overlay( new_overlay,
-				new_overlay == custom_idx && !custom_overlay_filename.empty() ?
-					(char *)custom_overlay_filename.c_str() : nullptr,
+				new_overlay == custom_idx && !custom_overlay_filename_.empty() ?
+					(char *)custom_overlay_filename_.c_str() : nullptr,
 				false );
 
 		g_app.controller.draw( true, false );

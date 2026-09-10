@@ -289,6 +289,20 @@ private:
 	Fl_Box            *info_row_boxes_[4] = {};
 
 	std::vector<DimRow> dim_rows_;
+	// Phase 12c: was set2DSize()'s own function-local `static size_t
+	// last_w, last_h` -- the same leaked-comparison-state anti-pattern
+	// Phase 11h fixed on the core side (ViewerController::draw()'s
+	// last_x_size/last_y_size, moved onto ViewerSession::lastFrameSize()).
+	// A real instance member here is no broader a change than that: this
+	// class is already a process-lifetime singleton (see instance() in
+	// interface_fltk.cc), so there's no reset semantics being introduced
+	// or removed, just no longer hiding per-process state behind `static`
+	// inside a method body where it looks instance-scoped but isn't.
+	size_t last_2d_width_ = 0, last_2d_height_ = 0;
+	// Phase 12c: was setOptionsDialog()'s own function-local `static
+	// std::string custom_overlay_filename` -- same category as the two
+	// above, moved here for the same reason.
+	std::string custom_overlay_filename_;
 	std::vector<NamedColormap> colormaps_;
 	// One preview swatch image per colormaps_ entry, in the same order --
 	// built once in createColormap() and reused across every

@@ -1338,11 +1338,10 @@ void MainWindow::drawColorbar()
 
 int MainWindow::set2DSize( size_t width, size_t height )
 {
-	static size_t last_w = 0, last_h = 0;
-	if( width == last_w && height == last_h ) return 0;
-	int retval = (width > last_w) ? 1 : -1;
-	last_w = width;
-	last_h = height;
+	if( width == last_2d_width_ && height == last_2d_height_ ) return 0;
+	int retval = (width > last_2d_width_) ? 1 : -1;
+	last_2d_width_ = width;
+	last_2d_height_ = height;
 	return retval;
 }
 
