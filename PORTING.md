@@ -2144,6 +2144,114 @@ entries (`pix_to_rgb`, `in_var_set_sensitive`, `in_flush`,
 `in_change_min`) after checking whether either `ViewerUi` implementation
 still needs to satisfy them as part of the interface contract.
 
+## Part IV, Phase 11b: convert `ViewerController`/`Dataset` seam calls; delete 2 of the 4 dead entries
+
+Re-counted the actual remaining bare seam-call sites in the current tree
+(not the pre-11a survey number) before touching anything: **82 sites**
+across `view.cc` (~50, all `View::` methods plus one deferred free
+function), `viewer_controller.cc` (26, all `ViewerController::` methods),
+`dataset.cc` (4, `Dataset::checkRanges`), `render_pipeline.cc` (2, inside
+`View::dataToPixels`), plus a handful in free functions 11a already
+deferred (`do_print`, `do_overlay`, `colormap_library.cc`,
+`create_default_colormap` -- left untouched, out of scope here).
+
+**A real complication the original survey didn't account for, found by
+reading `View`'s declaration before assuming "trivial once it holds a
+`ViewerUi&`": `View` (`core/include/ncview/defines.h:472`) is a
+deliberate aggregate** -- its own header comment states this explicitly,
+and `tests/test_pixels.cc`, `test_shrink.cc`, `test_expand.cc` all
+construct it directly as `View view{};`, bypassing `View::create()`
+entirely, specifically to exercise `dataToPixels()`/`expandData()`/
+`contractData()` in isolation. Giving `View` a stored `ViewerUi&`
+reference member would need every aggregate-construction site to supply
+one too (a reference member has no valid default), and a nullable
+pointer member defaulting to `nullptr` would leave those three tests'
+`View view{}` with a null `ui_` that `dataToPixels()`'s degenerate-range
+branch (`render_pipeline.cc:151-198`, reached by exactly the
+"min and max both 0/equal" cases these tests are written to exercise)
+would dereference -- a real crash risk introduced by "converting" code
+that today works precisely because it goes through the free-function
+seam, which resolves via the always-valid `g_app.ui` regardless of which
+`View` instance is asking. This is genuinely more entangled than "add a
+member," not a corner someone cut.
+
+**Scoped this phase to what's actually safe, landed as a verified
+subset**, per this plan's own precedent (Phase 6, Phase 10, and 11a
+itself all did the same when true scope exceeded the estimate:
+
+1. **`ViewerController` (26 sites, all converted)**: `ViewerController`
+   has the identical construction-order problem as `View` for a *stored*
+   reference (`g_app.controller` is constructed at static-init time,
+   before `main()` has a live `ViewerUi` to bind to) -- but 11a already
+   established the answer for exactly this case: call `g_app.ui->in_x(...)`
+   directly rather than inventing a member/setter mechanism, matching
+   `transform()`'s existing `view_change_transform(-1, *g_app.ui)` from
+   11a. Every bare seam call in `restart`/`rewind`/`backwards`/`pause`/
+   `forward`/`fastforward`/`colormapSelect`/`colormapSelectByName`/
+   `optionsDialog`/`draw`/`reportPosition`/`setMinFromCurdata`/
+   `setMaxFromCurdata`/`plotXY` now reads `g_app.ui->in_x(...)`. This
+   removes the free-function/bridge indirection (11b's actual job) without
+   attempting the `g_app`-elimination that's genuinely 11f's, once
+   `AppContext`/`NcviewApp`'s construction order is reshaped to make a
+   real reference possible.
+2. **`Dataset::checkRanges`/`initMinMax` (4 sites, converted, no aggregate
+   risk)**: unlike `View`, `Dataset::initMinMax` has exactly 2 external
+   callers, both already holding or able to reach a `ViewerUi&` directly
+   -- `View::set_scan_variable` (11a already threads `ui` there) and
+   `View::dataToPixels` (doesn't have one; passes `*g_app.ui` explicitly
+   at that boundary, same pattern as 11a's deferred cases). Threaded
+   `ViewerUi &ui` as a parameter through `initMinMax()` and `checkRanges()`
+   (`dataset.h`/`dataset.cc`) instead of adding a stored member -- no
+   aggregate, no test bypassing the normal construction path, so this one
+   really was mechanical.
+3. **`View::` methods in `view.cc` (~50 sites) and `View::dataToPixels`'s
+   own 2 remaining seam calls in `render_pipeline.cc`: deferred**, exactly
+   because of the aggregate-construction conflict above. The right fix
+   (a nullable `ViewerUi *ui_ = nullptr` member, set by `View::create()`,
+   with the 3 aggregate-constructing test files updated to set it too
+   for the paths that need it) is a small, bounded, *extra* piece of
+   work beyond pure "convert what's already there" -- deliberately not
+   done as a drive-by inside this phase. Flagged for whoever picks up
+   the `View::` portion of 11b next, or for 11f to absorb alongside its
+   own `AppContext`/`NcviewApp` reshaping, whichever comes first.
+
+**Dead seam entries: verified across `core/`, `ui/`, and `app/` (not just
+`core/`, which is what the original survey checked) -- 2 of the 4 were
+wrong.**
+- `pix_to_rgb` and `in_flush` **do** have real callers, both inside
+  `ui/src/interface_fltk.cc` (`pix_to_rgb` at line 273, converting pixel
+  data for X11 drawing; `in_flush` at line 332, called from
+  `FltkViewerUi::in_set_2d_size` to force the expose-event round-trip the
+  comment right above it describes). The original survey's "zero callers
+  in `core/`" was accurate but incomplete -- it didn't check `ui/`, where
+  `FltkViewerUi`'s own implementation calls back into the free-function
+  seam for these two. **Left alone, not deleted.**
+- `in_var_set_sensitive` and `in_change_min` are confirmed genuinely dead
+  end-to-end -- zero callers anywhere in `core/`, `ui/`, or `app/`, only a
+  test-stub override recording the call name and (for `in_change_min`) a
+  literal no-op body (`(void)label;`) in `FltkViewerUi`. Deleted from
+  `interface.h`, `viewer_ui.h`, `viewer_ui_bridge.cc`,
+  `fltk_viewer_ui.h`/`interface_fltk.cc`, and `tests/stub_interface.cc`,
+  all in one commit. No test asserted on either recorded call name.
+
+**Verified**: clean `-Werror` normal build, no warnings; `ctest` normal +
+`--order-by=rand` (seeds 7, 123); `ncview_core_linkcheck` exit 0; all 15
+`ui_smoke.sh` goldens byte-identical; a scratch ASan/UBSan/LSan build
+clean; `grep -rn` confirms zero remaining references to
+`in_var_set_sensitive`/`in_change_min` anywhere in the tree, and zero
+bare (unconverted) seam calls remain in `viewer_controller.cc` or
+`dataset.cc`. 244 tests / 6663 assertions -- unchanged, as expected for
+pure reference-threading and dead-code deletion.
+
+**Deferred, precisely**: `View::`'s ~50 remaining seam calls in `view.cc`
+plus `View::dataToPixels`'s 2 in `render_pipeline.cc`, blocked on the
+aggregate-construction design decision above -- this is now 11b's real
+remaining scope, not "done." `pix_to_rgb`/`in_flush` -- confirmed alive,
+not dead, left as seam entries. Everything already deferred by 11a
+(`do_print`, `do_overlay`, `init_cmap_from_file`/`_data`,
+`view_report_position_vals`, `create_default_colormap`) remains exactly
+as deferred.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
