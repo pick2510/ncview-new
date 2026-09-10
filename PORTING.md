@@ -2252,6 +2252,68 @@ not dead, left as seam entries. Everything already deferred by 11a
 `view_report_position_vals`, `create_default_colormap`) remains exactly
 as deferred.
 
+## Part IV, Phase 11b, part 2: resolve `View::`'s remaining seam calls
+
+Closes out 11b's own deferred remainder above, using the pattern 11b
+already established for `ViewerController` rather than the nullable-
+pointer-member idea 11b's writeup flagged as a possible next step:
+**`View::` methods call `g_app.ui->in_x(...)` explicitly, the same way
+`ViewerController::` methods already do**, instead of adding any member
+to `View` at all. This sidesteps the aggregate-construction conflict
+entirely -- a local `ViewerUi &ui = *g_app.ui;` alias (or an inline
+`g_app.ui->` call for a single-use site) is a stack variable inside a
+method body, not a data member, so it does not touch `View`'s field
+layout and `View view{};` keeps compiling exactly as before. The three
+aggregate-constructing test files (`test_pixels.cc`, `test_shrink.cc`,
+`test_expand.cc`) needed zero changes, since they only ever call
+`dataToPixels()`, and `g_app.ui` is unconditionally valid before any test
+case runs (`tests/main.cc:27`'s `installRecordingViewerUi()`).
+
+Converted 21 `View::` methods in `view.cc` (52 raw seam calls, re-derived
+by scanning the actual file rather than trusting the count in 11b's own
+writeup, which had estimated ~50): `setScanButtons`, `scanToPlace`,
+`checkNewData`, `changeBlowup`, `applyCurDimPlace`, `setScanDims`,
+`setAxis`, `setRange`, `setRangeLabels`, `redrawDimensionInfo`,
+`showCurrentDimValues`, `labelDimensions`, `flipIfInverted`,
+`setDataeditPlace`, `dataEdit`, `changeDat`, `dataEditDump`,
+`setXYPlotAxis`, `plotXYSc`, `information`. Plus `render_pipeline.cc`'s
+`View::dataToPixels` (4 raw calls: `in_set_cursor_normal` x2, `in_dialog`,
+`x_error`) -- `expandData`/`contractData` were already clean, verified
+rather than assumed.
+
+**One thing deliberately left untouched, and worth naming explicitly so
+it isn't mistaken for a miss**: several of these methods also call
+`in_error(...)`, a plain core-owned free function (defined in
+`viewer_ui_bridge.cc`, forwarding to `in_dialog(msg, false)`) that is
+*not* one of `ViewerUi`'s virtual methods and was never part of the
+`interface.h` seam this arc is collapsing -- confirmed against the
+original Phase 11 survey, which flagged this exact function as the one
+seam-adjacent exception. `initSaveframes`'s and `setXYPlotAxis`'s
+`in_error` calls (and `plotXYSc`'s three) are unchanged. `view_report_
+position_vals` (a free function, already deferred in 11a for a different,
+already-documented reason -- its only non-test caller is `ui/` code with
+no narrower way to reach a `ViewerUi&`) is likewise untouched.
+
+**Verified**: clean `-Werror` build; `ctest` normal + `--order-by=rand`
+(seeds 7, 123); `ncview_core_linkcheck` exit 0; all 15 `ui_smoke.sh`
+goldens byte-identical; a scratch ASan/UBSan/LSan build clean; a
+line-by-line re-scan of `view.cc`/`render_pipeline.cc` for any remaining
+bare (non-`ui.`/`g_app.ui->`-prefixed) call to any of the 48
+`interface.h` names, confirming only the comment mention and the
+already-deferred `view_report_position_vals` remain; the three
+aggregate-construction test files (20 cases / 228 assertions) explicitly
+re-run and confirmed passing, with `View` unchanged as a bare aggregate.
+244 tests / 6663 assertions overall -- unchanged, as expected for pure
+reference-access rewiring with no behavior change.
+
+**This closes Phase 11b in full.** Nothing from the original ~82-site
+count remains unconverted except the deliberate, already-documented
+exceptions (`in_error`'s core-owned calls, `view_report_position_vals`,
+and everything 11a itself deferred: `do_print`, `do_overlay`,
+`init_cmap_from_file`/`_data`, `create_default_colormap`). **Next: 11c**
+-- give `ViewerController` an explicit `ViewerUi&` and delete
+`viewer_ui_bridge.cc`'s remaining forwarders.
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds

@@ -386,6 +386,7 @@ in_variable_selected( const char *var_name )
 View::setScanButtons()
 {
 	View *local_view = this;
+	ViewerUi	&ui = *g_app.ui;
 	static int	set_state;
 	const char	*label    = NULL;
 	char		scalar_coord_str[1024];
@@ -411,11 +412,11 @@ View::setScanButtons()
 		label = "Scan axis is displayed";
 		}
 
-	set_buttons( set_state, *g_app.ui );
-	in_set_label( Label::ScanPlace, label );
+	set_buttons( set_state, ui );
+	ui.in_set_label( Label::ScanPlace, label );
 
 	local_view->constructScalarCoordStr( scalar_coord_str, 1020 );
-	in_set_label( Label::ScalarDims, scalar_coord_str );
+	ui.in_set_label( Label::ScalarDims, scalar_coord_str );
 }
 
 /********************************************************************************
@@ -425,6 +426,7 @@ View::setScanButtons()
 View::scanToPlace( size_t scan_place )
 {
 	View *view = this;
+	ViewerUi	&ui = *g_app.ui;
 	char	temp_string[1024], scalar_coord_str[1024];
 	std::string view_place;
 	size_t	size;
@@ -501,18 +503,18 @@ View::scanToPlace( size_t scan_place )
 		   * is already in variable "temp_string"
 		   */
 		}
-	in_set_label( Label::ScanPlace, view_place.c_str() );
-	in_set_cur_dim_value( dim_name, temp_string );
+	ui.in_set_label( Label::ScanPlace, view_place.c_str() );
+	ui.in_set_cur_dim_value( dim_name, temp_string );
 	view->data_status = ViewDataStatus::Invalid;
 	if( options.want_extra_info ) {
-		in_set_label( Label::CcInfo2, temp_string );
+		ui.in_set_label( Label::CcInfo2, temp_string );
 		}
 
 	/* Construct string showing the values of the scalar coordinates
 	 * for this variable, if any
 	 */
 	view->constructScalarCoordStr( scalar_coord_str, 1020 );
-	in_set_label( Label::ScalarDims, scalar_coord_str );
+	ui.in_set_label( Label::ScalarDims, scalar_coord_str );
 }
 
 /********************************************************************************
@@ -522,6 +524,7 @@ View::scanToPlace( size_t scan_place )
 View::checkNewData( int unused )
 {
 	View *view = this;
+	ViewerUi	&ui = *g_app.ui;
 	size_t 	file_var_size[MAX_NC_DIMS], *t, n_other;
 	size_t	i;
 	int	has_grown, t_ncid, timelike_index;
@@ -532,7 +535,7 @@ View::checkNewData( int unused )
 	float	rate_per_sec, rate_per_min, rate_per_hour, rate_per_day, rate,
 		min, max, *data, avg;
 
-	in_timer_clear();
+	ui.in_timer_clear();
 
 	timelike_index = 0;
 
@@ -563,7 +566,7 @@ View::checkNewData( int unused )
 		}
 
 	if( ! has_grown ) {
-		in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
+		ui.in_timer_set( [](){ ::view->checkNewData(0); }, 1000L );
 		return;
 		}
 
@@ -618,7 +621,7 @@ View::checkNewData( int unused )
 			if( message[i] == 10 )
 				message[i] = ' ';
 		}
-	in_set_label( Label::Title, message );
+	ui.in_set_label( Label::Title, message );
 
 	/* See if we need to reallocate the framestore */
 	if( nt_new >= framestore.nt() ) {
@@ -926,11 +929,12 @@ View::fillViewData()
 View::changeBlowup( int delta, int redraw_flag, int view_var_is_valid )
 {
 	View *view = this;
+	ViewerUi	&ui = *g_app.ui;
 	size_t	x_size, y_size, scaled_x_size, scaled_y_size;
 	char	blowup_label[32];
 	int	changed_size;
 
-	in_set_cursor_busy();
+	ui.in_set_cursor_busy();
 
 	/* Sequence of 'options.blowup' should be: ..., -4, -3, -2, 1, 2, 3, ... */
 	if( delta > 0 ) {
@@ -955,7 +959,7 @@ View::changeBlowup( int delta, int redraw_flag, int view_var_is_valid )
 	else
 		snprintf( blowup_label, 31, "M 1/%1d", -options.blowup );
 
-        in_set_label( Label::Blowup, blowup_label );
+        ui.in_set_label( Label::Blowup, blowup_label );
 
 	if( view_var_is_valid ) {
 		view->variable->user_set_blowup = options.blowup;
@@ -974,15 +978,15 @@ View::changeBlowup( int delta, int redraw_flag, int view_var_is_valid )
 		}
 
 	if( redraw_flag ) {
-		changed_size = in_set_2d_size( scaled_x_size, scaled_y_size );
+		changed_size = ui.in_set_2d_size( scaled_x_size, scaled_y_size );
 		/* Have to test and see if we shrunk; no expose event
 		 * is generated in such a case, which would automatically
 		 * trigger this call without us having to do it.
 		 */
-		if( changed_size < 0 ) 
+		if( changed_size < 0 )
 			g_app.controller.draw( false, false );
 		}
-	in_set_cursor_normal();
+	ui.in_set_cursor_normal();
 }
 
 /************************************************************************
@@ -1032,7 +1036,7 @@ View::applyCurDimPlace( int dimid, NCDim *dim, size_t place )
 			else
 				snprintf( temp_string, 1023, "%lg", new_dimval );
 			}
-		in_set_cur_dim_value( dim->name.c_str(), temp_string );
+		g_app.ui->in_set_cur_dim_value( dim->name.c_str(), temp_string );
 		}
 
 	if( options.debug )
@@ -1054,6 +1058,7 @@ View::applyCurDimPlace( int dimid, NCDim *dim, size_t place )
 View::setScanDims()
 {
 	View *view = this;
+	ViewerUi	&ui = *g_app.ui;
 	Stringlist *dim_list, *new_dim_list = NULL, *inv_dim_list;
 	int	   changed_something = false;
 	NCVar	   *v;
@@ -1072,7 +1077,7 @@ View::setScanDims()
 	snprintf( scan_dim, sizeof(scan_dim), "%s", (*dim_list)[0].string.c_str() );
 
 	/* Pop up the dialog box which asks for the user's selection */
-	scan_dims_result = in_set_scan_dims( dim_list, cur_x_name,
+	scan_dims_result = ui.in_set_scan_dims( dim_list, cur_x_name,
 				cur_y_name, &new_dim_list );
 	/* Pre-existing upstream quirk, preserved: in_set_scan_dims() returns a
 	 * plain 0/1 (cancelled/ok), never Message::Cancel's numeric value, so
@@ -1092,7 +1097,7 @@ View::setScanDims()
 	new_y_id = file0->dimNameToId( const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[0].string.c_str() );
 	new_x_id = file0->dimNameToId( const_cast<char *>(v->name.c_str()), (char *)(*new_dim_list)[1].string.c_str() );
 	if( new_x_id < new_y_id ) {
-		message = in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", true );
+		message = ui.in_dialog( "Transposing the data is not allowed.\nI'm switching the axes....", true );
 		if( message == Message::Cancel )
 			return;
 		inv_dim_list = NULL;
@@ -1105,7 +1110,7 @@ View::setScanDims()
 		return;
 		}
 
-	in_set_cursor_busy();
+	ui.in_set_cursor_busy();
 
 	if( strcmp( cur_y_name, (*new_dim_list)[0].string.c_str() ) != 0 ) {
 		view->setAxis( Dimension::Y, (char *)(*new_dim_list)[0].string.c_str() );
@@ -1133,7 +1138,7 @@ View::setScanDims()
 		g_app.controller.draw( true, false ); /* 'true' because we initialized saveframes above */
 		}
 
-	in_set_cursor_normal();
+	ui.in_set_cursor_normal();
 }
 
 /**************************************************************************************/
@@ -1200,7 +1205,7 @@ View::setAxis( Dimension dimension, char *new_dim_name )
 	if( old_id == new_id )
 		return;
 
-	in_indicate_active_dim( dimension, new_dim_name );
+	g_app.ui->in_indicate_active_dim( dimension, new_dim_name );
 }
 
 /**************************************************************************************/
@@ -1245,7 +1250,7 @@ View::setRange()
 	int	allvars;
 	Message	message;
 
-	message = x_range( view->variable->user_min, view->variable->user_max,
+	message = g_app.ui->x_range( view->variable->user_min, view->variable->user_max,
 		view->variable->global_min, view->variable->global_max,
 		&new_min, &new_max, &allvars );
 	if( message == Message::Cancel )
@@ -1319,10 +1324,10 @@ View::setRangeLabels( float min, float max )
 					limit_string(units).c_str() );
 		}
 
-	in_set_label( Label::DataExtrema, temp_label );
+	g_app.ui->in_set_label( Label::DataExtrema, temp_label );
 
 	if( options.want_extra_info ) {
-		in_set_label( Label::CcInfo1, extra_label );
+		g_app.ui->in_set_label( Label::CcInfo1, extra_label );
 		}
 
 }
@@ -1713,6 +1718,7 @@ draw_file_info( NCVar *var, ViewerSession &session, ViewerUi &ui )
 View::redrawDimensionInfo()
 {
 	View *view = this;
+	ViewerUi	&ui = *g_app.ui;
 	int	i, please_flip;
 	NCDim	*d, *y_dim;
 	Stringlist *dimlist;
@@ -1725,13 +1731,13 @@ View::redrawDimensionInfo()
 	y_dim      = var->dim[view->y_axis_id].get();
 	cur_y_name = const_cast<char *>(y_dim->name.c_str());
 
-	x_init_dim_info( dimlist );
+	ui.x_init_dim_info( dimlist );
 
 	for( i=0; i<var->n_dims; i++ )
 		if( (d = var->dim[i].get()) != NULL ) {
 			please_flip = ((d->name == cur_y_name) &&
 						options.invert_physical);
-			in_fill_dim_info( d, please_flip ); 
+			ui.in_fill_dim_info( d, please_flip );
 			}
 
 	view->showCurrentDimValues();
@@ -1767,7 +1773,7 @@ View::showCurrentDimValues()
 			&has_bounds, &bound_min, &bound_max, view->var_place.data() );
 		if( type == NC_DOUBLE )
 			snprintf( temp_string, 1023, "%lg", new_dimval );
-		in_set_cur_dim_value( dim_name, temp_string );
+		g_app.ui->in_set_cur_dim_value( dim_name, temp_string );
 		}
 }
 
@@ -1776,27 +1782,28 @@ View::showCurrentDimValues()
 View::labelDimensions()
 {
 	View *view = this;
+	ViewerUi	&ui = *g_app.ui;
 	NCDim	*dim;
 	char	*dim_name;
 
 	if( view->x_axis_id != -1 ) {
 		dim      = view->variable->dim[view->x_axis_id].get();
 		dim_name = const_cast<char *>(dim->name.c_str());
-		in_indicate_active_dim( Dimension::X, dim_name );
-		in_set_cur_dim_value  ( dim_name, "-X-" );
+		ui.in_indicate_active_dim( Dimension::X, dim_name );
+		ui.in_set_cur_dim_value  ( dim_name, "-X-" );
 		}
-	
+
 	if( view->y_axis_id != -1 ) {
 		dim      = view->variable->dim[view->y_axis_id].get();
 		dim_name = const_cast<char *>(dim->name.c_str());
-		in_indicate_active_dim( Dimension::Y, dim_name );
-		in_set_cur_dim_value  ( dim_name, "-Y-" );
+		ui.in_indicate_active_dim( Dimension::Y, dim_name );
+		ui.in_set_cur_dim_value  ( dim_name, "-Y-" );
 		}
 
 	if( view->scan_axis_id != -1 ) {
 		dim      = view->variable->dim[view->scan_axis_id].get();
 		dim_name = const_cast<char *>(dim->name.c_str());
-		in_indicate_active_dim( Dimension::Scan, dim_name );
+		ui.in_indicate_active_dim( Dimension::Scan, dim_name );
 		}
 }
 
@@ -1819,7 +1826,7 @@ View::flipIfInverted()
 	else
 		options.invert_physical = false;
 
-	x_force_set_invert_state( options.invert_physical );
+	g_app.ui->x_force_set_invert_state( options.invert_physical );
 }
 
 /**************************************************************************************
@@ -1969,8 +1976,8 @@ View::setDataeditPlace()
 		view->data_status = ViewDataStatus::Valid;
 		}
 
-	in_query_pointer_position( &x, &y );
-	if( (x < 0) || (y < 0) ) 
+	g_app.ui->in_query_pointer_position( &x, &y );
+	if( (x < 0) || (y < 0) )
 		return;
 
 	mouse_xy_to_data_xy( x, y, options.blowup, &data_x, &data_y );
@@ -1993,7 +2000,7 @@ View::setDataeditPlace()
 		data_y = y_size - data_y - 1;
 	
 	index =  data_x + orig_data_y*x_size;
-	in_set_edit_place( index, data_x, orig_data_y, x_size, y_size );
+	g_app.ui->in_set_edit_place( index, data_x, orig_data_y, x_size, y_size );
 }
 
 /**************************************************************************************/
@@ -2029,7 +2036,7 @@ View::dataEdit()
 		}
 	line_array[index] = NULL;
 
-	x_dataedit( line_array, x_size );
+	g_app.ui->x_dataedit( line_array, x_size );
 }
 
 /**************************************************************************************/
@@ -2057,14 +2064,14 @@ View::changeDat( size_t index, float new_val )
 	view->initSaveframes();
 	lockout_view_changes = true;
 	if( view->dataToPixels() < 0 ) {
-		in_timer_clear();
+		g_app.ui->in_timer_clear();
 		if( view->variable->global_min == view->variable->global_max )
 			invalidate_variable( view->variable, g_app.session, *g_app.ui );
 		return;
 		}
 	lockout_view_changes = false;
-	in_set_2d_size  ( scaled_x_size, scaled_y_size );
-	in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, 0 );
+	g_app.ui->in_set_2d_size  ( scaled_x_size, scaled_y_size );
+	g_app.ui->in_draw_2d_field( view->pixels.data(), scaled_x_size, scaled_y_size, 0 );
 }
 
 /**************************************************************************************/
@@ -2082,7 +2089,7 @@ View::dataEditDump()
 		fprintf( stderr, "Warning!  Data is NOT CHANGED!\n" );
 		}
 
-	message = in_choose_save_file( "Dump data to netCDF file", "dump.data", filename, sizeof(filename) );
+	message = g_app.ui->in_choose_save_file( "Dump data to netCDF file", "dump.data", filename, sizeof(filename) );
 	if( message == Message::OK ) {
 		ncid = nccreate( filename, NC_CLOBBER );
 
@@ -2164,7 +2171,7 @@ View::setXYPlotAxis( char *label )
 	std::vector<size_t> start( view->variable->n_dims );
 	std::vector<size_t> count( view->variable->n_dims );
 
-	unlock_plot();
+	g_app.ui->unlock_plot();
 
 	for( i=0; i<view->plot_XY_nlines; i++ ) {
 		/* Change start and count to reflect new axis selection */
@@ -2187,6 +2194,7 @@ View::setXYPlotAxis( char *label )
 View::plotXYSc( size_t *start, size_t *count )
 {
 	View *view = this;
+	ViewerUi	&ui = *g_app.ui;
 	size_t	i_size;
 	int	n_misplace=30, n_missing_eliminated;
 	long	i, j, k, n, misplace_index[30];
@@ -2254,7 +2262,7 @@ View::plotXYSc( size_t *start, size_t *count )
 	std::vector<float> tmp_yvals_buf( n );
 	tmp_yvals = tmp_yvals_buf.data();
 
-	in_set_cursor_busy();
+	ui.in_set_cursor_busy();
 
 	/* Get the X values for the plot. */
 	for(i_size=0L; i_size<static_cast<size_t>(n); i_size++) {
@@ -2341,7 +2349,7 @@ View::plotXYSc( size_t *start, size_t *count )
 			y_max = plot_XY_yvals[i];
 		}
 	if( all_same ) {
-		in_set_cursor_normal();
+		ui.in_set_cursor_normal();
 		snprintf( message, 511, "All values are identical: %f\n", plot_XY_yvals[0] );
 		in_error( message );
 		return;
@@ -2426,18 +2434,18 @@ View::plotXYSc( size_t *start, size_t *count )
 		fprintf( stderr, "     ytitle=%s\n", y_axis_title );
 		fprintf( stderr, "     title =%s\n", title );
 		}
-	plot_index = in_popup_XY_graph( n, dim_to_plot, plot_XY_xvals.data(),
+	plot_index = ui.in_popup_XY_graph( n, dim_to_plot, plot_XY_xvals.data(),
 			plot_XY_yvals.data(), x_axis_title, y_axis_title,
 			title, legend, dimlist );
-	
+
 	/* Save the X dimension for this plot, so that we can later format
 	 * that dim's time values if requested (while the mouse is inside
 	 * that plot's window).
 	 */
-	if( plot_index != -1 ) 
+	if( plot_index != -1 )
 		plot_XY_dim[plot_index] = view->variable->dim[dim_to_plot].get();
 
-	in_set_cursor_normal();
+	ui.in_set_cursor_normal();
 	if( options.debug ) 
 		fprintf( stderr, "plot_XY_sc: leaving\n" );
 }
@@ -2460,7 +2468,7 @@ View::plotXYFmtXVal( float val, int dimindex, char *s, size_t s_len )
 	void
 View::information()
 {
-	in_display_stuff( variable->files.front().get()->file->attString(
+	g_app.ui->in_display_stuff( variable->files.front().get()->file->attString(
 						variable->name ).c_str(),
 			variable->name.c_str() );
 }

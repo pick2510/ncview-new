@@ -98,6 +98,7 @@ data_has_mv( float *data, size_t n, float fill_value )
 View::dataToPixels()
 {
 	View *v = this;
+	ViewerUi	&ui = *g_app.ui;
 	size_t	i;
 	size_t	x_size, y_size, new_x_size, new_y_size;
 	float	fill_value;
@@ -151,7 +152,7 @@ View::dataToPixels()
 	if( (v->variable->user_max == 0) &&
 	    (v->variable->user_min == 0) &&
 	    (! options.autoscale) ) {
-		in_set_cursor_normal();
+		ui.in_set_cursor_normal();
 		g_app.controller.pause( Modifier::M1 );	/* pause playback directly -- no need to round-trip through the Button enum */
 		if( options.min_max_method == MinMaxMethod::Exhaust ) {
 	    		snprintf( error_message, 1022, "min and max both 0 for variable %s (checked all data)\nSetting range to (-1,1)",
@@ -164,7 +165,7 @@ View::dataToPixels()
 			}
 	    	snprintf( error_message, 1022, "min and max both 0 for variable %s.\nI can check ALL the data instead of subsampling if that's OK,\nor just cancel viewing this variable.",
 	    				v->variable->name.c_str() );
-		result = in_dialog( error_message, true );
+		result = ui.in_dialog( error_message, true );
 		if( result == Message::OK ) {
 			orig_minmax_method = options.min_max_method;
 			options.min_max_method = MinMaxMethod::Exhaust;
@@ -192,10 +193,10 @@ View::dataToPixels()
 	    	}
 
 	if( (v->variable->user_max == v->variable->user_min) && (! options.autoscale) ) {
-		in_set_cursor_normal();
+		ui.in_set_cursor_normal();
 	    	snprintf( error_message, 1022, "min and max both %g for variable %s",
 	    		v->variable->user_min, v->variable->name.c_str() );
-		x_error( error_message );
+		ui.x_error( error_message );
 		if( ! data_has_mv( v->data.data(), x_size*y_size, fill_value ) ) {
 			v->variable->user_max += 0.1 * v->variable->user_max;
 			v->variable->user_min -= 0.1 * v->variable->user_min;
