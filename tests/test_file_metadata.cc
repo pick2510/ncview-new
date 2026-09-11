@@ -192,6 +192,41 @@ TEST_CASE("a group-scoped variable sharing an ancestor group's dimension reads c
     CHECK(val == 2.0f);
 }
 
+TEST_CASE("netcdf_dim_units: a dim belonging to a variable nested 2 groups deep degrades instead of aborting (Phase 12i)") {
+    // Regression test: netcdf_dim_id_to_name() qualifies a dim name with
+    // the OWNING VARIABLE's group path, not the dim's own -- so g2_var's
+    // "x" dim (actually defined at the file root, shared by id) is named
+    // "grp1/grp2/x" here. netcdf_dimvar_id() then splits that at the LAST
+    // slash (varname_no_groups()), handing nc_inq_grp_ncid() the two-level
+    // path "grp1/grp2" -- which it can't resolve, since it only accepts a
+    // simple, one-level group name. Before Phase 12i this exit()'d the
+    // whole process during ordinary variable-metadata lookup, on a
+    // perfectly valid netCDF-4 file with no unusual input.
+    MetaFile f;
+    CHECK(netcdf_dim_units(f.fileid, "grp1/grp2/x") == "");
+    CHECK(netcdf_dim_longname(f.fileid, "grp1/grp2/x") == "grp1/grp2/x"); // falls back to the (qualified) dim name itself
+}
+
+TEST_CASE("netcdf_att_string: a variable inside a group resolves instead of aborting (Phase 12i)") {
+    // Regression test: netcdf_att_string() was the only function left in
+    // this file using a plain nc_inq_varid() (root-group-only) rather than
+    // the group-aware nc_inq_varid_grp() every sibling function uses --
+    // View::information()'s "Info" display always passes a group-qualified
+    // name (netcdf_fi_list_vars_inner() prefixes every variable with its
+    // group path), so this was a real correctness bug, not just a missing
+    // safety check: the plain lookup could never have found a grouped
+    // variable at all. Before Phase 12i, "Info" on any grouped variable
+    // exit()'d the whole process.
+    MetaFile f;
+    resetStubRecording();
+
+    std::string result = netcdf_att_string(f.fileid, "grp1/grp2/g2_var");
+
+    // Reaching this line at all is the main point -- the old code exit()d
+    // before returning anything.
+    CHECK(result.find("long_name") != std::string::npos);
+}
+
 // ===================== Attribute precedence: missing / empty / wrong-typed =====================
 
 TEST_CASE("a variable with no units attribute at all: netcdf_var_units returns empty") {

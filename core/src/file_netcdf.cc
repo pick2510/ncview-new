@@ -1129,10 +1129,21 @@ int netcdf_dimvar_id( int fileid, char *dim_name, int *dimvar_gid )
 			err = nc_inq_grp_ncid( nc_root_id_from_group_id(fileid), groupname, &gid );
 
 		if( err != NC_NOERR ) {
+			/* Phase 12i: this fires on any ordinary netCDF-4 file with
+			 * a variable nested >=2 groups deep -- varname_no_groups()
+			 * splits a fully-qualified dim name at the LAST slash, so
+			 * a variable at grp1/grp2/x hands nc_inq_grp_ncid() the
+			 * two-level path "grp1/grp2", which it can't resolve
+			 * (nc_inq_grp_ncid() only accepts a simple, one-level
+			 * group name -- nc_inq_grp_full_ncid() is the path-taking
+			 * variant). Degrade like every other "no dimvar" path in
+			 * this function rather than aborting: every caller
+			 * already treats a negative return as "no associated
+			 * dimvar" and falls back to the bare dim name/id. */
 			fprintf( stderr, "%s line %d : Error: nc_inq_grp_ncid failed in routine netcdf_dimvar_id:\n",
 				__FILE__, __LINE__ );
 			fprintf( stderr, "%s\n", nc_strerror( err ) );
-			exit(-1);
+			return( -1 );
 			}
 
 		/* Found a group ID to use instead of the passed fileid */
@@ -2035,7 +2046,7 @@ const char *nc_type_to_string( nc_type type )
 /*******************************************************************************************/
 std::string netcdf_att_string( int fileid, std::string_view var_name )
 {
-	int	iatt, varid, size_to_use, n_dims,
+	int	iatt, varid, groupid, size_to_use, n_dims,
 		dim[50], n_atts, err;
 	size_t	i;
 	nc_type	datatype, type;
@@ -2053,14 +2064,25 @@ std::string netcdf_att_string( int fileid, std::string_view var_name )
 	snprintf( ret_string.data(), retval_len, "Attributes for variable %s:\n------------------------------\n", var_name_s.c_str() );
 	ret_string[retval_len-1] = '\0';
 
-	err = nc_inq_varid( fileid, var_name_s.data(), &varid );
+	/* Phase 12i: this used to look the variable up with a plain
+	 * nc_inq_varid(), which only ever searches the root group -- every
+	 * other function in this file uses the group-aware
+	 * nc_inq_varid_grp() (see e.g. netcdf_fi_n_dims() above) because
+	 * caller-supplied variable names are always fully group-qualified
+	 * (netcdf_fi_list_vars_inner() prefixes them). So "Info" on any
+	 * variable inside any group crashed the process; this was a real
+	 * correctness bug, not just a missing safety check, since the plain
+	 * lookup could never have found the variable in the first place.
+	 * groupid (not fileid) is used for every subsequent call below,
+	 * matching that same established pattern. */
+	err = nc_inq_varid_grp( fileid, var_name_s.data(), &varid, &groupid );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "Error in netcdf_att_string: could not find var named \"%s\" in file!\n",
 			var_name_s.c_str() );
 		exit(-1);
 		}
 
-	err = nc_inq_var( fileid, varid, dummy_var_name, &type, &n_dims, dim, &n_atts );
+	err = nc_inq_var( groupid, varid, dummy_var_name, &type, &n_dims, dim, &n_atts );
 	if( err != NC_NOERR ) {
 		fprintf( stderr, "netcdf_att_string: failed on nc_inq_var call!\n" );
 		exit(-1);
@@ -2073,12 +2095,12 @@ std::string netcdf_att_string( int fileid, std::string_view var_name )
 
 	for( iatt=0; iatt<n_atts; iatt++ ) {
 
-		err = nc_inq_attname( fileid, varid, iatt, att_name );
+		err = nc_inq_attname( groupid, varid, iatt, att_name );
 		if( err != NC_NOERR ) {
 			fprintf( stderr, "netcdf_att_string: failed on nc_inq_attname call!\n" );
 			exit(-1);
 			}
-		err = nc_inq_att(  fileid, varid, att_name, &datatype, &len );
+		err = nc_inq_att(  groupid, varid, att_name, &datatype, &len );
 		if( err != NC_NOERR ) {
 			fprintf( stderr, "netcdf_att_string: failed on nc_inq_att call!\n" );
 			exit(-1);
@@ -2121,7 +2143,7 @@ std::string netcdf_att_string( int fileid, std::string_view var_name )
 
 		std::vector<char> data( size_to_use*len );
 
-		ncattget( fileid, varid, att_name, data.data() );
+		ncattget( groupid, varid, att_name, data.data() );
 
 		safe_strcat( ret_string.data(), retval_len, att_name );
 		safe_strcat( ret_string.data(), retval_len, ": "     );
