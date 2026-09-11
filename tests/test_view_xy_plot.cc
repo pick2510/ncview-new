@@ -13,6 +13,11 @@
 // (tests/stub_interface.cc) previously hardcoded (0,0). Extended with
 // g_query_pointer_x/y, mirroring the g_printer_options_override pattern
 // Phase 4a already established for scripting a UI answer.
+#include <cstring>
+#include <filesystem>
+#include <string>
+#include <unistd.h>
+
 #include <doctest/doctest.h>
 
 #include "ncview/includes.h"
@@ -50,6 +55,79 @@ bool recorded(const char *prefix) {
         if (call.rfind(prefix, 0) == 0)
             return true;
     return false;
+}
+
+// A (station, time, lat, lon) data var -- the same (time, lat, lon) image
+// shape every other test in this file uses (time as the plot axis, lat/lon
+// as the x/y image axes -- View::redrawDimensionInfo() and friends assume
+// at least that much, confirmed the hard way: a 2-D (time, station)-only
+// variable segfaults in View::redrawDimensionInfo() during selection,
+// there being no x/y image axis left once time is the plot axis) plus one
+// extra leading "station" axis that is itself a 2-D NC_CHAR dimvar
+// (station, strlen). station has size 1, so it's always the non-plotted,
+// non-image "other" dim plotXYSc()'s legend loop (view.cc) reads via
+// Dataset::dimValue() into a fixed-size stack buffer. strlen_size chars,
+// none NUL, so netcdf_dim_value()'s read loop runs the full strlen_size
+// iterations (limited only by the dimvar's own trailing dim, not by
+// finding a terminator early) before it force-NULs the last byte --
+// NcFixture can't express an NC_CHAR dimvar at all, hence the inline
+// build, the established idiom for shapes outside NcFixture's scope (see
+// the Phase 12f/12g tests in test_file_netcdf.cc).
+std::string make_char_station_file(int nt, int nlat, int nlon, int strlen_size) {
+    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_char_station_XXXXXX").string();
+    int fd = mkstemp(&tmpl[0]);
+    REQUIRE(fd >= 0);
+    close(fd);
+    std::string path = tmpl;
+
+    int ncid;
+    REQUIRE(nc_create(path.c_str(), NC_CLOBBER, &ncid) == NC_NOERR);
+    int dim_station, dim_time, dim_lat, dim_lon, dim_strlen;
+    REQUIRE(nc_def_dim(ncid, "station", 1, &dim_station) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "time", nt, &dim_time) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "lat", nlat, &dim_lat) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "lon", nlon, &dim_lon) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "strlen", strlen_size, &dim_strlen) == NC_NOERR);
+
+    int var_time, var_lat, var_lon, var_station, var_data;
+    REQUIRE(nc_def_var(ncid, "time", NC_DOUBLE, 1, &dim_time, &var_time) == NC_NOERR);
+    const char *time_units = "days since 2000-01-01";
+    REQUIRE(nc_put_att_text(ncid, var_time, "units", strlen(time_units), time_units) == NC_NOERR);
+
+    REQUIRE(nc_def_var(ncid, "lat", NC_FLOAT, 1, &dim_lat, &var_lat) == NC_NOERR);
+    REQUIRE(nc_def_var(ncid, "lon", NC_FLOAT, 1, &dim_lon, &var_lon) == NC_NOERR);
+
+    int station_dims[2] = {dim_station, dim_strlen};
+    REQUIRE(nc_def_var(ncid, "station", NC_CHAR, 2, station_dims, &var_station) == NC_NOERR);
+
+    int data_dims[4] = {dim_station, dim_time, dim_lat, dim_lon};
+    REQUIRE(nc_def_var(ncid, "data", NC_FLOAT, 4, data_dims, &var_data) == NC_NOERR);
+
+    REQUIRE(nc_enddef(ncid) == NC_NOERR);
+
+    std::vector<double> time_vals(nt);
+    for (int i = 0; i < nt; i++) time_vals[i] = (double)i;
+    REQUIRE(nc_put_var_double(ncid, var_time, time_vals.data()) == NC_NOERR);
+
+    std::vector<float> lat_vals(nlat), lon_vals(nlon);
+    for (int i = 0; i < nlat; i++) lat_vals[i] = (float)i;
+    for (int i = 0; i < nlon; i++) lon_vals[i] = (float)i;
+    REQUIRE(nc_put_var_float(ncid, var_lat, lat_vals.data()) == NC_NOERR);
+    REQUIRE(nc_put_var_float(ncid, var_lon, lon_vals.data()) == NC_NOERR);
+
+    // Every byte 'A' -- no embedded NUL, so netcdf_dim_value()'s read loop
+    // is bounded only by strlen_size (the trailing dim's length), not by
+    // finding a terminator early.
+    std::string station_name(strlen_size, 'A');
+    size_t start[2] = {0, 0}, count[2] = {1, (size_t)strlen_size};
+    REQUIRE(nc_put_vara_text(ncid, var_station, start, count, station_name.data()) == NC_NOERR);
+
+    std::vector<float> data_vals((size_t)nt * nlat * nlon);
+    for (size_t i = 0; i < data_vals.size(); i++) data_vals[i] = (float)i;
+    REQUIRE(nc_put_var_float(ncid, var_data, data_vals.data()) == NC_NOERR);
+
+    REQUIRE(nc_close(ncid) == NC_NOERR);
+    return path;
 }
 
 } // namespace
@@ -226,4 +304,52 @@ TEST_CASE("view_report_position_vals: reads back plot_XY_dim[] from the last plo
         }
     }
     CHECK(found);
+}
+
+TEST_CASE("View::plotXYSc: an over-long NC_CHAR coordinate on a non-plotted axis "
+          "does not overflow the legend's fixed-size buffer (Phase 12g)") {
+    // Dataset::dimValue()'s documented contract (dataset.cc) requires the
+    // caller's return_val_char buffer to be at least 1024 bytes.
+    // plotXYSc()'s temp_string was only 128 before Phase 12g -- a CF-legal
+    // 2-D NC_CHAR coordinate variable (e.g. a station name) longer than
+    // that overflows it the moment that axis shows up in the plot legend.
+    // This test only proves the fix doesn't crash under ASan; it does NOT
+    // independently reconstruct the pre-fix overflow here (that was
+    // confirmed once, by hand, by temporarily reverting the buffer size
+    // and rerunning this exact test under a scratch ASan build -- see the
+    // Phase 12g commit message).
+    SessionFixture fx;
+    const int nt = 3, nlat = 2, nlon = 2;
+    const int strlen_size = 200; // comfortably over the old 128-byte buffer
+    std::string path = make_char_station_file(nt, nlat, nlon, strlen_size);
+
+    Stringlist *files = nullptr;
+    stringlist_add_string(&files, path.c_str());
+    determine_file_type(files);
+    stringlist_delete_entire_list(files);
+    ensure_ncview_misc_initialized();
+    options.blowup_default_size = 300;
+    int fid = netcdf_fi_initialize(const_cast<char *>(path.c_str()));
+    g_dataset.addVariable("data", fid, path.c_str());
+    in_variable_selected("data");
+    REQUIRE(view != nullptr);
+
+    char label[] = "time";
+    view->setXYPlotAxis(label);
+    REQUIRE(view->plot_XY_axis == 1); // "time" is dim 1 of {station, time, lat, lon}
+
+    size_t start[4] = {0, 0, 0, 0}, count[4] = {1, (size_t)nt, 1, 1};
+    view->plotXYSc(start, count);
+
+    REQUIRE(recorded("in_popup_XY_graph"));
+    // The station value made it into the legend intact -- not just "didn't
+    // crash" but "read the right, (almost) full-length data". Only
+    // strlen_size-1 'A's, not strlen_size: netcdf_dim_value()'s read loop
+    // reads all strlen_size characters (none is NUL, so nothing stops it
+    // early), then unconditionally force-NULs the LAST one to guarantee a
+    // terminated C string -- pre-existing behavior this test isn't
+    // changing, so the last 'A' this fixture wrote is always sacrificed.
+    CHECK(g_last_xy_legend.find(std::string(strlen_size - 1, 'A')) != std::string::npos);
+
+    std::remove(path.c_str());
 }

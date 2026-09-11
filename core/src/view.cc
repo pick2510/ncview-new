@@ -2267,7 +2267,7 @@ View::plotXYSc( size_t *start, size_t *count )
 	float	t_xval, t_yval, tol, *tmp_yvals;
 	double	y_min, y_max, temp_double, bound_min, bound_max;
 	char	x_axis_title[132], y_axis_title[132], temp2_string[128], legend[512];
-	char	title[512], temp_string[128], *dim_name;
+	char	title[512], temp_string[1024], *dim_name;
 	std::string units, long_name, file_title;
 	char	message[512];
 	int	has_bounds, type, all_same, have_done_one, dim_to_plot, plot_index;

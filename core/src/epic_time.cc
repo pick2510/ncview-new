@@ -150,7 +150,7 @@ handle_time_dim( NetCDFFile *file, NCVar *v, int dimid )
 	static TimeGranularity
 months_calc_tgran( NetCDFFile *file, NCDim *d )
 {
-	char	temp_string[128];
+	char	temp_string[1024];
 	float	delta, v0, v1;
 	int	type, has_bounds;
 	double	temp_double, bounds_min, bounds_max;

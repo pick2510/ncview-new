@@ -295,6 +295,54 @@ TEST_CASE("netcdf_dim_value: an unsigned-typed (netCDF-4) coordinate variable re
     std::remove(path.c_str());
 }
 
+TEST_CASE("netcdf_dim_value: a scalar variable name-colliding with a dimension degrades instead of aborting (Phase 12g)") {
+    // netcdf_dimvar_id() matches a "dimvar" purely by name (any variable
+    // whose name equals a dimension's name, regardless of its own rank or
+    // type -- confirmed by reading its loop, which only ever checks
+    // strcmp(dim_name, var_name)). So a file can perfectly legally contain
+    // a rank-0 (scalar) variable whose name happens to collide with an
+    // unrelated dimension's name; before Phase 12g, netcdf_dim_value()'s
+    // numeric path treated any n_dims != 1 as fatal and exit()'d the whole
+    // process over it -- turning an ordinary, valid file into a crash.
+    // Phase 12g degrades instead, the same "warn and fall back to
+    // virt_place" shape the function's own default: (unhandled-type) case
+    // already used.
+    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_scalar_collision_XXXXXX").string();
+    int fd = mkstemp(&tmpl[0]);
+    REQUIRE(fd >= 0);
+    close(fd);
+    std::string path = tmpl;
+
+    int ncid;
+    REQUIRE(nc_create(path.c_str(), NC_CLOBBER, &ncid) == NC_NOERR);
+    int dim_station;
+    REQUIRE(nc_def_dim(ncid, "station", 3, &dim_station) == NC_NOERR);
+    // A rank-0 variable named "station" -- unrelated to the "station" dim
+    // in shape, but name-matched by netcdf_dimvar_id() all the same.
+    int var_station;
+    REQUIRE(nc_def_var(ncid, "station", NC_DOUBLE, 0, nullptr, &var_station) == NC_NOERR);
+    REQUIRE(nc_enddef(ncid) == NC_NOERR);
+    double station_scalar = 42.0;
+    REQUIRE(nc_put_var_double(ncid, var_station, &station_scalar) == NC_NOERR);
+    REQUIRE(nc_close(ncid) == NC_NOERR);
+
+    int fileid = open_sample_file(path);
+
+    double val;
+    char cval[256];
+    int has_bounds;
+    double bmin, bmax;
+    // Before the fix, this line never returns -- the process exit()'d.
+    nc_type type = netcdf_dim_value(fileid, (char *)"station", 1, &val, cval, 7,
+                                     &has_bounds, &bmin, &bmax);
+    CHECK(type == NC_DOUBLE);
+    CHECK(val == doctest::Approx(7.0)); // falls back to virt_place, not the scalar's real value (42.0)
+    CHECK(has_bounds == 0);
+
+    netcdf_fi_close(fileid);
+    std::remove(path.c_str());
+}
+
 TEST_CASE("file_netcdf: a name with no matching dimvar reports no values") {
     SampleFile f;
     // netcdf_has_dim_values()'s notion of "dimvar" is purely name-based (a

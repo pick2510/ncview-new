@@ -147,7 +147,7 @@ do_print( void )
 	static void
 build_print_info( PrintInfo *info, size_t x_size, size_t y_size )
 {
-	char 	*x_dim_name, *y_dim_name, tstr[1500], tstr2[1000], *dim_name;
+	char 	*x_dim_name, *y_dim_name, tstr[1500], tstr2[1024], *dim_name;
 	std::string units, x_dim_longname, y_dim_longname, x_units, y_units,
 		main_long_name, main_units, dim_longname, file_title;
 	FDBlist	*fdb;

@@ -1281,13 +1281,20 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 				char_place[0] = place;
 				do	{
 					char_place[1] = i;
-					err = nc_get_var1_uchar( dimvar_gid, dimvar_id, char_place, (((unsigned char *)(ret_val_char))+i));
+					/* Phase 12g: nc_get_var1_uchar() cannot read
+					 * NC_CHAR data at all -- confirmed empirically,
+					 * it fails every time with NC_ECHAR ("Attempt to
+					 * convert between text & numbers"), in both
+					 * classic and netCDF-4 files. Before Phase 12f
+					 * checked this call's error code, that failure
+					 * was silently ignored and this buffer was left
+					 * whatever it started as; Phase 12f's new check
+					 * turned that into a hard exit() on every single
+					 * 2-D NC_CHAR dimvar read, not just a rare one.
+					 * nc_get_var1_text() is the function that
+					 * actually reads NC_CHAR data. */
+					err = nc_get_var1_text( dimvar_gid, dimvar_id, char_place, ret_val_char+i );
 					if( err != NC_NOERR ) {
-						/* Phase 12f: this call's return value used to
-						 * go unchecked -- on failure the buffer past
-						 * this point was left whatever it started as,
-						 * and the loop kept going as if the read had
-						 * succeeded. */
 						fprintf( stderr, "netcdf_dim_value: failed reading character %ld of dim %s!\n",
 							i, dim_name );
 						fprintf( stderr, "%s\n", nc_strerror( err ) );
@@ -1307,7 +1314,9 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 				 * index over. */
 				size_t place1[1];
 				place1[0] = place;
-				err = nc_get_var1_uchar( dimvar_gid, dimvar_id, place1, (unsigned char *)ret_val_char );
+				/* Phase 12g: see the n_dims==2 case's comment above --
+				 * nc_get_var1_uchar() cannot read NC_CHAR data. */
+				err = nc_get_var1_text( dimvar_gid, dimvar_id, place1, ret_val_char );
 				if( err != NC_NOERR ) {
 					fprintf( stderr, "netcdf_dim_value: failed reading dim %s at place %zu!\n",
 						dim_name, place );
@@ -1317,16 +1326,21 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 				ret_val_char[1] = '\0';
 				}
 			else	{
-				/* Phase 12f: neither of the two shapes this function
+				/* Phase 12g: neither of the two shapes this function
 				 * knows how to handle -- reading via either fixed-size
 				 * index array (place1[1] or char_place[2]) below a
 				 * higher-rank NC_CHAR dimvar would read past the end
-				 * of that array. Not something CF-convention files
-				 * produce, but guard it rather than corrupting the
-				 * stack. */
-				fprintf( stderr, "netcdf_dim_value: unsupported rank (%d) for character dimension variable %s!\n",
+				 * of that array. netcdf_dimvar_id() matches purely by
+				 * name, so this is reachable on an ordinary file (a
+				 * scalar or higher-rank variable whose name happens to
+				 * collide with a dimension name), not just a corrupt
+				 * one -- degrade like the default: case below rather
+				 * than aborting the whole process over it.
+				 */
+				fprintf( stderr, "ncview: netcdf_dim_value: unsupported rank (%d) for character dimension variable %s; using virtual place\n",
 					n_dims, dim_name );
-				exit(-1);
+				*ret_val_double = (double)virt_place;
+				ret_type = NC_DOUBLE;
 				}
 			break;
 
@@ -1342,16 +1356,23 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 			 * centered between the boundaries, which isn't so useful.
 			 */
 			if( n_dims != 1 ) {
-				/* Phase 12f: a numeric dimvar is expected to be
+				/* Phase 12g: a numeric dimvar is expected to be
 				 * 1-D. &place below is a single size_t used as the
 				 * index array for nc_get_var1_double() -- if the
 				 * dimvar were actually higher rank, the netCDF
-				 * library would read past the end of it. Not
-				 * something CF-convention files produce, but guard
-				 * it rather than corrupting the stack. */
-				fprintf( stderr, "netcdf_dim_value: unsupported rank (%d) for numeric dimension variable %s!\n",
+				 * library would read past the end of it.
+				 * netcdf_dimvar_id() matches purely by name, so this
+				 * is reachable on an ordinary file (e.g. a 2-D
+				 * curvilinear coordinate variable whose name happens
+				 * to collide with a dimension name), not just a
+				 * corrupt one -- degrade like the default: case below
+				 * rather than aborting the whole process over it.
+				 */
+				fprintf( stderr, "ncview: netcdf_dim_value: unsupported rank (%d) for numeric dimension variable %s; using virtual place\n",
 					n_dims, dim_name );
-				exit(-1);
+				*ret_val_double = (double)virt_place;
+				ret_type = NC_DOUBLE;
+				break;
 				}
 
 			dimvar_bounds_id = netcdf_dimvar_bounds_id( dimvar_gid, dim_name, &nvertices );

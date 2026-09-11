@@ -74,6 +74,7 @@ extern int g_last_xy_dimindex;
 extern std::vector<double> g_last_xy_xvals;
 extern std::vector<double> g_last_xy_yvals;
 extern std::string g_last_xy_x_axis_title;
+extern std::string g_last_xy_legend;
 extern void resetStubRecording();
 
 // The fake one-shot timer queue (stub_interface.cc) -- lets a test drive

@@ -99,6 +99,7 @@ int g_last_xy_dimindex = -1;
 std::vector<double> g_last_xy_xvals;
 std::vector<double> g_last_xy_yvals;
 std::string g_last_xy_x_axis_title;
+std::string g_last_xy_legend;
 
 // --- Fake timer queue ---------------------------------------------------
 // "Refine the architecture" plan, Phase 0b: in_timer_set() used to just
@@ -141,6 +142,7 @@ void resetStubRecording()
 	g_last_xy_xvals.clear();
 	g_last_xy_yvals.clear();
 	g_last_xy_x_axis_title.clear();
+	g_last_xy_legend.clear();
 	g_created_colormaps.clear();
 	g_seen_colormap_names.clear();
 }
@@ -234,7 +236,7 @@ public:
 		return g_set_scan_dims_response;
 	}
 	void in_flush() override { g_recorded_calls.push_back("in_flush"); }
-	int in_popup_XY_graph(size_t n, int dimindex, double *xvals, double *yvals, const char *x_axis_title, const char*, const char*, const char*, const Stringlist*) override {
+	int in_popup_XY_graph(size_t n, int dimindex, double *xvals, double *yvals, const char *x_axis_title, const char*, const char*, const char *legend, const Stringlist*) override {
 		g_recorded_calls.push_back("in_popup_XY_graph");
 		g_have_last_xy_plot = true;
 		g_last_xy_n = n;
@@ -242,6 +244,7 @@ public:
 		g_last_xy_xvals.assign(xvals, xvals + n);
 		g_last_xy_yvals.assign(yvals, yvals + n);
 		g_last_xy_x_axis_title = x_axis_title ? x_axis_title : "";
+		g_last_xy_legend = legend ? legend : "";
 		return 0;
 	}
 	void in_query_pointer_position(int *x, int *y) override { g_recorded_calls.push_back("in_query_pointer_position"); if (x) *x = g_query_pointer_x; if (y) *y = g_query_pointer_y; }
