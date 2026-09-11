@@ -3367,19 +3367,140 @@ consistent with the file's existing failure idiom, not a new one.
 clean: `-Werror` build; `ctest` normal + `--order-by=rand` across 3
 seeds, identical counts; `ncview_core_linkcheck` exit 0; all 15
 `ui_smoke.sh` goldens byte-identical; a full scratch ASan/UBSan build
-clean; `grep -rn` confirming the 9 callers of `dimValue()`/
+clean; `grep -rn` confirming the callers of `dimValue()`/
 `netcdf_dim_value()` are unchanged (deliberately -- their hardening is
-Phase 12g's job, not this one's).
+a future phase's job, not this one's).
 
-**Deferred to Phase 12g**, prerequisite now satisfied: hardening
-`Dataset::dimValue()`'s/`NetCDFFile::dimValue()`'s 9 currently-unsafe
-call sites against a real `NC_NAT` return; converting
+**UPDATE (Phase 12g)**: scoping the caller-hardening work found two of
+this phase's own remedies needed a second look first -- see below.
+Deferred, prerequisite now satisfied by 12g: hardening
+`Dataset::dimValue()`'s/`NetCDFFile::dimValue()`'s 10 currently-unsafe
+call sites (re-audited in 12g's own scoping; the "9" figure above was an
+undercount) against a real `NC_NAT` return; converting
 `netcdf_dim_value()`'s remaining `exit()` sites to error returns; and
 building the bounds-variable fixture support needed to exercise those
-paths directly in a test. Also still deferred, unrelated to this
-cluster: `overlay.cc`'s wrong loop variable (`ii` where every
-neighboring line uses `jj`), and 3 caller buffers smaller than the
-function's own documented >=1024-byte contract.
+paths directly in a test -- now Phase 12h, not 12g (12g turned out to be
+the "fix what 12f itself got wrong or missed" phase instead).
+
+## Part V, Phase 12g: fix 12f's own regression, a real overlay bug, and 3 undersized buffers
+
+**Scoped in plan mode first.** Picked up the deferred caller-hardening
+work, but scoping it (three parallel investigations: the caller audit,
+the current `exit()` inventory plus fixture feasibility, and independent
+re-verification of two previously-filed bugs) found that two things
+needed fixing *before* that work, and one of them was a regression
+Phase 12f itself had just introduced.
+
+### 12f's new rank-mismatch aborts fired on ordinary, valid files
+
+`netcdf_dimvar_id()` matches a "dimvar" purely by name -- any variable
+whose name equals a dimension's name, regardless of its own rank or
+type. So a file can legally contain a rank-0 (scalar) variable whose
+name happens to collide with an unrelated dimension's name, or a 2-D
+curvilinear coordinate variable name-colliding with a dimension. Before
+Phase 12f these shapes were undefined behavior (a wrong-rank index
+array); 12f correctly stopped the UB, but chose `exit(-1)` as the
+remedy -- turning an ordinary, valid file into a hard process abort.
+Fixed by using the same degrade-and-continue shape the function's own
+`default:` (unhandled-type) case already used: warn to stderr naming
+the rank and dim, fall back to `*ret_val_double = (double)virt_place`,
+return `NC_DOUBLE`. Confirmed by reverting the fix and running the new
+regression test directly: the process died with no `[doctest]` summary
+at all (the same signal 12d/12e/12f used), confirming this really was a
+process-killing regression against a legally-constructed file, not a
+hypothetical.
+
+### A second, independent pre-existing bug the same investigation surfaced: `nc_get_var1_uchar()` cannot read `NC_CHAR` data at all
+
+Writing a regression test for the buffer-size fix below (a 2-D `NC_CHAR`
+coordinate variable, something nothing in the test tree had ever built
+before) immediately hit this in a completely ordinary case, confirmed
+empirically with a standalone C program against the installed netCDF
+library: `nc_get_var1_uchar()` fails with `NC_ECHAR` ("Attempt to
+convert between text & numbers") on *every* attempt to read `NC_CHAR`
+data, in both classic and netCDF-4 format -- `nc_get_var1_text()` is the
+function that actually reads it. `netcdf_dim_value()`'s NC_CHAR read
+path (both the `n_dims==2` loop and the `n_dims==1` case) has always
+used the wrong one. Before Phase 12f's error checking landed, that
+failure was silently ignored and the output buffer was left whatever it
+started as -- meaning **2-D NC_CHAR dimvar reads have never actually
+worked**, they silently returned garbage. Phase 12f's new `err` check
+(added for a different reason -- the numeric path's own bug) turned
+that same silent failure into a hard `exit(-1)` on every single call,
+which is what this phase's own regression test hit immediately. Fixed
+by switching both calls to `nc_get_var1_text()`. This is squarely
+within this hardening pass's remit (an already-live defect in the
+function under active repair, not scope creep) and had to be fixed to
+land a real, non-crashing test for the buffer-size issue below at all.
+
+### `overlay.cc`'s wrong loop variable
+
+`gen_overlay_internal_mapped()`'s Y-axis coordinate lookup passed `ii`
+(the X index) as its `virt_place` argument, where the line immediately
+below it already correctly uses `jj` for its own fallback -- confirmed
+by direct inspection, a one-token fix (`ii` -> `jj`). **No runtime
+regression test for this one**: the bug is only observable when exactly
+one image axis is 2-D-mapped (curvilinear) and the other isn't, and the
+resulting `dimval_y_2d` array feeds a hill-climbing nearest-point search
+(`overlay_find_closest_pt_inner()`, explicitly documented as assuming
+"distances on a sphere are monotonic with no local minima") whose
+outcome would depend on that search algorithm's exact behavior on data
+that violates its own stated precondition once bugged -- not on the one
+line being fixed. Building a fixture robust to that instability was
+judged disproportionate for a one-token swap already confirmed correct
+by direct parameter-order inspection (`Dataset::dimValue()`'s third
+positional parameter is `virt_place`, which must match the axis
+actually being queried); documented honestly here rather than forcing a
+fragile test to check a box.
+
+### 3 caller buffers smaller than `netcdf_dim_value()`'s own >=1024-byte contract
+
+Confirmed by reading each declaration against the contract stated at
+`dataset.cc`: `epic_time.cc`'s `months_calc_tgran()`, `view.cc`'s
+`plotXYSc()`, and `do_print.cc`'s `build_print_info()` all had smaller
+buffers (128, 128, 1000 bytes respectively). The real bound: the
+`NC_CHAR` `n_dims==2` path writes up to the length of the dimvar's
+*string* dimension, so any char coordinate variable with a string
+dimension over 128 characters (station/label names commonly use 256)
+overflowed the first two. Widened all three to 1024.
+
+Proven for `plotXYSc()` specifically, the way prior phases proved their
+memory-safety fixes: a new inline-built fixture (a `(station, time, lat,
+lon)` variable whose `station` axis is a 2-D `NC_CHAR` dimvar with a
+200-character, non-NUL-terminated string -- `NcFixture` can't express an
+`NC_CHAR` dimvar at all, so this is inline, the established idiom for
+shapes outside its scope) reverting the fix and rerunning the exact same
+test under a scratch ASan build produced a real
+`stack-buffer-overflow` (caught inside `memcpy`, `temp_string` named
+explicitly in the ASan stack-frame dump); clean after restoring the fix.
+The other two buffers (`epic_time.cc`, `do_print.cc`) were widened by
+inspection alone -- both feed only into a bounded `snprintf`/format call
+downstream, so the fix is provably safe, but building an equivalent
+NC_CHAR fixture for each was judged not worth repeating for the same
+class of bug already proven once.
+
+255->257 tests, 6877->6911 assertions. Full six-gate verification
+clean: `-Werror` build; `ctest` normal + `--order-by=rand` across 4
+seeds, identical counts; `ncview_core_linkcheck` exit 0; all 15
+`ui_smoke.sh` goldens byte-identical (the rank-abort fix touches a live
+read path `ui_smoke.sh` exercises -- no golden differed); a full scratch
+ASan/UBSan build clean; `grep -rn` confirming no `nc_get_var1_uchar`
+call remains in `file_netcdf.cc`.
+
+**Deferred to Phase 12h** (renumbered from 12g -- see the note on 12f's
+entry above): hardening `Dataset::dimValue()`'s/`NetCDFFile::dimValue()`'s
+10 currently-unsafe call sites against a real `NC_NAT` return (a
+re-audit during this phase's scoping found the true count is 10, not
+the "9" 12f's entry estimated -- `Dataset::dimValue()`'s own body at
+`dataset.cc:320` also mishandles the sentinel); converting
+`netcdf_dim_value()`'s remaining genuinely-reachable `exit()` sites to
+`NC_NAT` returns; and building the bounds-variable fixture support
+needed to exercise those paths directly. Also still deferred: the
+data-read cascade and full startup cascade from Phase 12d's original
+51-site inventory, and a latent bug found while scoping --
+`netcdf_dimvar_bounds_id()` never verifies a bounds variable's *first*
+dim is the coordinate's own dim, so a transposed `[nv, n]` bounds
+variable would drive an out-of-range read.
 
 ## Post-v0.2.0 defect audits
 
