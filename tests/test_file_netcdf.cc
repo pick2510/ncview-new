@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <unistd.h>
+#include <vector>
 
 #include <doctest/doctest.h>
 
@@ -337,6 +338,245 @@ TEST_CASE("netcdf_dim_value: a scalar variable name-colliding with a dimension d
                                      &has_bounds, &bmin, &bmax);
     CHECK(type == NC_DOUBLE);
     CHECK(val == doctest::Approx(7.0)); // falls back to virt_place, not the scalar's real value (42.0)
+    CHECK(has_bounds == 0);
+
+    netcdf_fi_close(fileid);
+    std::remove(path.c_str());
+}
+
+TEST_CASE("netcdf_dim_value: a bounds variable with >50 vertices degrades to the plain coordinate instead of aborting (Phase 12h)") {
+    // netcdf_dim_value()'s fixed-size `boundvals[50]` array can't hold an
+    // arbitrary CF bounds variable's vertex count -- unstructured/polygonal
+    // cell bounds routinely exceed 50 vertices, so this is a real, valid
+    // file shape, not a corrupt one. Before Phase 12h this exit()'d the
+    // whole process; now it falls back to the plain, bounds-less read of
+    // the coordinate itself (the coordinate variable is fine; only the
+    // bounds decoration is unsupported).
+    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_big_bounds_XXXXXX").string();
+    int fd = mkstemp(&tmpl[0]);
+    REQUIRE(fd >= 0);
+    close(fd);
+    std::string path = tmpl;
+
+    const int nv = 60; // > 50
+
+    int ncid;
+    REQUIRE(nc_create(path.c_str(), NC_CLOBBER, &ncid) == NC_NOERR);
+    int dim_cell, dim_nv;
+    REQUIRE(nc_def_dim(ncid, "cell", 4, &dim_cell) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "nv", nv, &dim_nv) == NC_NOERR);
+    int var_cell, var_bnds;
+    REQUIRE(nc_def_var(ncid, "cell", NC_DOUBLE, 1, &dim_cell, &var_cell) == NC_NOERR);
+    REQUIRE(nc_put_att_text(ncid, var_cell, "bounds", 9, "cell_bnds") == NC_NOERR);
+    int bdims[2] = {dim_cell, dim_nv};
+    REQUIRE(nc_def_var(ncid, "cell_bnds", NC_DOUBLE, 2, bdims, &var_bnds) == NC_NOERR);
+    REQUIRE(nc_enddef(ncid) == NC_NOERR);
+    double cell_vals[4] = {10.0, 20.0, 30.0, 40.0};
+    REQUIRE(nc_put_var_double(ncid, var_cell, cell_vals) == NC_NOERR);
+    std::vector<double> bnds_vals(4 * nv, 0.0);
+    REQUIRE(nc_put_var_double(ncid, var_bnds, bnds_vals.data()) == NC_NOERR);
+    REQUIRE(nc_close(ncid) == NC_NOERR);
+
+    int fileid = open_sample_file(path);
+
+    double val;
+    char cval[256];
+    int has_bounds;
+    double bmin, bmax;
+    // Before the fix, this line never returns -- the process exit()'d.
+    nc_type type = netcdf_dim_value(fileid, (char *)"cell", 2, &val, cval, 99,
+                                     &has_bounds, &bmin, &bmax);
+    CHECK(type == NC_DOUBLE);
+    CHECK(val == doctest::Approx(30.0)); // the real coordinate value, not virt_place
+    CHECK(has_bounds == 0);
+
+    netcdf_fi_close(fileid);
+    std::remove(path.c_str());
+}
+
+TEST_CASE("netcdf_dim_value: a normal (<=50-vertex) bounds variable still averages to the center value") {
+    // Companion to the >50-vertices degrade test above: nothing in the
+    // existing suite exercises the ordinary bounds-averaging path at all,
+    // so this closes a real coverage gap on the path Phase 12h's
+    // restructuring (introducing `use_bounds`) touched most.
+    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_small_bounds_XXXXXX").string();
+    int fd = mkstemp(&tmpl[0]);
+    REQUIRE(fd >= 0);
+    close(fd);
+    std::string path = tmpl;
+
+    int ncid;
+    REQUIRE(nc_create(path.c_str(), NC_CLOBBER, &ncid) == NC_NOERR);
+    int dim_cell, dim_nv;
+    REQUIRE(nc_def_dim(ncid, "cell", 4, &dim_cell) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "nv", 2, &dim_nv) == NC_NOERR);
+    int var_cell, var_bnds;
+    REQUIRE(nc_def_var(ncid, "cell", NC_DOUBLE, 1, &dim_cell, &var_cell) == NC_NOERR);
+    REQUIRE(nc_put_att_text(ncid, var_cell, "bounds", 9, "cell_bnds") == NC_NOERR);
+    int bdims[2] = {dim_cell, dim_nv};
+    REQUIRE(nc_def_var(ncid, "cell_bnds", NC_DOUBLE, 2, bdims, &var_bnds) == NC_NOERR);
+    REQUIRE(nc_enddef(ncid) == NC_NOERR);
+    double cell_vals[4] = {10.0, 20.0, 30.0, 40.0};
+    REQUIRE(nc_put_var_double(ncid, var_cell, cell_vals) == NC_NOERR);
+    // Cell 2 (0-indexed) has bounds [25, 45] -- deliberately NOT centered on
+    // the stored coordinate value (30), matching the header comment's own
+    // note that "some files have the dim value NOT centered between the
+    // boundaries" and that netcdf_dim_value() reports the bounds' average
+    // (35), not the stored coordinate (30), when bounds are present.
+    double bnds_vals[8] = {5.0,15.0, 15.0,25.0, 25.0,45.0, 35.0,55.0};
+    REQUIRE(nc_put_var_double(ncid, var_bnds, bnds_vals) == NC_NOERR);
+    REQUIRE(nc_close(ncid) == NC_NOERR);
+
+    int fileid = open_sample_file(path);
+
+    double val;
+    char cval[256];
+    int has_bounds;
+    double bmin, bmax;
+    nc_type type = netcdf_dim_value(fileid, (char *)"cell", 2, &val, cval, 99,
+                                     &has_bounds, &bmin, &bmax);
+    CHECK(type == NC_DOUBLE);
+    CHECK(has_bounds == 2);
+    CHECK(val == doctest::Approx(35.0)); // (25+45)/2, not the stored 30.0
+    CHECK(bmin == doctest::Approx(25.0));
+    CHECK(bmax == doctest::Approx(45.0));
+
+    netcdf_fi_close(fileid);
+    std::remove(path.c_str());
+}
+
+TEST_CASE("netcdf_dim_value: a coordinate variable shorter than its own dimension degrades on out-of-range reads (Phase 12h)") {
+    // netcdf_has_dim_values()/netcdf_dimvar_id() match a dimvar purely by
+    // name, with no check that its length agrees with the dimension it's
+    // named after. A perfectly legal (if unusual) file can have a "time"
+    // dimension of size 10 while the "time" *variable* is actually defined
+    // over a different, shorter dimension -- so a read at a `place` beyond
+    // that variable's real length fails with NC_EINVALCOORDS. Before Phase
+    // 12h this exit()'d the whole process on the read failure (introduced,
+    // unchecked, by Phase 12f as the first fix that even looked at this
+    // call's error code); now it degrades to virt_place.
+    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_short_dimvar_XXXXXX").string();
+    int fd = mkstemp(&tmpl[0]);
+    REQUIRE(fd >= 0);
+    close(fd);
+    std::string path = tmpl;
+
+    int ncid;
+    REQUIRE(nc_create(path.c_str(), NC_CLOBBER, &ncid) == NC_NOERR);
+    int dim_time, dim_short;
+    REQUIRE(nc_def_dim(ncid, "time", 10, &dim_time) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "short", 3, &dim_short) == NC_NOERR);
+    int var_time;
+    // "time" the variable is 1-D, but over "short" (length 3), not "time"
+    // (length 10) -- netcdf_dimvar_id() matches it to the "time" dimension
+    // purely by name regardless.
+    REQUIRE(nc_def_var(ncid, "time", NC_DOUBLE, 1, &dim_short, &var_time) == NC_NOERR);
+    REQUIRE(nc_enddef(ncid) == NC_NOERR);
+    double time_vals[3] = {1.0, 2.0, 3.0};
+    REQUIRE(nc_put_var_double(ncid, var_time, time_vals) == NC_NOERR);
+    REQUIRE(nc_close(ncid) == NC_NOERR);
+
+    int fileid = open_sample_file(path);
+
+    double val;
+    char cval[256];
+    int has_bounds;
+    double bmin, bmax;
+    // place=5 is within the "time" dimension's nominal length (10) but past
+    // the real "time" variable's actual length (3). Before the fix, this
+    // line never returns -- the process exit()'d.
+    nc_type type = netcdf_dim_value(fileid, (char *)"time", 5, &val, cval, 5,
+                                     &has_bounds, &bmin, &bmax);
+    CHECK(type == NC_DOUBLE);
+    CHECK(val == doctest::Approx(5.0)); // falls back to virt_place
+    CHECK(has_bounds == 0);
+
+    netcdf_fi_close(fileid);
+    std::remove(path.c_str());
+}
+
+TEST_CASE("netcdf_dim_value: a 1-D NC_CHAR dimvar shorter than its own dimension degrades on out-of-range reads (Phase 12h)") {
+    // Same shape of bug as the numeric short-dimvar test above, but on the
+    // 1-D NC_CHAR path: the "label" variable is 1-D NC_CHAR over a
+    // different, shorter dimension than the "label" dimension it's
+    // name-matched to. Before Phase 12h, nc_get_var1_text()'s failure here
+    // (added by Phase 12g, unchecked before that) exit()'d the process.
+    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_short_char1d_XXXXXX").string();
+    int fd = mkstemp(&tmpl[0]);
+    REQUIRE(fd >= 0);
+    close(fd);
+    std::string path = tmpl;
+
+    int ncid;
+    REQUIRE(nc_create(path.c_str(), NC_CLOBBER, &ncid) == NC_NOERR);
+    int dim_label, dim_short;
+    REQUIRE(nc_def_dim(ncid, "label", 10, &dim_label) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "short", 3, &dim_short) == NC_NOERR);
+    int var_label;
+    REQUIRE(nc_def_var(ncid, "label", NC_CHAR, 1, &dim_short, &var_label) == NC_NOERR);
+    REQUIRE(nc_enddef(ncid) == NC_NOERR);
+    char label_vals[3] = {'a', 'b', 'c'};
+    REQUIRE(nc_put_var_text(ncid, var_label, label_vals) == NC_NOERR);
+    REQUIRE(nc_close(ncid) == NC_NOERR);
+
+    int fileid = open_sample_file(path);
+
+    double val;
+    char cval[256];
+    int has_bounds;
+    double bmin, bmax;
+    // Before the fix, this line never returns -- the process exit()'d.
+    nc_type type = netcdf_dim_value(fileid, (char *)"label", 5, &val, cval, 5,
+                                     &has_bounds, &bmin, &bmax);
+    CHECK(type == NC_DOUBLE); // degraded from NC_CHAR to virt_place
+    CHECK(val == doctest::Approx(5.0));
+    CHECK(has_bounds == 0);
+
+    netcdf_fi_close(fileid);
+    std::remove(path.c_str());
+}
+
+TEST_CASE("netcdf_dim_value: a 2-D NC_CHAR dimvar's first read fails and degrades cleanly (Phase 12h)") {
+    // Exercises the trickiest edge of the 2-D NC_CHAR degrade fix: an
+    // error on the very FIRST character read (i==0), where *(ret_val_char
+    // + i - 1) would underflow if the NUL-termination step below the loop
+    // ran unconditionally. It's guarded on `ret_type == NC_CHAR` now, which
+    // is false on this path since the read never succeeds at all.
+    auto tmpl = (std::filesystem::temp_directory_path() / "ncview_short_char2d_XXXXXX").string();
+    int fd = mkstemp(&tmpl[0]);
+    REQUIRE(fd >= 0);
+    close(fd);
+    std::string path = tmpl;
+
+    int ncid;
+    REQUIRE(nc_create(path.c_str(), NC_CLOBBER, &ncid) == NC_NOERR);
+    int dim_label, dim_short, dim_chars;
+    REQUIRE(nc_def_dim(ncid, "label", 10, &dim_label) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "short", 3, &dim_short) == NC_NOERR);
+    REQUIRE(nc_def_dim(ncid, "chars", 5, &dim_chars) == NC_NOERR);
+    int var_label;
+    int ldims[2] = {dim_short, dim_chars};
+    // "label" the variable is 2-D NC_CHAR over [short(3), chars(5)] -- but
+    // name-matched to the "label" dimension (length 10) regardless.
+    REQUIRE(nc_def_var(ncid, "label", NC_CHAR, 2, ldims, &var_label) == NC_NOERR);
+    REQUIRE(nc_enddef(ncid) == NC_NOERR);
+    char label_vals[15] = {'a','b',0,0,0, 'c','d',0,0,0, 'e','f',0,0,0};
+    REQUIRE(nc_put_var_text(ncid, var_label, label_vals) == NC_NOERR);
+    REQUIRE(nc_close(ncid) == NC_NOERR);
+
+    int fileid = open_sample_file(path);
+
+    double val;
+    char cval[256];
+    int has_bounds;
+    double bmin, bmax;
+    // place=5 is beyond the "short" dim's real length (3) -- the very
+    // first nc_get_var1_text() call (i==0) fails.
+    // Before the fix, this line never returns -- the process exit()'d.
+    nc_type type = netcdf_dim_value(fileid, (char *)"label", 5, &val, cval, 5,
+                                     &has_bounds, &bmin, &bmax);
+    CHECK(type == NC_DOUBLE); // degraded from NC_CHAR to virt_place
+    CHECK(val == doctest::Approx(5.0));
     CHECK(has_bounds == 0);
 
     netcdf_fi_close(fileid);

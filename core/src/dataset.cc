@@ -267,6 +267,10 @@ void Dataset::getDataIterate( NCVar *var, size_t *virt_start_pos, size_t *count,
  * to allocate space for at least a 1024 character string in the return_value!
  * It will never be larger than that.  Takes a virtual place, and converts
  * it to an actual place before determining the value.
+ *
+ * Phase 12h: this never aborts the process either -- netcdf_dim_value()
+ * degrades to a virt_place-derived NC_DOUBLE (or an unbounded real value)
+ * on any read/shape failure it can't make sense of, rather than exiting.
  */
 nc_type Dataset::dimValue( NCVar *var, int dim_id, size_t virt_place, double *return_val_double,
 	char *return_val_char, int *return_has_bounds, double *return_bounds_min,

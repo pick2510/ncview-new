@@ -1215,12 +1215,22 @@ int netcdf_has_dim_values( int fileid, char *dim_name )
  * be filled out.  If the return value of the call is NC_CHAR, then ret_val_char
  * will have been filled out.  If the return value of the call is NC_DOUBLE, then
  * ret_val_double will have been filled out.
+ *
+ * Phase 12h: this function always returns NC_DOUBLE or NC_CHAR and never
+ * aborts the process. When it cannot read or make sense of the requested
+ * dimension value (an unusable file shape, a failed netCDF read, an
+ * oversized bounds variable, ...) it degrades: it warns to stderr and
+ * falls back to virt_place as a synthetic NC_DOUBLE coordinate (or, for
+ * an unusable bounds variable specifically, to the plain unbounded
+ * coordinate read with *return_has_bounds set to 0), the same "index as
+ * coordinate" presentation ncview already uses for any dimension with no
+ * coordinate variable at all.
  */
 nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place, 
 		double *ret_val_double, char *ret_val_char, size_t virt_place, 
 		int *return_has_bounds, double *return_bounds_min, double *return_bounds_max )
 {
-	int	err, dimvar_id, nvertices, dimvar_gid;
+	int	err, dimvar_id, nvertices, dimvar_gid, use_bounds;
 	char	var_name[MAX_NC_NAME];
 	nc_type type, ret_type;
 	size_t	limit;
@@ -1248,8 +1258,21 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 
 	err = nc_inq_var( dimvar_gid, dimvar_id, var_name, &type, &n_dims, dim, &n_atts );
 	if( err != NC_NOERR ) {
-		fprintf( stderr, "netcdf_dim_value: failed on nc_inq_var call!\n" );
-		exit(-1);
+		/* Phase 12h: dimvar_id/dimvar_gid were just handed back by a
+		 * successful lookup two lines above, so this is effectively
+		 * unreachable outside a corrupt handle or a netCDF-library-
+		 * internal failure. Degrade anyway rather than abort, matching
+		 * the rest of this function -- this runs before the
+		 * has_bounds/bounds_min/bounds_max pre-zeroing block below, so
+		 * it must set all four out-params itself, the same shape the
+		 * two early returns above it use. */
+		fprintf( stderr, "netcdf_dim_value: failed on nc_inq_var call for dim %s; using virtual place\n",
+			dim_name );
+		*ret_val_double = (double)virt_place;
+		*return_has_bounds = 0;
+		*return_bounds_min = 0.0;
+		*return_bounds_max = 0.0;
+		return( NC_DOUBLE );
 		}
 
 	/* Phase 12f: initialize on every path below, including the
@@ -1295,17 +1318,26 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 					 * actually reads NC_CHAR data. */
 					err = nc_get_var1_text( dimvar_gid, dimvar_id, char_place, ret_val_char+i );
 					if( err != NC_NOERR ) {
-						fprintf( stderr, "netcdf_dim_value: failed reading character %ld of dim %s!\n",
+						/* Phase 12h: degrade rather than abort -- break
+						 * out of the read loop and fall back to
+						 * virt_place, overwriting the NC_CHAR assigned
+						 * above. ret_val_char is only NUL-terminated
+						 * below when ret_type is still NC_CHAR, so an
+						 * error on the very first character (i==0,
+						 * where i-1 would underflow) is handled safely. */
+						fprintf( stderr, "netcdf_dim_value: failed reading character %ld of dim %s; using virtual place\n",
 							i, dim_name );
 						fprintf( stderr, "%s\n", nc_strerror( err ) );
-						exit(-1);
+						*ret_val_double = (double)virt_place;
+						ret_type = NC_DOUBLE;
+						break;
 						}
 					i++;
 					}
 				while
 					(((size_t)i < limit) &&
 						(*(ret_val_char+i-1) != '\0'));
-				if( *(ret_val_char+i-1) != '\0')
+				if( (ret_type == NC_CHAR) && (*(ret_val_char+i-1) != '\0') )
 					*(ret_val_char+i-1) = '\0';
 				}
 			else if( n_dims == 1 ) {
@@ -1318,12 +1350,15 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 				 * nc_get_var1_uchar() cannot read NC_CHAR data. */
 				err = nc_get_var1_text( dimvar_gid, dimvar_id, place1, ret_val_char );
 				if( err != NC_NOERR ) {
-					fprintf( stderr, "netcdf_dim_value: failed reading dim %s at place %zu!\n",
+					/* Phase 12h: degrade rather than abort. */
+					fprintf( stderr, "netcdf_dim_value: failed reading dim %s at place %zu; using virtual place\n",
 						dim_name, place );
 					fprintf( stderr, "%s\n", nc_strerror( err ) );
-					exit(-1);
+					*ret_val_double = (double)virt_place;
+					ret_type = NC_DOUBLE;
 					}
-				ret_val_char[1] = '\0';
+				else
+					ret_val_char[1] = '\0';
 				}
 			else	{
 				/* Phase 12g: neither of the two shapes this function
@@ -1376,75 +1411,89 @@ nc_type netcdf_dim_value( int fileid, char *dim_name, size_t place,
 				}
 
 			dimvar_bounds_id = netcdf_dimvar_bounds_id( dimvar_gid, dim_name, &nvertices );
-			if( dimvar_bounds_id < 0 ) {
+			/* Phase 12h: "usable bounds" now covers both "no bounds
+			 * attribute at all" and "bounds attribute present but this
+			 * function can't handle it (too many vertices)" -- both
+			 * converge on the same plain, bounds-less coordinate read
+			 * below rather than each having their own copy of it. */
+			use_bounds = (dimvar_bounds_id >= 0) && (nvertices <= 50);
 
-				*return_has_bounds = 0;
-				err = nc_get_var1_double( dimvar_gid, dimvar_id, &place, ret_val_double );
-				if( err != NC_NOERR ) {
-					/* Phase 12f: this call's return value used to go
-					 * unchecked -- on failure ret_val_double was left
-					 * whatever it started as, and the function
-					 * returned NC_DOUBLE as if the read had
-					 * succeeded, so the caller believed uninitialized
-					 * stack memory was a real coordinate value. */
-					fprintf( stderr, "netcdf_dim_value: failed reading dim %s at place %zu!\n",
-						dim_name, place );
-					fprintf( stderr, "%s\n", nc_strerror( err ) );
-					exit(-1);
-					}
-#ifdef ELIM_DENORMS
-				/* Eliminate denormalized numbers */
-				c = (unsigned char *)ret_val_double;
-				if((*(c+7)==0) && ((*(c+0)!=0)||(*(c+1)!=0)||(*(c+2)!=0)||(*(c+3)!=0)||(*(c+4)!=0)||(*(c+5)!=0)||(*(c+6)!=0))) {
-					fprintf( stderr,
-					  "Denormalized number in dimvar %s, position %ld: Setting to zero!\n",
-					  var_name, place );
-					*ret_val_double = 0.0;
-					}
-#endif
-				}
-			else
-				{
+			if( use_bounds ) {
 				*return_has_bounds = nvertices;
-				/* OK, have a bounds dimvar here, read it and compute mean
-				 * to get the value to return.
+				/* OK, have a usable bounds dimvar here, read it and
+				 * compute the mean to get the value to return.
 				 */
-				if( nvertices > 50 ) {
-					fprintf( stderr, "Error, compiled with max number of vertices for bounds var of 50!  But found a var with n=%d\n", 
-						nvertices );
-					exit(-1);
-					}
 				bstart[0] = place;
 				bstart[1] = 0L;
 				bcount[0] = 1L;
 				bcount[1] = nvertices;
 				err = nc_get_vara_double( dimvar_gid, dimvar_bounds_id, bstart, bcount, boundvals );
-				if( err != NC_NOERR ) {	
-					fprintf( stderr, "Error reading boundary dim values from file!\n" );
+				if( err != NC_NOERR ) {
+					/* Phase 12h: degrade to the plain, bounds-less read
+					 * below rather than aborting -- the coordinate
+					 * variable itself is fine, only its bounds
+					 * variable's read failed. */
+					fprintf( stderr, "Error reading boundary dim values for dim %s from file; using unbounded coordinate instead\n",
+						dim_name );
 					fprintf( stderr, "%s\n", nc_strerror( err ) );
-					exit(-1);
+					use_bounds = 0;
+					*return_has_bounds = 0;
 					}
-				*ret_val_double = 0.0;
-				boundvals_min = 1.e35;
-				boundvals_max = -1.e35;
-				for( i=0; i<nvertices; i++ ) {
+				else	{
+					*ret_val_double = 0.0;
+					boundvals_min = 1.e35;
+					boundvals_max = -1.e35;
+					for( i=0; i<nvertices; i++ ) {
 #ifdef ELIM_DENORMS
+						/* Eliminate denormalized numbers */
+						c = (unsigned char *)boundvals[i];
+						if((*(c+7)==0) && ((*(c+0)!=0)||(*(c+1)!=0)||(*(c+2)!=0)||(*(c+3)!=0)||(*(c+4)!=0)||(*(c+5)!=0)||(*(c+6)!=0))) {
+							fprintf( stderr,
+							  "Denormalized number in dimvar %s, position %ld: Setting to zero!\n",
+							  var_name, place );
+							boundvals[i] = 0.0;
+							}
+#endif
+						*ret_val_double += boundvals[i];
+						boundvals_min = (boundvals[i] < boundvals_min) ? boundvals[i] : boundvals_min;
+						boundvals_max = (boundvals[i] > boundvals_max) ? boundvals[i] : boundvals_max;
+						}
+					*ret_val_double /= (double)nvertices;
+					*return_bounds_min = boundvals_min;
+					*return_bounds_max = boundvals_max;
+					}
+				}
+
+			if( !use_bounds ) {
+				/* Phase 12h: was `else`, i.e. dimvar_bounds_id < 0 --
+				 * now also reached when a bounds variable exists but
+				 * couldn't be used (too many vertices, or its own read
+				 * failed above). Plain, bounds-less coordinate read. */
+				if( (dimvar_bounds_id >= 0) && (nvertices > 50) )
+					fprintf( stderr, "Error, compiled with max number of vertices for bounds var of 50!  But found a var with n=%d for dim %s; using unbounded coordinate instead\n",
+						nvertices, dim_name );
+
+				*return_has_bounds = 0;
+				err = nc_get_var1_double( dimvar_gid, dimvar_id, &place, ret_val_double );
+				if( err != NC_NOERR ) {
+					/* Phase 12h: degrade rather than abort. */
+					fprintf( stderr, "netcdf_dim_value: failed reading dim %s at place %zu; using virtual place\n",
+						dim_name, place );
+					fprintf( stderr, "%s\n", nc_strerror( err ) );
+					*ret_val_double = (double)virt_place;
+					}
+#ifdef ELIM_DENORMS
+				else	{
 					/* Eliminate denormalized numbers */
-					c = (unsigned char *)boundvals[i];
+					c = (unsigned char *)ret_val_double;
 					if((*(c+7)==0) && ((*(c+0)!=0)||(*(c+1)!=0)||(*(c+2)!=0)||(*(c+3)!=0)||(*(c+4)!=0)||(*(c+5)!=0)||(*(c+6)!=0))) {
 						fprintf( stderr,
 						  "Denormalized number in dimvar %s, position %ld: Setting to zero!\n",
 						  var_name, place );
-						boundvals[i] = 0.0;
+						*ret_val_double = 0.0;
 						}
-#endif
-					*ret_val_double += boundvals[i];
-					boundvals_min = (boundvals[i] < boundvals_min) ? boundvals[i] : boundvals_min;
-					boundvals_max = (boundvals[i] > boundvals_max) ? boundvals[i] : boundvals_max;
 					}
-				*ret_val_double /= (double)nvertices;
-				*return_bounds_min = boundvals_min;
-				*return_bounds_max = boundvals_max;
+#endif
 				}
 			ret_type = NC_DOUBLE;
 			break;
