@@ -3635,13 +3635,132 @@ than carried forward in the plan file.
 
 Still genuinely open, unrelated to this cluster: the data-read cascade
 and full startup cascade from Phase 12d's original 51-site inventory
-(the latter still blocked on `in_error()`/`in_dialog()` unconditionally
-dereferencing `g_app.ui`, unsafe on any pre-UI startup path); and
-`netcdf_dimvar_bounds_id()`'s pre-existing gap (never verifies a bounds
-variable's *first* dim is the coordinate's own dim, so a transposed
-`[nv, n]` bounds variable could still drive an out-of-range read --
-12h's fallback makes that degrade rather than abort, but the
+(**correction, found while scoping Phase 12i**: the note above claiming
+these were "blocked on `in_error()`/`in_dialog()` unconditionally
+dereferencing `g_app.ui`" was wrong -- `app/main.cc` sets `g_app.ui`
+before `ncview_main()` runs, so `in_error()` has been safe from the
+first line of startup all along; this was an untested assumption
+carried forward from 12d, not a real blocker -- see Phase 12i below);
+and `netcdf_dimvar_bounds_id()`'s pre-existing gap (never verifies a
+bounds variable's *first* dim is the coordinate's own dim, so a
+transposed `[nv, n]` bounds variable could still drive an out-of-range
+read -- 12h's fallback makes that degrade rather than abort, but the
 wrong-shape detection itself remains unfixed).
+
+## Part V, Phase 12i: fix 2 group-path bugs in `netcdf_dimvar_id()`/`netcdf_att_string()`
+
+**Scoped fresh, and the scoping rejected both of 12d's placeholder
+names.** "The data-read cascade" and "the startup cascade" were 12d's
+names for `file_netcdf.cc`'s remaining `exit()` sites, left deliberately
+undescribed for fresh scoping at pickup. An Explore investigation
+building a current, line-by-line inventory (independently spot-checked
+against the actual netCDF headers and source) found both names
+described something that wasn't there:
+
+- **The 51-site count included 7 comment lines** from prior phases' own
+  fix descriptions (Phase 12c/12d/12f/12g/12h), not live `exit()` calls.
+  **44 remain.**
+- **There is no CLI-parsing bucket in this file.** Re-reading Phase
+  12d's own entry: its "19 recoverable/user-facing, 7 internal-invariant,
+  25 in between" breakdown is entirely about *recoverability*, not a
+  CLI-vs-library split -- `file_netcdf.cc` has zero argument-parsing
+  code (that's `cli_options.cc`/`ncview.cc`).
+- **"The startup cascade" was never blocked on `g_app.ui`** -- see the
+  correction added to Phase 12h's entry above.
+- **Neither is really a cascade.** 41 of the 44 sites are one shape
+  repeated: a netCDF inquiry failing on an id/name the *same function or
+  its immediate caller* just successfully resolved -- unreachable on a
+  valid file, correctly left as `exit()` per this plan's "no `assert()`
+  convention" decision (confirmed case-by-case, not assumed). The other
+  3 are not a cluster -- 3 unrelated, individually-reachable bugs, each
+  a one-line-shaped fix with zero caller changes.
+
+This phase takes the two zero-cascade bugs. The third
+(`netcdf_fi_get_data`'s unchecked `nc_get_vara_float()`, the single most
+reachable site in the file -- any CF file with a displayable
+non-numeric variable crashes the instant it's selected) needs a real
+design decision (the function is `void`, so a status return cascades
+through 5 more `void` functions, vs. filling `data` with `FILL_FLOAT`
+and returning normally) -- deferred to Phase 12j, not bundled in here.
+
+**Bug 1 -- `netcdf_dimvar_id()` (`file_netcdf.cc`, inside the
+fully-qualified-dim-name branch) crashed at startup on any netCDF-4 file
+with a variable nested >=2 groups deep.** `netcdf_dim_id_to_name()`
+qualifies a dim name with the *owning variable's* group path, not the
+dim's own -- so a variable at `grp1/grp2/g2_var` sharing the file
+root's "x" dimension by id (legal in netCDF-4) gets a fully-qualified
+dim name of `grp1/grp2/x`. `varname_no_groups()` splits that at the
+*last* slash, handing `nc_inq_grp_ncid()` the two-level path
+`grp1/grp2` -- which it can't resolve (confirmed against netcdf.h:
+`nc_inq_grp_ncid()` takes a *simple* one-level group name; the
+path-taking variant is the sibling `nc_inq_grp_full_ncid()`). One-level
+groups survive by accident (`nc_inq_grp_ncid(root,"grp1")` succeeds);
+only >=2 levels aborts, and it aborts during ordinary startup
+(`fi_initialize -> Dataset::addVariables -> fill_dim_structs ->
+dimIdToName -> dimLongname -> netcdf_dimvar_id`), no unusual user action
+needed. (A separately-documented `=`-vs-`==` typo two lines above this
+fix, preserved verbatim per `modernization.md`, means the function's own
+retry-with-root-id fallback always runs and always fails identically --
+not the bug itself, just why there's no accidental recovery.)
+
+Fixed with `return(-1)` instead of `exit(-1)` -- zero cascade:
+`netcdf_dimvar_id()` already returns `-1` for "no dimvar found"
+elsewhere in the same function, and all 4 callers (`netcdf_dim_units`,
+`netcdf_dim_calendar`, `netcdf_dim_longname`, `netcdf_dimvar_bounds_id`)
+already degrade to the bare dim name on a negative return.
+
+**Bug 2 -- `netcdf_att_string()` crashed on "Info" for any variable
+inside any group, and was simply wrong for one even when it didn't
+crash.** It was the only function left in `file_netcdf.cc` using a
+plain `nc_inq_varid()` (root-group-only) rather than the group-aware
+`nc_inq_varid_grp()` every sibling function in the file uses
+(`netcdf_scannable_dims`, `netcdf_fi_n_dims`, `netcdf_fi_var_size`,
+`netcdf_dim_id_to_name`, `netcdf_fi_get_data`, `netcdf_get_char_att`,
+`netcdf_fill_aux_data`, `netcdf_fill_value`). `View::information()`
+always passes a group-qualified name (`netcdf_fi_list_vars_inner()`
+prefixes every listed variable with its group path), so the plain
+lookup could never have found a grouped variable at all -- this is the
+same bug *class* Phase 12d fixed in this exact function (its
+`switch(datatype)` `default:` branch); 12d just didn't look at this
+earlier lookup. Fixed by switching to `nc_inq_varid_grp()` and using its
+resolved group id (not the original file id) for every subsequent
+netCDF call in the function, matching the pattern `netcdf_fi_n_dims()`
+already established.
+
+**Confirmed both were real regressions the established way**: reverted
+each fix individually, rebuilt, ran its new test directly -- both
+processes died with no `[doctest]` summary (bug 1: `NetCDF: Name
+contains illegal characters` from the doubly-qualified group path; bug
+2: `could not find var named "grp1/grp2/g2_var" in file!`) -- then
+restored and confirmed clean.
+
+Both regression tests reuse `test_file_metadata.cc`'s existing
+`MetaFile` fixture (already builds the needed 2-level-nested-group file
+and grouped variable for other tests in the same file) -- no new
+fixture infrastructure needed. 262->264 tests, 6975->7026 assertions.
+
+**Recorded for Phase 12j, not acted on now**: while reading
+`netcdf_att_string`/`netcdf_global_att_string`/`netcdf_dimvar_bounds_id`,
+confirmed (against the netCDF v2 API's own source-level default,
+`ncopts = NC_FATAL | NC_VERBOSE`, and this project's zero hits for any
+override) that their remaining v2-API-only calls
+(`ncattname`/`ncattinq`/`ncattget`) **already abort inside the netCDF
+library itself** on error -- their own `if(err<0)` guards afterward are
+dead code, unreachable because the process is gone before the call
+returns. Anyone converting these functions must migrate to the v3 API
+(`nc_inq_attname`/`nc_inq_att`/`nc_get_att`, which `netcdf_att_string`
+already uses elsewhere in the same function) as a hard prerequisite, or
+a "no longer aborts" claim would be false in a way `grep -n "exit("`
+wouldn't catch.
+
+Full six-gate verification clean: clean CI-matching build
+(`cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo`, no manual
+`CMAKE_CXX_FLAGS` override -- a prior verification pass in this plan
+used a non-representative override and missed a real regression that
+broke CI for two phases); `ctest` normal and 3 random-seed orderings,
+identical counts; `ncview_core_linkcheck` exit 0; all 15 `ui_smoke.sh`
+goldens byte-identical; a full-suite scratch ASan/UBSan build clean;
+`grep -n "exit("` confirms neither fixed site aborts anymore.
 
 ## Post-v0.2.0 defect audits
 
