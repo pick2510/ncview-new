@@ -370,14 +370,38 @@ jobs:
             -v "$PWD":/repo \
             -v "$PWD/netcdf-static-cache":/opt/netcdf-static \
             ubuntu:18.04 bash -ex -c '
-          apt-get update -qq
-          apt-get install -y -qq \
-            g++ make curl ca-certificates \
+          # apt against archive.ubuntu.com for this EOL release has proven
+          # flaky in CI (connection failures/timeouts, a different package
+          # each time -- not one bad mirror entry). Two layers of defense,
+          # since it is not obvious from here which applies on any given
+          # run: (1) apt-native retry/timeout tuning for ordinary transient
+          # blips; (2) if update/install still fails after those retries,
+          # repoint sources.list at old-releases.ubuntu.com, which is where
+          # Ubuntu moves a release'"'"'s packages once it drops off the main
+          # archive entirely, and try again. This only engages on failure,
+          # so it is a no-op cost-wise whenever archive.ubuntu.com is fine.
+          apt_opts="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          try_apt() {
+            for attempt in 1 2 3; do
+              if apt-get $apt_opts update -qq && apt-get $apt_opts install -y -qq "$@"; then
+                return 0
+              fi
+              echo "apt attempt $attempt failed, retrying in 10s..." >&2
+              sleep 10
+            done
+            return 1
+          }
+          PKGS="g++ make curl ca-certificates \
             libhdf5-dev zlib1g-dev libbz2-dev libzstd-dev libaec-dev \
             libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev \
             libxrender-dev libxfixes-dev \
             libexpat1-dev libcurl4-openssl-dev libxml2-dev \
-            flex bison texinfo patchelf pkg-config
+            flex bison texinfo patchelf pkg-config"
+          if ! try_apt $PKGS; then
+            echo "archive.ubuntu.com unusable after retries; falling back to old-releases.ubuntu.com" >&2
+            sed -i "s|http://archive.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g; s|http://security.ubuntu.com/ubuntu|http://old-releases.ubuntu.com/ubuntu|g" /etc/apt/sources.list
+            try_apt $PKGS
+          fi
 
           curl -fsSL https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz -o /tmp/cmake.tar.gz
           mkdir -p /opt/cmake
