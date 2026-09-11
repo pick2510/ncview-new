@@ -3502,6 +3502,147 @@ data-read cascade and full startup cascade from Phase 12d's original
 dim is the coordinate's own dim, so a transposed `[nv, n]` bounds
 variable would drive an out-of-range read.
 
+## Part V, Phase 12h: degrade `netcdf_dim_value()`'s last 6 `exit()` sites -- no `NC_NAT`
+
+**Scoped in plan mode first, and the scoping rejected the phase's own
+original premise.** 12h was planned as "introduce `NC_NAT`, harden 10
+unsafe callers." Re-verification against the post-12g code (an Explore
+investigation reading every one of the function's 8 return paths, then
+independently spot-checked) found that framing didn't survive contact
+with the facts, the same re-justify-before-doing discipline that
+declined Phase 11g:
+
+- `netcdf_dim_value()` **cannot currently return anything but
+  `NC_DOUBLE` or `NC_CHAR`** -- `NC_NAT` appears nowhere in the function
+  or the file, and its header comment stating the two-value contract is
+  accurate today.
+- That makes all 10 "unsafe" callers **currently correct**. Their
+  two-way `if(type==NC_DOUBLE)...else...` shape is sound precisely
+  because there is no third value; `nc_type` is a plain enum compared
+  with `==`, so introducing `NC_NAT` produces no compiler warning
+  anywhere -- it would silently make all 10 branches wrong at once, each
+  then reading a char buffer that was never written. Doing this would
+  have converted a 6-site abort problem into an 11-site
+  undefined-behavior problem, all of which would need to land in one
+  change to be a net win.
+- **Nothing wants what `NC_NAT` would buy.** Every one of the 16 call
+  sites only asks "is this a number or a string?" No caller
+  distinguishes, or has reason to distinguish, "coordinate unreadable"
+  from "no coordinate exists" -- and ncview already presents an
+  uncoordinated axis as `0..N-1` as its normal, designed behavior, with
+  about half the callers already carrying their own index fallback.
+
+Put to the user as an explicit decision (three options: degrade-only,
+degrade-plus-UI-reporting, or the original `NC_NAT` plan) with the
+concrete costs of each laid out; degrade-only was chosen. So 12h instead
+**finished what 12g started**: extended 12g's own "warn and fall back"
+house style to the remaining `exit()` sites. Zero caller changes, no new
+API surface.
+
+### The 6 remaining sites
+
+1. **`nc_inq_var()` failure** -- effectively unreachable (the id/gid
+   pair was just returned by a successful lookup two lines up), but
+   fixed for correctness. Runs *before* the has_bounds/bounds
+   pre-zeroing block, so needed a direct return setting all four
+   out-params itself, matching the shape of the two early returns
+   already above it.
+2. **`nc_get_var1_text()` failure, 2-D `NC_CHAR` loop** -- degraded;
+   needed to break cleanly out of the `do/while` and overwrite the
+   `ret_type = NC_CHAR` already assigned earlier in that case. The
+   NUL-termination step below the loop is now guarded on
+   `ret_type == NC_CHAR`, avoiding an `i-1` underflow when the very
+   first character read (`i==0`) is what failed.
+3. **`nc_get_var1_text()` failure, 1-D `NC_CHAR` path** -- same
+   treatment.
+4. **`nc_get_var1_double()` failure, numeric no-bounds path** --
+   degraded. The most reachable of the four read failures (any
+   coordinate variable shorter than the dimension it's named after).
+5. **`nvertices > 50`** (the fixed `boundvals[50]` stack array) -- does
+   **not** degrade to `virt_place`. The coordinate variable itself is
+   fine; only the bounds decoration is unsupported. Falls back to the
+   plain, bounds-less coordinate read instead, giving the user the real
+   value with `has_bounds = 0`. Genuinely reachable on valid CF files
+   (unstructured/polygonal cell bounds routinely exceed 50 vertices).
+6. **`nc_get_vara_double()` failure reading the bounds variable** --
+   same fallback as 5.
+
+Sites 5 and 6 required restructuring the bounds-handling block: a
+`use_bounds` flag now covers both "no bounds attribute at all" and
+"bounds attribute present but unusable," converging on one shared
+plain-read implementation rather than duplicating it.
+
+Both doc comments stating the function's contract (`file_netcdf.cc` and
+`Dataset::dimValue()` in `dataset.cc`) updated to say it always returns
+`NC_DOUBLE` or `NC_CHAR`, never aborts, and degrades on any read/shape
+failure -- without weakening the existing >=1024-byte buffer note.
+
+### Regression tests, and what each proves
+
+Two new test cases close a real coverage gap that predates this phase
+entirely: nothing in the suite had ever exercised the ordinary CF
+bounds-averaging path (a coordinate variable with a valid <=50-vertex
+`bounds` attribute) at all. One test proves the mean/min/max averaging
+still works correctly and deliberately uses off-center bounds to prove
+the returned value is the bounds' average, not the stored coordinate.
+
+Four more prove sites 2-5's degrade fixes are real defenses against
+process death, each verified the way every memory-safety fix in this
+plan has been: reverting the fix and running the new test directly
+first, confirming the process died with no `[doctest]` summary at all,
+then restoring the fix and confirming a clean pass.
+- The `nvertices > 50` fixture (a coordinate variable with a 60-vertex
+  bounds variable) crashed pre-fix; passes now with the real coordinate
+  value and `has_bounds == 0`.
+- A coordinate variable shorter than its own dimension (numeric path)
+  crashed pre-fix on the out-of-range `nc_get_var1_double()` read;
+  degrades to `virt_place` now.
+- The same short-dimvar trick, attempted for the two `NC_CHAR` read
+  failures too (not skipped -- cheap to build with the same
+  `nc_create`/`nc_def_var` idiom already established): one exercises
+  the 1-D `NC_CHAR` path, the other specifically targets the trickiest
+  edge of the 2-D fix (an error on the very first character, `i==0`,
+  the case that would have underflowed the NUL-termination index if the
+  `ret_type == NC_CHAR` guard weren't there). Both crashed pre-fix,
+  both pass now.
+
+Site 1 (`nc_inq_var()` failure) is unreachable by construction --
+documented in a comment rather than faked with a test.
+
+257->262 tests, 6911->6975 assertions. Full six-gate verification
+clean: `-Werror` build with no warnings; `ctest` normal + 4 random-seed
+orderings, identical counts every time; `ncview_core_linkcheck` exit 0;
+all 15 `ui_smoke.sh` goldens byte-identical despite this phase changing
+behavior on the file's hottest read path; a full scratch ASan/UBSan
+build clean; `grep -n "exit(" ` within the function's line range
+confirms zero remaining `exit()` calls (only a comment referencing the
+old bug it replaced).
+
+**Milestone**: `netcdf_dim_value()` is the first function from the
+external review's original 51-site `file_netcdf.cc` `exit()` inventory
+(Phase 12d) to be fully converted -- zero `exit()` calls left in a
+function that started with 11 across Phases 12d/12e/12f/12g/12h
+combined (2 converted in 12f, 2 converted in 12g, 6 degraded in 12h; the
+other original counts belonged to sibling functions already converted
+separately in 12d/12e).
+
+**`NC_NAT` is declined, not deferred** -- see this entry's rationale
+above. If a future feature genuinely needs to distinguish "coordinate
+unreadable" from "no coordinate," revisit then, and harden all 11 sites
+(the 10 callers plus `Dataset::dimValue()`'s own body) in the same
+change; the audit that would feed that work is preserved here rather
+than carried forward in the plan file.
+
+Still genuinely open, unrelated to this cluster: the data-read cascade
+and full startup cascade from Phase 12d's original 51-site inventory
+(the latter still blocked on `in_error()`/`in_dialog()` unconditionally
+dereferencing `g_app.ui`, unsafe on any pre-UI startup path); and
+`netcdf_dimvar_bounds_id()`'s pre-existing gap (never verifies a bounds
+variable's *first* dim is the coordinate's own dim, so a transposed
+`[nv, n]` bounds variable could still drive an out-of-range read --
+12h's fallback makes that degrade rather than abort, but the
+wrong-shape detection itself remains unfixed).
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
