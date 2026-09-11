@@ -3762,6 +3762,125 @@ identical counts; `ncview_core_linkcheck` exit 0; all 15 `ui_smoke.sh`
 goldens byte-identical; a full-suite scratch ASan/UBSan build clean;
 `grep -n "exit("` confirms neither fixed site aborts anymore.
 
+## Part V, Phase 12j: type-filter non-numeric variables, degrade `netcdf_fi_get_data()`, fix `netcdf_fill_value()`'s wrong-id bug
+
+**Re-scoping found Phase 12i's own entry above was factually wrong on
+its central claim.** It described `netcdf_fi_get_data()`'s
+`nc_get_vara_float()` call as "unchecked". Reading the function
+directly shows it already checked the return and `exit(-1)`'d --
+exactly the same shape as every other unconverted site in this file, a
+second `exit(-1)` sitting a few lines above it on the variable lookup.
+**This entry corrects that mistake.** The real bug wasn't a missing
+check; it was that `netcdf_fi_list_vars_inner()` applies no type filter
+at all to which variables are offered as selectable, so a CF file with
+a displayable non-numeric variable crashed the whole process the
+instant it was selected -- still the single most reachable `exit()`
+site in the file, just for a different reason than previously written
+down.
+
+Confirmed directly: `NCVar` (`core/include/ncview/defines.h`) doesn't
+even carry an `nc_type` field, so nothing downstream *could* filter by
+type even if it wanted to. This gap was already pinned by an existing
+characterization test in `test_file_metadata.cc`, whose own comment
+called it "a real, previously-uncovered quirk, not a bug this test is
+asserting should be fixed" -- that test's existence is what made the gap
+undeniable once someone looked.
+
+**Two independent fixes were needed, neither subsuming the other:**
+
+**Fix 1 -- a type filter at listing time.** In
+`netcdf_fi_list_vars_inner()`'s displayability check, added
+`nc_inq_vartype(gid, i, &vtype)` and excluded
+`vtype == NC_CHAR || vtype == NC_STRING || vtype >= NC_FIRSTUSERTYPEID`
+(covers `NC_VLEN`/`NC_OPAQUE`/`NC_ENUM`/`NC_COMPOUND`; `NC_MAX_ATOMIC_TYPE`
+is literally defined as `NC_STRING` in this netCDF's header, confirming
+the boundary). The loop's index `i` already *is* the netCDF varid within
+group `gid` (varids are `0..n_vars-1` per group), so this costs one
+cheap library call with no re-resolution. This cleanly fixes both
+user-selection call chains
+(`in_variable_selected -> set_scan_variable -> plotXYSc/fillViewData ->
+Dataset::getData[Iterate] -> netcdf_fi_get_data`, confirmed via direct
+trace across both branches of `effective_dimensionality`).
+
+**Fix 2 -- degrading `netcdf_fi_get_data()`'s 2 `exit()` sites.** The
+type filter doesn't cover `Dataset::cacheScalarCoordInfo()` or
+`handle_dim_mapping_2d()`, both of which read a *coordinate* variable
+named in a `coordinates` attribute directly by name, never through the
+displayable list -- a file naming a `char` variable that way still
+aborted at startup regardless of the filter. The read-failure exit
+(`tot_size` already known by that point) now fills the whole output
+buffer with `FILL_FLOAT` -- this function's own existing "bad value"
+sentinel, used a few lines below for NaN results from a *successful*
+read -- and returns immediately, **before** the NaN-elimination loop and
+the `scale_factor`/`add_offset` block, so the sentinel isn't multiplied
+into something else. Downstream tolerance was traced end to end and is
+solid: `FrameRenderer::render`, `getMinMaxOnestep`, the XY-plot path,
+and both cursor-readout sites all explicitly test against `FILL_FLOAT`.
+The variable-lookup-failure exit (a few lines earlier in the same
+function) couldn't safely compute a fill extent without re-triggering
+the identical failure inside a helper (`netcdf_fi_n_dims()`) that still
+`exit()`s itself -- so it reports and returns without touching the
+buffer instead, which is honest rather than a guess: every caller sizes
+its `start_pos`/`count` arrays from a variable already resolved once at
+`addVariable()` time, so this branch is effectively unreachable in
+practice.
+
+**Accepted, not fixed**: an all-`FILL_FLOAT` variable with <=3 timesteps
+renders correctly by coincidence (`initMinMax`'s inverted min/max range
+never gets used, since every pixel short-circuits on the fill-value
+branch first); with more timesteps it triggers the pre-existing "min and
+max both 0" modal dialog before settling on a blank frame. Not new
+behavior -- that dialog path already exists for any all-missing
+variable -- just reached by a different route. Not worth solving here.
+
+**A third, related bug found while verifying, bundled in as cheap
+enough**: `netcdf_fill_value()` called `nc_inq_vartype(file_id, varid,
+&vartype)` -- but `varid` was resolved via `nc_inq_varid_grp()` a few
+lines up and is group-relative, while `file_id` is the root id. Same bug
+class as Phase 12i's `netcdf_att_string()` fix. For a grouped variable
+with no `_FillValue`/`missing_value` attribute, this either resolved the
+wrong variable's type against the root group or failed outright, leaving
+`*v` uninitialized on failure. Fixed to use the already-resolved group
+id, matching every other lookup in the same function.
+
+**Test changes, all reusing the existing `MetaFile` fixture (no new
+fixture infrastructure)**:
+
+- Flipped the characterization test that pinned this exact gap: it now
+  asserts the `NC_CHAR` variable `label` is correctly excluded from the
+  displayable list, per this plan's practice of updating a
+  characterization test through an intentional behavior change rather
+  than leaving it stale.
+- A direct `netcdf_fi_get_data()` test on `label`, confirming
+  `FILL_FLOAT` fill instead of abort -- confirmed as a real regression
+  the established way: reverted the fix, rebuilt, ran the test directly,
+  the process died with no `[doctest]` summary (exit code 255); restored
+  and confirmed clean.
+- A `netcdf_fill_value()` test against a grouped variable with no
+  `_FillValue` attribute. **Honestly limited**: in this specific fixture
+  the bug happens to produce the same visible result as the fix, because
+  the colliding root-group variable at the same numeric varid is also
+  `NC_FLOAT` (a coincidence, verified by manually reverting the fix and
+  confirming the test still passed either way) -- the fix itself was
+  confirmed correct by direct code inspection instead, matching every
+  other lookup already in the function. Retained as a smoke test for the
+  code path, not as proof of the bug.
+- A test through `cacheScalarCoordInfo()`/`handle_dim_mapping_2d()` was
+  considered and skipped -- it needs full `Dataset`/`NCVar`/
+  `scalar_dim_map_info` machinery via `SessionFixture`, a materially
+  heavier setup than this test file's direct-function-call style. The
+  `netcdf_fi_get_data()` test above is the primary proof regardless,
+  since both those callers route through the exact same function.
+
+264->266 tests, 7026->7083 assertions. Full six-gate verification:
+clean CI-matching build (no manual `CMAKE_CXX_FLAGS` override); `ctest`
+normal and 3 random-seed orderings, identical counts;
+`ncview_core_linkcheck` exit 0; all 15 `ui_smoke.sh` goldens
+byte-identical; a full-suite scratch ASan/UBSan build clean; `grep`
+confirms zero live `exit()` calls remain in `netcdf_fi_get_data()` (the
+pre-existing, out-of-scope variable-lookup-failure `exit()` in
+`netcdf_fill_value()` is untouched, as scoped).
+
 ## Post-v0.2.0 defect audits
 
 Four rounds of external code review against the released `v0.2.x` builds
