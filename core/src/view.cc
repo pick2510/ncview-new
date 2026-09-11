@@ -2467,8 +2467,22 @@ View::plotXYSc( size_t *start, size_t *count )
 				snprintf( temp2_string, 127, "%lg", temp_double );
 				strncat( legend, temp2_string, sizeof(legend) - strlen(legend) - 1 );
 				}
-			else
-				strncat( legend, temp_string, sizeof(legend) - strlen(legend) - 1 );
+			else	{
+				/* Phase 12h follow-up: temp_string is 1024 bytes (widened
+				 * in Phase 12g to satisfy Dataset::dimValue()'s ≥1024-byte
+				 * contract) while legend is only 512 -- GCC's
+				 * -Wstringop-truncation can prove this strncat's source
+				 * may be longer than the remaining space and flags it as
+				 * -Werror, even though truncating here is intentional and
+				 * safe. Same fix as colormap_library.cc's -- make the
+				 * truncation explicit via memcpy/strnlen so nothing is
+				 * left for the heuristic to warn about. */
+				size_t used = strlen(legend);
+				size_t remaining = sizeof(legend) - used - 1;
+				size_t copy_len = strnlen( temp_string, remaining );
+				memcpy( legend+used, temp_string, copy_len );
+				legend[used+copy_len] = '\0';
+				}
 			have_done_one = true;
 			}
 	strncat( legend, ")", sizeof(legend) - strlen(legend) - 1 );
