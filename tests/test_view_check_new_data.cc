@@ -236,7 +236,14 @@ TEST_CASE("checkNewData: repeated growth calls accumulate frame-rate history, ca
     std::remove(path.c_str());
 }
 
-TEST_CASE("checkNewData: a file that vanishes between polls reports an error instead of exit()ing (Phase 12d)") {
+TEST_CASE("checkNewData: a file that vanishes between polls reports an error instead of exit()ing (Phase 12d)"
+        * doctest::skip(
+#ifdef _WIN32
+            true
+#else
+            false
+#endif
+        )) {
     // Regression test: checkNewData() used to reopen the file via
     // netcdf_fi_initialize(), which exit()s the whole process if the
     // reopen fails -- so a file deleted or replaced while ncview was
@@ -244,6 +251,17 @@ TEST_CASE("checkNewData: a file that vanishes between polls reports an error ins
     // this one poll. Fixed to use NetCDFFile::open()'s testable
     // std::optional failure instead (Phase 6's open() primitive) and
     // report via in_error() + stop watching, rather than crash.
+    //
+    // Skipped on Windows: this test's premise is POSIX unlink-while-open
+    // semantics -- std::remove() on the still-open file below is expected
+    // to succeed (the underlying inode survives until the last open fd
+    // closes), leaving nothing at that *path* for checkNewData()'s reopen
+    // to find. Windows' file-sharing rules deny deleting a file that any
+    // handle holds open without FILE_SHARE_DELETE, which the netCDF/HDF5
+    // backend doesn't request -- so std::remove() itself fails there with
+    // no ncview code involved. Confirmed via CI (Windows job,
+    // MSYS2/MinGW64): this REQUIRE was the one and only failure on that
+    // platform across 5 phases (12d-12h) before anyone checked CI status.
     SessionFixture fx;
     std::string path = make_growable_file("check_vanished", 3);
     NCVar *var = select_growable_variable(path, "check_vanished");
