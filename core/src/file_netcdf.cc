@@ -215,7 +215,22 @@ void netcdf_fi_list_vars_inner( Stringlist **ret_val, int gid, char *groupname )
 			 * architecture" plan) -- broken by calling the primitive
 			 * directly, as every other call in this file already does. */
 			dimlist  = netcdf_scannable_dims( gid, var_name );
-			if( (total_size > 1L) && (stringlist_len( dimlist ) >= 1)) {
+			/* Phase 12j: exclude non-numeric variables from the
+			 * displayable list -- nc_get_vara_float() (this function's
+			 * eventual data-read primitive, in netcdf_fi_get_data())
+			 * cannot read NC_CHAR/NC_STRING or any netCDF-4 user-defined
+			 * type (NC_VLEN/NC_OPAQUE/NC_ENUM/NC_COMPOUND, all with
+			 * nc_type >= NC_FIRSTUSERTYPEID). The loop variable i IS the
+			 * netCDF varid within group gid (varids are 0..n_vars-1 per
+			 * group), so this costs one cheap call with no re-resolution.
+			 * If the type lookup itself fails, treat as non-displayable
+			 * rather than risk offering something we can't read. */
+			nc_type vtype;
+			int	vtype_err = nc_inq_vartype( gid, i, &vtype );
+			int	is_numeric_type = (vtype_err == NC_NOERR) &&
+				(vtype != NC_CHAR) && (vtype != NC_STRING) &&
+				(vtype < NC_FIRSTUSERTYPEID);
+			if( is_numeric_type && (total_size > 1L) && (stringlist_len( dimlist ) >= 1)) {
 				/* Hack to make version 1.70+ emulate older versions
 				 * that did not display 1-d vars.
 				 */
@@ -616,9 +631,21 @@ void netcdf_fi_get_data( int fileid, char *var_name, size_t *start_pos,
 
 	err = nc_inq_varid_grp( fileid, var_name, &varid, &gid );
 	if( err != NC_NOERR ) {
+		/* Phase 12j: degrade rather than abort. Unlike the read-failure
+		 * branch below, tot_size can't safely be computed here -- n_dims
+		 * is only knowable via a successful lookup of this same variable,
+		 * and every helper that could supply it (netcdf_fi_n_dims(),
+		 * etc.) would re-run the identical failing lookup and exit()
+		 * itself, undoing the point of this fix. This lookup failing at
+		 * all is effectively unreachable in practice (every caller sizes
+		 * start_pos/count from a variable already resolved once at
+		 * addVariable() time), so simply reporting and returning without
+		 * touching data -- rather than guessing at a fill extent -- is
+		 * the honest choice: the caller's buffer is left exactly as it
+		 * was on entry. */
 		fprintf( stderr, "Error in netcdf_fi_get_data: could not find var named \"%s\" in file!\n",
 			var_name );
-		exit(-1);
+		return;
 		}
 
 	varname_no_groups( var_name, var_name_ng, NULL );
@@ -642,6 +669,18 @@ void netcdf_fi_get_data( int fileid, char *var_name, size_t *start_pos,
 
 	err = nc_get_vara_float( gid, varid, start_pos, count, data );
 	if( err != NC_NOERR ) {
+		/* Phase 12j: degrade rather than abort -- this is the single
+		 * most reachable exit() site in this file (any displayable
+		 * variable that fails a data read, e.g. a non-numeric type that
+		 * slipped past netcdf_fi_list_vars_inner()'s type filter via a
+		 * coordinates attribute rather than the displayable-variable
+		 * list). tot_size is already known at this point, so fill the
+		 * whole buffer with FILL_FLOAT (this function's own "bad value"
+		 * sentinel, already used a few lines below for NaN results from
+		 * a *successful* read) and return immediately -- critically,
+		 * before the NaN-elimination loop and the scale_factor/add_offset
+		 * block below, so the sentinel isn't multiplied into something
+		 * else. */
 		fprintf( stderr, "netcdf_fi_get_data: error on nc_get_vara_float call\n" );
 		fprintf( stderr, "cdfid=%d   variable=%s\n", fileid, var_name );
 		fprintf( stderr, "start, count:\n" );
@@ -649,7 +688,9 @@ void netcdf_fi_get_data( int fileid, char *var_name, size_t *start_pos,
 			fprintf( stderr, "[%zu]: %zu  %zu\n",
 				i, *(start_pos+i), *(count+i) );
 		fprintf( stderr, "%s\n", nc_strerror(err) );
-		exit( -1 );
+		for( i=0L; i<tot_size; i++ )
+			data[i] = FILL_FLOAT;
+		return;
 		}
 
 	/* Eliminate nans */
@@ -1931,8 +1972,16 @@ void netcdf_fill_value( int file_id, char *var_name, float *v, NetCDFOptions *au
 
 	/* default behavior, if no specified "_FillValue" attribute.
 	 * Thanks to Heiko Klein <Heiko.Klein@met.no> for the suggestion & code.
+	 *
+	 * Phase 12j: this used to pass file_id (the root id) here instead of
+	 * gid, the group id nc_inq_varid_grp() resolved varid against a few
+	 * lines up -- the same wrong-id bug class Phase 12i fixed in
+	 * netcdf_att_string(). For a grouped variable this either resolves
+	 * the wrong variable's type or fails outright, and on failure *v is
+	 * left untouched -- reaching cacheScalarCoordInfo() and this
+	 * function's own caller as an uninitialized stack float.
 	*/
-	if ( nc_inq_vartype( file_id, varid, &vartype) == NC_NOERR ) {
+	if ( nc_inq_vartype( gid, varid, &vartype) == NC_NOERR ) {
 		switch (vartype) {
 			case NC_BYTE:   *v = (float) NC_FILL_BYTE; break;
 			case NC_SHORT:  *v = (float) NC_FILL_SHORT; break;

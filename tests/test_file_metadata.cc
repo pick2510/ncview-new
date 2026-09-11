@@ -270,24 +270,80 @@ TEST_CASE("an unlimited (record) dimension var reports correctly via the group-a
 
 // ===================== A char (text) storage dimension =====================
 
-TEST_CASE("a char-typed text variable and its storage dim: pinning actual (not assumed) behavior") {
-    // "label" is NC_CHAR, not a numeric field -- confirming what
-    // netcdf_fi_list_vars_inner()/netcdf_scannable_dims() actually do with
-    // one, since reading file_netcdf.cc shows neither excludes by nc_type:
-    // displayability there is decided purely by dimension count/size, so a
-    // sufficiently large NC_CHAR variable is treated the same as a numeric
-    // one. This is a real, previously-uncovered quirk, not a bug this test
-    // is asserting should be fixed -- see the file-level comment.
+TEST_CASE("a char-typed text variable: excluded from the displayable list, but still queryable by name (Phase 12j)") {
+    // "label" is NC_CHAR, not a numeric field. Before Phase 12j,
+    // netcdf_fi_list_vars_inner() didn't exclude by nc_type at all --
+    // displayability was decided purely by dimension count/size, so a
+    // sufficiently large NC_CHAR variable was offered as selectable
+    // alongside numeric ones, and selecting it crashed the whole process
+    // in netcdf_fi_get_data() (nc_get_vara_float() can't read NC_CHAR
+    // data). Phase 12j added a type filter at listing time specifically
+    // to close this gap, so "label" is now correctly excluded from the
+    // displayable list -- this replaces the old "pinning actual (not
+    // assumed) behavior" characterization test, whose whole point was to
+    // surface exactly this quirk so it could be fixed.
+    //
+    // netcdf_fi_n_dims()/netcdf_scannable_dims() look a variable up by
+    // name directly, independent of the displayable-variable list, so
+    // "label" remains fully queryable by name -- only its presence in
+    // the *listing* changed.
     MetaFile f;
     Stringlist *vars = netcdf_fi_list_vars(f.fileid);
     REQUIRE(vars != nullptr);
-    CHECK(contains(vars, "label"));
+    CHECK_FALSE(contains(vars, "label"));
 
     CHECK(netcdf_fi_n_dims(f.fileid, (char *)"label") == 1);
     Stringlist *dims = netcdf_scannable_dims(f.fileid, (char *)"label");
     REQUIRE(dims != nullptr);
     REQUIRE(stringlist_len(dims) == 1);
     CHECK((*dims)[0].string == "namelen");
+}
+
+TEST_CASE("netcdf_fi_get_data: an NC_CHAR variable degrades to FILL_FLOAT instead of aborting (Phase 12j)") {
+    // netcdf_fi_get_data() reads through nc_get_vara_float(), which
+    // cannot read NC_CHAR data (confirmed empirically in Phase 12g,
+    // fails with NC_ECHAR every time). Before Phase 12j this exit()'d
+    // the whole process -- the type filter above stops "label" from
+    // being offered via the display list, but this function is also
+    // reachable directly by name (e.g. a "coordinates" attribute naming
+    // a char variable, read at file-open time, never through the
+    // display list) -- so it needs its own backstop regardless of the
+    // filter.
+    MetaFile f;
+    size_t start[1] = {0};
+    size_t count[1] = {8};
+    float data[8];
+    // Before the fix, this call never returns -- the process exit()'d.
+    netcdf_fi_get_data(f.fileid, (char *)"label", start, count, data, NULL);
+    for (int i = 0; i < 8; i++)
+        CHECK(data[i] == FILL_FLOAT);
+}
+
+TEST_CASE("netcdf_fill_value: a grouped variable with no _FillValue attribute resolves a sane default (Phase 12j)") {
+    // netcdf_fill_value()'s default-value branch used to call
+    // nc_inq_vartype(file_id, varid, ...) -- file_id is the ROOT id, but
+    // varid was resolved via nc_inq_varid_grp() and is group-relative.
+    // For "g1_var" (in grp1, no _FillValue/missing_value attribute) this
+    // queried the wrong variable's type against the root group instead
+    // of grp1's, and on failure would leave *v uninitialized.
+    //
+    // Honest limitation: in THIS fixture the bug is not distinguishable
+    // by this assertion alone -- g1_var's group-relative varid (0)
+    // coincidentally collides with root_var's root-group varid (also 0,
+    // also NC_FLOAT), and every other root variable that could collide
+    // (label, NC_CHAR) falls into this same switch's own default: case,
+    // which also yields NC_FILL_FLOAT. So passing file_id instead of gid
+    // here happens to produce the same visible result in this specific
+    // layout; verified by manually reverting the fix and re-running this
+    // test, which still passed. The fix itself (gid instead of file_id,
+    // matching every other lookup already in this function) was
+    // confirmed correct by direct code inspection instead. This test is
+    // retained as a smoke test for the code path, not as proof of the
+    // bug.
+    MetaFile f;
+    float v = -12345.0f; // deliberately not NC_FILL_FLOAT, so a no-op fill_value lookup would be caught
+    netcdf_fill_value(f.fileid, (char *)"grp1/g1_var", &v, NULL);
+    CHECK(v == NC_FILL_FLOAT);
 }
 
 // ===================== An attribute of a modern netCDF-4 datatype =====================
